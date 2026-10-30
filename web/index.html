@@ -248,6 +248,15 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 
 /* Scenes */
 .scenes { display: flex; flex-direction: column; gap: 12px; }
+.paces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pace { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pace[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pace:disabled { cursor: not-allowed; opacity: 0.6; }
+.pace-n { font-size: 15px; }
+.pace-n b { font-family: var(--f-display); font-size: 22px; font-weight: 700; }
+.strip { display: flex; gap: 2px; height: 10px; width: 100%; }
+.strip i { background: var(--accent); opacity: 0.55; border-radius: 2px; min-width: 2px; }
+.pace[aria-pressed="true"] .strip i { opacity: 0.9; }
 .scene { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; }
 .scene.wide { grid-template-columns: 240px minmax(0, 1fr); }
 .scene-media { display: flex; flex-direction: column; gap: 6px; }
@@ -341,6 +350,7 @@ details.meta-d[open] summary { margin-bottom: 6px; }
   .aline { grid-template-columns: 22px minmax(0, 1fr) auto; }
   .aline .wave, .aline .secs { display: none; }
   .capopts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .paces { grid-template-columns: minmax(0, 1fr); }
   .proj-title { display: none; }
   .kv { grid-template-columns: minmax(0, 1fr); }
   .thumbs { grid-template-columns: minmax(0, 1fr); }
@@ -636,7 +646,46 @@ const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || 
 const lineVoice = (p, line) => p.video_type === 'character' ? ((p.characters.find(c => c.id === line.speaker) || {}).voice_id || 'v-aoede') : p.audio.voice_id;
 const lineSecs = (p, line) => line.duration || estSecs(line.text, voiceById(lineVoice(p, line)).speed);
 const sceneLines = (p, s) => s.line_ids.map(id => p.script.lines.find(l => l.id === id)).filter(Boolean);
-const sceneSecs = (p, s) => Math.round(sceneLines(p, s).reduce((n, l) => n + lineSecs(p, l), 0) * 10) / 10 || 2;
+const sceneSecs = (p, s) => Math.round(sceneLines(p, s).reduce((n, l) => n + lineSecs(p, l), 0) / (s.split ? s.split.of : 1) * 10) / 10 || 2;
+// A split scene shows one part of a long line, so it gets its share of the words for captions.
+function sceneText(p, s) {
+  const t = sceneLines(p, s).map(l => l.text).join(' '); if (!s.split) return t;
+  const w = words(t); const size = Math.ceil(w.length / s.split.of);
+  return w.slice(s.split.index * size, (s.split.index + 1) * size).join(' ');
+}
+
+// Image pacing: how often the picture changes. Chosen in the Scenes step before images are generated.
+const PACING = {
+  simple: { label: 'Simple', every: 8, note: 'Calm. Fewer images, each one stays on screen and breathes.' },
+  moderate: { label: 'Moderate', every: 5, note: 'Steady. Matches the rhythm of most Shorts.' },
+  compact: { label: 'Compact', every: 3, note: 'Fast cuts that hold attention. More images to pay for.' },
+};
+const SHOTS = ['wide establishing shot', 'close-up detail', 'medium shot from a new angle', 'macro texture shot', 'over-the-shoulder view', 'top-down view'];
+const DEFAULT_PACING = { mode: 'moderate', compact_every: 3 };
+const paceEvery = pc => pc.mode === 'compact' ? (pc.compact_every || 3) : PACING[pc.mode].every;
+// Simple groups short lines into one longer scene; Moderate and Compact split long lines into several shots.
+function scenePlan(p, pc) {
+  pc = pc || p.format.pacing || DEFAULT_PACING;
+  const every = paceEvery(pc); const lines = (p.script && p.script.lines) || []; const out = [];
+  if (pc.mode === 'simple') {
+    let group = [], t = 0;
+    lines.forEach((l, i) => {
+      group.push(l); t += lineSecs(p, l);
+      if (t >= every * 0.8 || i === lines.length - 1) {
+        if (t < every * 0.4 && out.length) out[out.length - 1].line_ids.push(...group.map(g => g.id));
+        else out.push({ line_ids: group.map(g => g.id), split: null, description: group[0].visual || 'balcony garden scene' });
+        group = []; t = 0;
+      }
+    });
+  } else {
+    lines.forEach(l => {
+      const n = Math.max(1, Math.round(lineSecs(p, l) / every));
+      for (let k = 0; k < n; k++) out.push({ line_ids: [l.id], split: n > 1 ? { index: k, of: n } : null, description: (l.visual || 'balcony garden scene') + (n > 1 ? ', ' + SHOTS[k % SHOTS.length] : '') });
+    });
+  }
+  return out;
+}
+function planSecs(p, sp) { const t = sp.line_ids.reduce((n, id) => { const l = p.script.lines.find(x => x.id === id); return n + (l ? lineSecs(p, l) : 0); }, 0); return sp.split ? t / sp.split.of : t; }
 const scriptSecs = p => (p.script && p.script.lines ? p.script.lines.reduce((n, l) => n + lineSecs(p, l), 0) : 0);
 const needsAnimate = p => p.scenes.length ? p.scenes.some(s => s.animate) : p.format.animated;
 
@@ -649,7 +698,7 @@ function overlap(a, b) {
 function estimate(p) {
   const lines = (p.script && p.script.lines) || [];
   const chars = lines.reduce((n, l) => n + l.text.length, 0);
-  const nScenes = p.scenes.length || lines.length;
+  const nScenes = p.scenes.length || (lines.length ? scenePlan(p).length : 0);
   const animSecs = p.scenes.length ? p.scenes.filter(s => s.animate).reduce((n, s) => n + sceneSecs(p, s), 0) : (p.format.animated ? scriptSecs(p) : 0);
   const voice = chars / 1000 * modelOf(p, 'voice').cost;
   const images = nScenes * modelOf(p, 'image').cost;
@@ -661,7 +710,7 @@ function estimate(p) {
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v3';
+const KEY = 'angle-studio-demo-v4';
 const listeners = new Set();
 const DEFAULT_MODELS = { writer: 'claude-opus-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
@@ -671,7 +720,7 @@ function newProject(title) {
     video_type: 'voiceover', models: { ...STATE_DEFAULT_MODELS() }, ingest_url: '',
     source: null, analysis: null, angles: [], selected_angle_ids: [], user_direction: '',
     script: null, style: null, characters: clone(DEFAULT_CHARS),
-    format: { aspect_ratio: '9:16', target_seconds: 60, animated: false },
+    format: { aspect_ratio: '9:16', target_seconds: 60, animated: false, pacing: { ...DEFAULT_PACING } },
     scenes: [], audio: { voice_id: 'v-aoede', music_path: 'm-soil', music_volume: 0.25, duck: true, caption_style: 'bold', consent: false },
     render: { draft_path: null, final_path: null, cost_estimate: 0, cost_actual: 0 },
     checkpoints: { angles: false, script: false, style: false, voice: false, format: false, scenes: false, clips: false },
@@ -805,19 +854,20 @@ const api = {
     }
     await runner;
   },
-  async generateScenes(pid) {
+  planScenes(pid) {
     updateP(pid, p => {
       const st = styleById(p.style);
-      p.scenes = p.script.lines.map((l, i) => ({
-        id: uid('sc'), order: i, description: l.visual || 'balcony garden, close-up', line_ids: [l.id],
-        character_ids: p.video_type === 'character' && l.speaker ? [l.speaker] : [],
-        image_prompt: l.visual || '', image_versions: [], image_index: -1, image_status: 'pending',
+      p.scenes = scenePlan(p).map((sp, i) => ({
+        id: uid('sc'), order: i, description: sp.description, line_ids: sp.line_ids, split: sp.split,
+        character_ids: p.video_type === 'character' ? Array.from(new Set(sp.line_ids.map(id => (p.script.lines.find(l => l.id === id) || {}).speaker).filter(Boolean))) : [],
+        image_prompt: sp.description, image_versions: [], image_index: -1, image_status: 'pending',
         animate: p.format.animated, motion_prompt: i === 0 ? 'slow push in, light flickers across the frame' : 'gentle parallax, leaves sway in a light breeze',
         clip_versions: [], clip_index: -1, clip_status: 'pending', caption_style: p.audio.caption_style, style_prefix: st.prefix,
       }));
     });
-    const p = STATE.projects[pid];
-    await Promise.all(p.scenes.map((s, i) => sleep(i * 220).then(() => api.generateImage(pid, s.id))));
+  },
+  async generateImages(pid, ids) {
+    await Promise.all(ids.map((id, i) => sleep(i * 220).then(() => api.generateImage(pid, id))));
   },
   async generateImage(pid, sceneId, noFail) {
     updateP(pid, p => { const s = p.scenes.find(s => s.id === sceneId); if (s) s.image_status = 'generating'; });
@@ -1371,7 +1421,7 @@ function FormatScreen({ p, s }) {
   const locked = p.checkpoints.format; const est = estimate(p); const im = modelOf(p, 'image'); const vm = modelOf(p, 'video');
   const nScenes = p.script.lines.length; const imgCost = nScenes * im.cost;
   const set = fn => !locked && updateP(p.id, fn);
-  const go = () => { approve(p.id, 'format'); api.generateScenes(p.id); };
+  const go = () => { const fresh = !p.scenes.length; approve(p.id, 'format'); if (fresh) api.planScenes(p.id); };
   const hasScenes = p.scenes.length > 0;
   return html`<${Fragment}>
     <${StepHead} title="Video format" sub="Choose the frame, whether scenes move, and how captions and music sound. The cost estimate updates as you choose." />
@@ -1392,6 +1442,10 @@ function FormatScreen({ p, s }) {
         <label className="field" htmlFor="vol">Volume under voice <span className="mono muted">${Math.round(p.audio.music_volume * 100)}%</span><input id="vol" type="range" min="0" max="0.6" step="0.05" disabled=${locked || p.audio.music_path === 'none'} value=${p.audio.music_volume} onChange=${e => set(q => { q.audio.music_volume = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
         <label className="switch"><input id="duck" type="checkbox" checked=${p.audio.duck} disabled=${locked} onChange=${e => set(q => { q.audio.duck = e.target.checked; })} />Duck music while someone speaks</label>
       </section>
+      <section className="panel stack"><h3>Image pacing</h3>
+        <p className="note">You pick this in the next step, before any image is generated. For ${fmtT(scriptSecs(p))} of narration:</p>
+        <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>${['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: (p.format.pacing || DEFAULT_PACING).compact_every || 3 }; return html`<${Fragment} key=${m}><dt>${PACING[m].label} (1 every ~${paceEvery(cfg)} s)</dt><dd>${scenePlan(p, cfg).length} images</dd></${Fragment}>`; })}</dl>
+      </section>
       <section className="panel stack"><h3>Estimated cost for this video</h3>
         <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>
           <dt>Analysis + writing (${analystOf().name}, ${modelOf(p, 'writer').name})</dt><dd>${fmt$(est.writing)}</dd>
@@ -1404,8 +1458,7 @@ function FormatScreen({ p, s }) {
         <p className="note">Your per-project limit is ${fmt$(s.settings.costLimit)}. Steps that go over it ask for confirmation.</p>
       </section>
     </div>
-    <${ApproveBar} p=${p} step="format" ready=${true} label="Approve format" onApprove=${go}
-      gate=${hasScenes ? html`<button type="button" className="btn primary" onClick=${() => approve(p.id, 'format')}>Approve format (keep current scenes)</button>` : html`<${CostGate} p=${p} label=${'Approve and generate ' + nScenes + ' scene images'} cost=${imgCost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Scenes', nScenes]]} onGo=${go} />`} />
+    <${ApproveBar} p=${p} step="format" ready=${true} label=${hasScenes ? 'Approve format (keep current scenes)' : 'Approve format and plan scenes'} onApprove=${go} />
   </${Fragment}>`;
 }
 
@@ -1429,6 +1482,40 @@ function SceneImage({ p, sc, small }) {
     ${sc.image_status === 'pending' && !v ? html`<div className="overlay">Not generated</div>` : null}
   </div>`;
 }
+function PacingPanel({ p }) {
+  const locked = p.checkpoints.scenes; const im = modelOf(p, 'image');
+  const started = p.scenes.some(sc => sc.image_versions.length || sc.image_status === 'generating');
+  const [open, setOpen] = useState(!started);
+  const pc = p.format.pacing || DEFAULT_PACING; const total = scriptSecs(p);
+  const todo = p.scenes.filter(sc => sc.image_status === 'pending' || sc.image_status === 'failed');
+  const choose = next => {
+    if (locked) return;
+    updateP(p.id, q => { q.format.pacing = next; }); api.planScenes(p.id);
+    if (started) toast('Scenes re-planned. Generate images to continue.');
+  };
+  if (!open) return html`<section className="panel row" style=${{ justifyContent: 'space-between' }}>
+    <div style=${{ minWidth: 0 }}><strong>Image pacing: ${PACING[pc.mode].label}</strong> <span className="note">\u00b7 one image every ~${paceEvery(pc)} s \u00b7 ${p.scenes.length} scenes, ${p.scenes.length} images for ${fmtT(total)}</span></div>
+    <button type="button" className="btn sm" disabled=${locked} onClick=${() => setOpen(true)}>Change pacing</button>
+  </section>`;
+  const opts = ['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: pc.compact_every || 3 }; const plan = scenePlan(p, cfg); return { m, cfg, plan, n: plan.length, every: paceEvery(cfg) }; });
+  return html`<section className="panel stack">
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Image pacing</h2><span className="note mono">${fmtT(total)} of narration \u00b7 ${p.script.lines.length} lines</span></div>
+    <p className="note">How often the picture changes. Pick one before generating images. The scene list below updates to match.</p>
+    ${started ? html`<div className="warnbox">Changing pacing re-plans every scene. Images already generated are discarded.</div>` : null}
+    <div className="paces">${opts.map(o => html`<button key=${o.m} type="button" className="pace" aria-pressed=${pc.mode === o.m} disabled=${locked} onClick=${() => choose(o.cfg)}>
+      <span className="row" style=${{ justifyContent: 'space-between' }}><strong>${PACING[o.m].label}</strong><span className="mono note">1 every ~${o.every} s</span></span>
+      <span className="pace-n"><b>${o.n}</b> scenes \u00b7 <b>${o.n}</b> images</span>
+      <span className="strip" aria-hidden="true">${o.plan.map((sp, k) => html`<i key=${k} style=${{ flex: planSecs(p, sp) }} />`)}</span>
+      <span className="note">${PACING[o.m].note}</span>
+      <span className="mono note">est. ${fmt$(o.n * im.cost)} with ${im.name}</span>
+    </button>`)}</div>
+    ${pc.mode === 'compact' ? html`<div className="row"><span className="note">Compact: one image every</span><${Seg} label="Compact interval" value=${pc.compact_every || 3} onChange=${v => choose({ mode: 'compact', compact_every: v })} options=${[{ value: 2, label: '2 s' }, { value: 3, label: '3 s' }]} /></div>` : null}
+    <div className="row">
+      ${todo.length ? html`<${CostGate} p=${p} label=${'Generate ' + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => { setOpen(false); api.generateImages(p.id, todo.map(sc => sc.id)); }} />` : null}
+      ${started ? html`<button type="button" className="btn ghost" onClick=${() => setOpen(false)}>Keep current scenes</button>` : null}
+    </div>
+  </section>`;
+}
 function ScenesScreen({ p, s }) {
   const locked = p.checkpoints.scenes; const isChar = p.video_type === 'character'; const h = p.format.aspect_ratio === '16:9';
   const im = modelOf(p, 'image');
@@ -1444,10 +1531,11 @@ function ScenesScreen({ p, s }) {
   const unvoiced = p.scenes.some(sc => sceneLines(p, sc).some(l => l.audio_status !== 'ready'));
   const allReady = p.scenes.length > 0 && ready === p.scenes.length;
   return html`<${Fragment}>
-    <${StepHead} title="Scenes" sub=${'One image per scene with ' + im.name + ' and the ' + styleById(p.style).name.toLowerCase() + ' style prefix. Edit any description or prompt and regenerate just that scene. Earlier versions are kept.'}>
+    <${StepHead} title="Scenes" sub=${'Choose how often the picture changes, then generate one image per scene with ' + im.name + ' and the ' + styleById(p.style).name.toLowerCase() + ' style prefix. Edit any description or prompt and regenerate just that scene. Earlier versions are kept.'}>
       <span className="note mono">${p.scenes.length} scenes · ${fmtT(total)} · ${ready}/${p.scenes.length} images</span>
-      <button type="button" className="btn" disabled=${locked} onClick=${() => api.generateScenes(p.id)}><${Icon} n="redo" />Rebuild from script</button>
+      <button type="button" className="btn" disabled=${locked} onClick=${() => { api.planScenes(p.id); toast('Scenes re-planned from the script. Generate images to continue.'); }}><${Icon} n="redo" />Re-plan from script</button>
     </${StepHead}>
+    <${PacingPanel} p=${p} key=${'pace' + p.id} />
     ${unvoiced ? html`<div className="warnbox">Some scenes have lines without audio. Generate them in the Voice step so scene lengths match the narration.</div>` : null}
     <div className="scenes">${p.scenes.map((sc, i) => { const ls = sceneLines(p, sc); return html`<section key=${sc.id} className=${'panel scene' + (h ? ' wide' : '')}>
       <div className="scene-media">
@@ -1464,12 +1552,12 @@ function ScenesScreen({ p, s }) {
           <div className="row" style=${{ gap: 2 }}>
             <button type="button" className="btn ghost sm" aria-label="Move up" title="Move up" disabled=${locked || i === 0} onClick=${() => move(i, -1)}><${Icon} n="up" /></button>
             <button type="button" className="btn ghost sm" aria-label="Move down" title="Move down" disabled=${locked || i === p.scenes.length - 1} onClick=${() => move(i, 1)}><${Icon} n="down" /></button>
-            <button type="button" className="btn ghost sm" aria-label="Merge with next" title="Merge with next scene" disabled=${locked || i === p.scenes.length - 1} onClick=${() => merge(i)}><${Icon} n="merge" /></button>
-            <button type="button" className="btn ghost sm" aria-label="Split scene" title="Split into two scenes" disabled=${locked || sc.line_ids.length < 2} onClick=${() => split(i)}><${Icon} n="split" /></button>
+            <button type="button" className="btn ghost sm" aria-label="Merge with next" title="Merge with next scene" disabled=${locked || i === p.scenes.length - 1 || !!sc.split || !!(p.scenes[i + 1] && p.scenes[i + 1].split)} onClick=${() => merge(i)}><${Icon} n="merge" /></button>
+            <button type="button" className="btn ghost sm" aria-label="Split scene" title="Split into two scenes" disabled=${locked || sc.line_ids.length < 2 || !!sc.split} onClick=${() => split(i)}><${Icon} n="split" /></button>
             <button type="button" className="btn ghost sm danger" aria-label="Delete scene" title="Delete scene" disabled=${locked || p.scenes.length < 2} onClick=${() => del(i)}><${Icon} n="trash" /></button>
           </div>
         </div>
-        <div className="scene-lines">${ls.map(l => { const ch = isChar && p.characters.find(c => c.id === l.speaker); return html`<div key=${l.id}>${ch ? html`<b>${ch.name}: </b>` : null}${l.text}</div>`; })}</div>
+        <div className="scene-lines">${sc.split ? html`<div><span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sc.split.index + 1} of ${sc.split.of} \u00b7 </span>${isChar && ls[0] && p.characters.find(c => c.id === ls[0].speaker) ? html`<b>${p.characters.find(c => c.id === ls[0].speaker).name}: </b>` : null}${sceneText(p, sc)}</div>` : ls.map(l => { const ch = isChar && p.characters.find(c => c.id === l.speaker); return html`<div key=${l.id}>${ch ? html`<b>${ch.name}: </b>` : null}${l.text}</div>`; })}</div>
         ${sc.error && sc.image_status === 'failed' ? html`<div className="warnbox">${sc.error}</div>` : null}
         <label className="field">Scene description<textarea className="textarea" rows="2" disabled=${locked} value=${sc.description} onChange=${e => setS(sc.id, x => { x.description = e.target.value; })}></textarea></label>
         <label className="field">Image prompt<span className="prefix-chip">${styleById(p.style).prefix},</span><textarea className="textarea prompt" rows="2" disabled=${locked} value=${sc.image_prompt} onChange=${e => setS(sc.id, x => { x.image_prompt = e.target.value; })}></textarea></label>
@@ -1520,7 +1608,7 @@ function AnimateScreen({ p, s }) {
       <div className="scene-body">
         <div className="row" style=${{ justifyContent: 'space-between' }}><div className="row"><strong>Scene ${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span><${Pill} status=${sc.clip_status} /></div>
           <button type="button" className="btn sm" disabled=${locked || sc.clip_status === 'generating' || sc.clip_status === 'pending'} onClick=${() => api.animate(p.id, [sc.id])}><${Icon} n="redo" />New take <span className="tag">${fmt$(genSecs(sc) * vm.cost)}</span></button></div>
-        <div className="scene-lines">${sceneLines(p, sc).map(l => html`<div key=${l.id}>${l.text}</div>`)}</div>
+        <div className="scene-lines">${sceneText(p, sc)}</div>
         <label className="field">Motion prompt<textarea className="textarea prompt" rows="2" disabled=${locked} value=${sc.motion_prompt} onChange=${e => setS(sc.id, x => { x.motion_prompt = e.target.value; })}></textarea></label>
         ${c ? html`<p className="note mono">Generated ${c.generated}s → ${c.fitted < c.generated ? 'trimmed' : 'extended'} to ${c.fitted.toFixed(1)}s to match audio</p>` : null}
         <div className="row"><button type="button" className="btn sm ghost" disabled=${locked} onClick=${() => setS(sc.id, x => { x.animate = false; })}>Make this scene static</button></div>
@@ -1550,7 +1638,7 @@ function Player({ p, mode }) {
   const tr = clip
     ? 'scale(' + (1.1 + 0.08 * local) + ') translate(' + (Math.sin(local * 6.28) * 2.5) + '%, ' + (Math.cos(local * 6.28) * 2) + '%) rotate(' + Math.sin(local * 6.28) * 1 + 'deg)'
     : 'scale(' + (1.05 + 0.12 * local) + ') translate(' + (dir * (local - 0.5) * 5) + '%, ' + ((0.5 - local) * 2) + '%)';
-  const ls = sceneLines(p, sc); const text = ls.map(l => l.text).join(' '); const ws = words(text); const wi = Math.min(ws.length - 1, Math.floor(local * ws.length));
+  const ls = sceneLines(p, sc); const text = sceneText(p, sc); const ws = words(text); const wi = Math.min(ws.length - 1, Math.floor(local * ws.length));
   const cap = p.audio.caption_style;
   const speaker = p.video_type === 'character' && ls[0] && p.characters.find(c => c.id === ls[0].speaker);
   const h = p.format.aspect_ratio === '16:9';

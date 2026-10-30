@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from . import jobs, pipeline, storage
-from .models import Project, new_id
+from .models import Pacing, Project, new_id
 from .providers import registry, sample
 
 app = FastAPI(title="Angle Studio API", version="0.1.0")
@@ -181,12 +181,27 @@ async def audio(pid: str, body: AudioBody):
     return jobs.submit(pid, "Generating narration", lambda prog: pipeline.generate_audio(pid, body.line_ids, prog))
 
 
-@app.post("/api/projects/{pid}/scenes", status_code=202)
-async def scenes(pid: str, body: Paid):
+@app.get("/api/projects/{pid}/pacing")
+def pacing(pid: str):
+    """Scene and image counts for Simple, Moderate and Compact at the script's current length."""
+    return pipeline.pacing_options(_project(pid))
+
+
+@app.post("/api/projects/{pid}/scenes/plan")
+def plan_scenes(pid: str, body: Optional[Pacing] = None):
+    """Free: splits the script into scenes at the chosen pacing. Re-planning discards existing scene images."""
+    pipeline.require(_project(pid), "voice", "format")
+    return pipeline.plan_scenes(pid, body)
+
+
+@app.post("/api/projects/{pid}/scenes/images", status_code=202)
+async def scene_images(pid: str, body: Paid):
     p = _project(pid)
-    pipeline.require(p, "voice", "format")
+    if not p.scenes:
+        raise HTTPException(409, "Plan the scenes first.")
     pipeline.guard_cost(p, pipeline.estimate(p)["images"], body.confirm_over_limit)
-    return jobs.submit(pid, "Generating scenes", lambda prog: pipeline.build_scenes(pid, prog))
+    ids = [s.id for s in p.scenes if s.image_status in ("pending", "failed")]
+    return jobs.submit(pid, f"Generating {len(ids)} images", lambda prog: pipeline.generate_images(pid, ids, prog))
 
 
 @app.post("/api/projects/{pid}/scenes/{sid}/image", status_code=202)

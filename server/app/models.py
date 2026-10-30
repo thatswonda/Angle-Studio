@@ -121,10 +121,21 @@ class Character(BaseModel):
     voice_id: str = "v-aoede"
 
 
+class Pacing(BaseModel):
+    """How often the picture changes: simple ~8 s, moderate ~5 s, compact every 2 or 3 s per image."""
+    mode: Literal["simple", "moderate", "compact"] = "moderate"
+    compact_every: Literal[2, 3] = 3
+
+    @property
+    def every(self) -> float:
+        return {"simple": 8, "moderate": 5}.get(self.mode, self.compact_every)
+
+
 class Format(BaseModel):
     aspect_ratio: Literal["9:16", "16:9"] = "9:16"
     target_seconds: int = 60
     animated: bool = False
+    pacing: Pacing = Field(default_factory=Pacing)
 
 
 class Version(BaseModel):
@@ -140,6 +151,8 @@ class Scene(BaseModel):
     order: int
     description: str
     line_ids: list[str]
+    split_index: Optional[int] = None  # this scene shows part split_index of split_of of a long line
+    split_of: Optional[int] = None
     character_ids: list[str] = []
     image_prompt: str = ""
     image_path: Optional[str] = None

@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Callable
 
 from . import assembly, storage
-from .models import (Analysis, Angle, Character, Comment, KeyFrame, Project, Scene,
+from .models import (Analysis, Angle, Character, Comment, KeyFrame, Pacing, Project, Scene,
                      Script, ScriptLine, Source, Version)
 from .providers import registry, sample
 
@@ -61,14 +61,58 @@ def line_voice(p: Project, line: ScriptLine) -> str:
     return p.audio.voice_id
 
 
+def line_seconds(p: Project, line_id: str) -> float:
+    line = p.line(line_id)
+    return line.duration or len(line.text.split()) / 2.6 + 0.5
+
+
 def scene_seconds(p: Project, s: Scene) -> float:
-    return round(sum(p.line(i).duration or len(p.line(i).text.split()) / 2.6 + 0.5 for i in s.line_ids), 1)
+    return round(sum(line_seconds(p, i) for i in s.line_ids) / (s.split_of or 1), 1)
+
+
+SHOTS = ["wide establishing shot", "close-up detail", "medium shot from a new angle", "macro texture shot", "over-the-shoulder view", "top-down view"]
+
+
+def scene_plan(p: Project, pacing: Pacing | None = None) -> list[dict]:
+    """Simple groups short lines into one longer scene; moderate and compact split long lines into several shots."""
+    pacing = pacing or p.format.pacing
+    every, lines, out = pacing.every, p.script.lines if p.script else [], []
+    if pacing.mode == "simple":
+        group, t = [], 0.0
+        for i, l in enumerate(lines):
+            group.append(l)
+            t += line_seconds(p, l.id)
+            if t >= every * 0.8 or i == len(lines) - 1:
+                if t < every * 0.4 and out:
+                    out[-1]["line_ids"] += [g.id for g in group]
+                else:
+                    out.append({"line_ids": [g.id for g in group], "description": group[0].visual})
+                group, t = [], 0.0
+    else:
+        for l in lines:
+            n = max(1, round(line_seconds(p, l.id) / every))
+            for k in range(n):
+                out.append({"line_ids": [l.id], "split_index": k if n > 1 else None, "split_of": n if n > 1 else None,
+                            "description": l.visual + (f", {SHOTS[k % len(SHOTS)]}" if n > 1 else "")})
+    return out
+
+
+def pacing_options(p: Project) -> list[dict]:
+    """Scene and image counts for each pacing at the script's current length, shown before generating."""
+    total = sum(line_seconds(p, l.id) for l in p.script.lines) if p.script else 0
+    cost = registry.model("image", p.models.image)["cost"]
+    opts = []
+    for mode, every in (("simple", None), ("moderate", None), ("compact", 2), ("compact", 3)):
+        pc = Pacing(mode=mode, compact_every=every or p.format.pacing.compact_every)
+        n = len(scene_plan(p, pc))
+        opts.append({"mode": mode, "every": pc.every, "scenes": n, "images": n, "image_cost": round(n * cost, 2), "seconds": round(total, 1)})
+    return opts
 
 
 def estimate(p: Project) -> dict:
     lines = p.script.lines if p.script else []
     chars = sum(len(l.text) for l in lines if l.audio_status != "ready")
-    n_img = sum(1 for s in p.scenes if s.image_status != "ready") if p.scenes else len(lines)
+    n_img = sum(1 for s in p.scenes if s.image_status != "ready") if p.scenes else len(scene_plan(p))
     anim = [s for s in p.scenes if s.animate and s.clip_status != "ready"]
     vm = registry.model("video", p.models.video)
     anim_secs = sum(min(vm["limits"]["max_clip"], max(5, -(-scene_seconds(p, s) // 5) * 5)) for s in anim)
@@ -180,18 +224,27 @@ async def generate_audio(pid: str, line_ids: list[str] | None, progress: Callabl
                     s.duration = scene_seconds(p, s)
 
 
-async def build_scenes(pid: str, progress: Callable[[str], None]) -> None:
-    """VIS-1: split the approved script into scenes, then generate every image."""
-    async with editing(pid) as p:
-        require(p, "format")
-        p.scenes = [Scene(order=i, description=l.visual, line_ids=[l.id], image_prompt=l.visual,
-                          character_ids=[l.speaker] if l.speaker else [], animate=p.format.animated,
-                          motion_prompt="slow push in, gentle parallax") for i, l in enumerate(p.script.lines)]
-        for s in p.scenes:
-            s.duration = scene_seconds(p, s)
-        ids = [s.id for s in p.scenes]
-    progress(f"Generating {len(ids)} images")
-    await asyncio.gather(*(generate_image(pid, sid, lambda _: None) for sid in ids))
+def plan_scenes(pid: str, pacing: Pacing | None = None) -> Project:
+    """VIS-1: split the approved script into scenes at the chosen image pacing. Free; no images yet."""
+    p = storage.load(pid)
+    require(p, "format")
+    if pacing:
+        p.format.pacing = pacing
+    p.scenes = []
+    for i, sp in enumerate(scene_plan(p)):
+        speakers = {p.line(lid).speaker for lid in sp["line_ids"]} - {None}
+        s = Scene(order=i, description=sp["description"], line_ids=sp["line_ids"], image_prompt=sp["description"],
+                  split_index=sp.get("split_index"), split_of=sp.get("split_of"), character_ids=sorted(speakers),
+                  animate=p.format.animated, motion_prompt="slow push in, gentle parallax")
+        s.duration = scene_seconds(p, s)
+        p.scenes.append(s)
+    storage.save(p)
+    return p
+
+
+async def generate_images(pid: str, scene_ids: list[str], progress: Callable[[str], None]) -> None:
+    progress(f"Generating {len(scene_ids)} images")
+    await asyncio.gather(*(generate_image(pid, sid, lambda _: None) for sid in scene_ids))
 
 
 async def generate_image(pid: str, scene_id: str, progress: Callable[[str], None]) -> None:

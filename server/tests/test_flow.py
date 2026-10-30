@@ -57,7 +57,16 @@ def test_link_to_rendered_video(client):
 
     for cp in ("voice", "format"):
         c.post(f"/api/projects/{pid}/checkpoints/{cp}")
-    wait(c, c.post(f"/api/projects/{pid}/scenes", json={}).json())
+    # Image pacing is chosen before any image is generated; counts rise from simple to compact.
+    opts = c.get(f"/api/projects/{pid}/pacing").json()
+    counts = [o["images"] for o in opts]
+    assert counts[0] < counts[1] < counts[2]  # simple < moderate < compact (2 s)
+    p = c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "compact", "compact_every": 2}).json()
+    assert len(p["scenes"]) == counts[2] and all(s["image_status"] == "pending" for s in p["scenes"])
+    assert any(s["split_of"] for s in p["scenes"])
+    p = c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "moderate"}).json()
+    assert len(p["scenes"]) == counts[1]
+    wait(c, c.post(f"/api/projects/{pid}/scenes/images", json={}).json())
     p = c.get(f"/api/projects/{pid}").json()
     assert p["scenes"] and all(s["image_status"] == "ready" for s in p["scenes"])
 
