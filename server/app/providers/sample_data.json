@@ -1,0 +1,796 @@
+{
+ "VOICES": [
+  {
+   "id": "v-mara",
+   "name": "Mara",
+   "desc": "Warm, mid-pitch, conversational",
+   "pitch": 1,
+   "rate": 1,
+   "speed": 1
+  },
+  {
+   "id": "v-theo",
+   "name": "Theo",
+   "desc": "Calm, low, documentary",
+   "pitch": 0.75,
+   "rate": 0.92,
+   "speed": 0.92
+  },
+  {
+   "id": "v-juno",
+   "name": "Juno",
+   "desc": "Bright, quick, upbeat",
+   "pitch": 1.25,
+   "rate": 1.1,
+   "speed": 1.1
+  },
+  {
+   "id": "v-ash",
+   "name": "Ash",
+   "desc": "Dry, wry, deadpan",
+   "pitch": 0.9,
+   "rate": 0.98,
+   "speed": 0.98
+  },
+  {
+   "id": "v-pip",
+   "name": "Pip",
+   "desc": "Small, squeaky, playful",
+   "pitch": 1.6,
+   "rate": 1.12,
+   "speed": 1.12
+  },
+  {
+   "id": "v-own",
+   "name": "My voice",
+   "desc": "Your cloned voice · needs consent",
+   "pitch": 1,
+   "rate": 1,
+   "speed": 1,
+   "clone": true
+  }
+ ],
+ "STYLES": [
+  {
+   "id": "botanical",
+   "name": "Soft botanical",
+   "kind": "soft",
+   "mood": "Calm, tactile, morning light",
+   "prefix": "soft window light, shallow depth of field, muted greens, 35mm film grain",
+   "palette": [
+    "#2E4A3B",
+    "#93BF9A",
+    "#F1E6C8",
+    "#D9895B"
+   ]
+  },
+  {
+   "id": "infographic",
+   "name": "Clean infographic",
+   "kind": "flat",
+   "mood": "Clear, explanatory, numbers on screen",
+   "prefix": "flat vector illustration, clean geometric shapes, generous negative space, two-tone",
+   "palette": [
+    "#12355B",
+    "#4F8BC9",
+    "#EAF2FA",
+    "#F2B134"
+   ]
+  },
+  {
+   "id": "comic",
+   "name": "Cartoon comic",
+   "kind": "comic",
+   "mood": "Playful, punchy, expressive",
+   "prefix": "bold ink outlines, cel shading, saturated colors, expressive cartoon characters",
+   "palette": [
+    "#2B2D42",
+    "#EF8354",
+    "#FFF3D6",
+    "#4FB0C6"
+   ]
+  },
+  {
+   "id": "watercolor",
+   "name": "Watercolor journal",
+   "kind": "watercolor",
+   "mood": "Gentle, nostalgic, handmade",
+   "prefix": "loose watercolor on cold-press paper, soft bleeding edges, hand-drawn feel",
+   "palette": [
+    "#5B7B7A",
+    "#C8D5B9",
+    "#FAF3E3",
+    "#E08D79"
+   ]
+  },
+  {
+   "id": "cinematic",
+   "name": "Moody cinematic",
+   "kind": "soft",
+   "mood": "Dramatic, high stakes, night",
+   "prefix": "low-key lighting, teal and amber grade, anamorphic lens, deep shadows",
+   "palette": [
+    "#0E1A24",
+    "#1F4E5A",
+    "#E7B15A",
+    "#C2563A"
+   ]
+  }
+ ],
+ "SAMPLE": {
+  "source": {
+   "title": "I Grew Food on My Apartment Balcony for a Year (Here’s the Harvest)",
+   "channel": "Small Space Growing",
+   "duration": 702,
+   "published": "2026-08-14",
+   "views": "2.1M views",
+   "transcript": "Fourteen point six kilos of food from a four square metre balcony. That is what one year of growing on a rented balcony got me. Twelve months ago it looked like this, bare concrete and one sad plastic chair. The rules were simple: no yard, no landlord drama, nothing I could not carry up five floors. I started everything on the windowsill in yogurt cups...",
+   "key_frames": [
+    {
+     "t": "0:00",
+     "d": "Harvest basket on a kitchen scale",
+     "seed": 11
+    },
+    {
+     "t": "0:41",
+     "d": "Empty concrete balcony",
+     "seed": 23
+    },
+    {
+     "t": "2:12",
+     "d": "Seedlings in yogurt cups",
+     "seed": 37
+    },
+    {
+     "t": "4:33",
+     "d": "Plants bent in the wind",
+     "seed": 41
+    },
+    {
+     "t": "7:12",
+     "d": "Pigeon on the railing",
+     "seed": 59
+    },
+    {
+     "t": "8:40",
+     "d": "Tomatoes ripening",
+     "seed": 61
+    },
+    {
+     "t": "9:25",
+     "d": "Month-by-month montage",
+     "seed": 73
+    },
+    {
+     "t": "11:02",
+     "d": "Totals on a whiteboard",
+     "seed": 89
+    }
+   ],
+   "comments": [
+    {
+     "id": "c1",
+     "text": "Mine faces north and gets maybe 3 hours of sun. Is it even worth trying??",
+     "likes": "4.2k",
+     "kind": "question"
+    },
+    {
+     "id": "c2",
+     "text": "How much did all of this cost in total? Would love a breakdown.",
+     "likes": "3.1k",
+     "kind": "request"
+    },
+    {
+     "id": "c3",
+     "text": "Please do a winter version! What happens after October?",
+     "likes": "2.7k",
+     "kind": "request"
+    },
+    {
+     "id": "c4",
+     "text": "The pigeon at 7:12 deserves its own video",
+     "likes": "2.2k",
+     "kind": "request"
+    },
+    {
+     "id": "c5",
+     "text": "Did the self-watering pots actually work while you were away?",
+     "likes": "1.4k",
+     "kind": "question"
+    },
+    {
+     "id": "c6",
+     "text": "Can I reuse the soil next year or do I need new?",
+     "likes": "1.1k",
+     "kind": "question"
+    }
+   ],
+   "comments_scanned": 1840
+  },
+  "analysis": {
+   "summary": "A renter turns an empty 4 m² concrete balcony into a food garden over twelve months and weighs every harvest.",
+   "hook": "Opens on the final harvest on a kitchen scale (14.6 kg), then cuts back to the bare balcony twelve months earlier.",
+   "beats": [
+    [
+     "0:00",
+     "Payoff first: the harvest on the scale"
+    ],
+    [
+     "0:40",
+     "The empty balcony and the rules for the year"
+    ],
+    [
+     "2:10",
+     "Seed starting on the windowsill"
+    ],
+    [
+     "4:30",
+     "Moving outside and the wind problem"
+    ],
+    [
+     "7:05",
+     "Summer peak and the pigeon"
+    ],
+    [
+     "9:20",
+     "Month-by-month harvest montage"
+    ],
+    [
+     "11:00",
+     "Totals and what to grow first"
+    ]
+   ],
+   "pacing": "Cuts every 3 to 4 seconds in the first minute, then slows into a montage. Talking-head segments never run past 20 seconds.",
+   "why_it_worked": [
+    "A hard number in the hook promises a payoff",
+    "Relatable limit: a rented balcony, no yard",
+    "Visible change over a fixed time span",
+    "A small recurring character (the pigeon) viewers remember"
+   ],
+   "gaps": [
+    {
+     "kind": "Unanswered question",
+     "text": "What grows with very little sun",
+     "from": "c1"
+    },
+    {
+     "kind": "Unanswered question",
+     "text": "Total cost of the setup",
+     "from": "c2"
+    },
+    {
+     "kind": "Unfinished thread",
+     "text": "The story stops in October",
+     "from": "c3"
+    },
+    {
+     "kind": "Audience request",
+     "text": "More of the pigeon",
+     "from": "c4"
+    },
+    {
+     "kind": "Skipped perspective",
+     "text": "Viewers with no balcony at all"
+    },
+    {
+     "kind": "Unexplored visual",
+     "text": "One live-action look the whole way through"
+    }
+   ]
+  },
+  "angles": [
+   {
+    "id": "a1",
+    "type": "Deep dive",
+    "style": "botanical",
+    "score": 94,
+    "effort": "Low",
+    "potential": "High",
+    "origin": "c1",
+    "title": "Growing food on a balcony that gets 3 hours of sun",
+    "pitch": "The most-liked question in the comments: what actually grows when your balcony faces north.",
+    "reason": "Viewers with shady balconies were left without an answer. This is their obvious next click.",
+    "suggested_title": "Balcony Garden With Only 3 Hours of Sun: What Actually Grew",
+    "tags": [
+     "balcony garden",
+     "shade vegetables",
+     "north facing balcony",
+     "apartment gardening",
+     "small space gardening"
+    ],
+    "hooks": [
+     "My balcony gets three hours of sun. Everyone said grow nothing. Here is what grew anyway.",
+     "Got a shady balcony? These five crops do not care.",
+     "I tracked every hour of light on a north-facing balcony for 90 days."
+    ],
+    "hook_visual": "narrow shaded balcony with a single band of sunlight crossing the planters",
+    "beats": [
+     {
+      "t": "First I measured the light. Three hours of direct sun, the rest bright shade.",
+      "v": "phone light meter held up on a narrow concrete balcony"
+     },
+     {
+      "t": "Leafy greens were the surprise. Lettuce, chard and spinach barely noticed.",
+      "v": "rows of lettuce and rainbow chard in long planters in soft shade"
+     },
+     {
+      "t": "Herbs split the room. Mint and parsley thrived, basil sulked.",
+      "v": "thriving mint beside a leggy, sad basil plant"
+     },
+     {
+      "t": "Tomatoes were the hard lesson. Plenty of leaves, four tomatoes total.",
+      "v": "tall tomato vine with only a few small green tomatoes"
+     },
+     {
+      "t": "If your balcony is shady, grow leaves, not fruit. Save this list for spring.",
+      "v": "overhead shot of a full basket of greens and herbs"
+     },
+     {
+      "t": "Lettuce bolts slower in shade, so my harvest window ran three extra weeks.",
+      "v": "calendar with three extra weeks circled beside lettuce"
+     },
+     {
+      "t": "Next time: a reflective panel on the back wall to bounce more light.",
+      "v": "white panel reflecting light onto planters"
+     }
+    ]
+   },
+   {
+    "id": "a2",
+    "type": "Deep dive",
+    "style": "infographic",
+    "score": 90,
+    "effort": "Low",
+    "potential": "High",
+    "origin": "c2",
+    "title": "What a year of balcony food actually cost",
+    "pitch": "Every receipt from the setup, set against the grocery value of what came out.",
+    "reason": "Cost was the second most common question. Same viewer, wants the numbers behind the harvest.",
+    "suggested_title": "I Added Up Every Cent of My Balcony Garden. Was It Worth It?",
+    "tags": [
+     "balcony garden cost",
+     "is gardening worth it",
+     "grow your own food",
+     "budget gardening",
+     "apartment gardening"
+    ],
+    "hooks": [
+     "I spent $214 on a balcony garden. Here is exactly what it grew back.",
+     "Is growing food on a balcony actually cheaper? I kept every receipt.",
+     "Cost per tomato: $1.80. Cost per salad: 22 cents. Here is the math."
+    ],
+    "hook_visual": "a long receipt unrolling beside a basket of vegetables",
+    "beats": [
+     {
+      "t": "Setup was the big hit. Planters, soil and a drip kit came to $146.",
+      "v": "planters, soil bags and a drip kit with price tags"
+     },
+     {
+      "t": "Seeds were almost free. Eleven packets, $27, most still half full.",
+      "v": "grid of seed packets with small price labels"
+     },
+     {
+      "t": "Greens paid for themselves by month two.",
+      "v": "bar chart where grocery value crosses spend at month two"
+     },
+     {
+      "t": "Tomatoes and peppers never broke even on a balcony.",
+      "v": "a single tomato on a scale with a large price tag"
+     },
+     {
+      "t": "Year two costs a fraction of year one. The full spreadsheet is linked below.",
+      "v": "clean spreadsheet summary card with totals"
+     },
+     {
+      "t": "Water was the cost I forgot: about four dollars for the whole summer.",
+      "v": "watering can with a tiny coin stack"
+     },
+     {
+      "t": "Best value per square metre: salad greens, by a mile.",
+      "v": "ranking chart with salad greens at the top"
+     }
+    ]
+   },
+   {
+    "id": "a3",
+    "type": "Continuation",
+    "style": "cinematic",
+    "score": 88,
+    "effort": "Medium",
+    "potential": "High",
+    "origin": "c3",
+    "title": "The winter balcony: growing through the cold months",
+    "pitch": "Picks up in October where the original stopped and follows the balcony through frost.",
+    "reason": "Continues the exact timeline of the reference video. Returning viewers want the next season.",
+    "suggested_title": "Balcony Garden in Winter: What Survives the Cold",
+    "tags": [
+     "winter balcony garden",
+     "cold hardy vegetables",
+     "balcony garden",
+     "winter gardening",
+     "apartment gardening"
+    ],
+    "hooks": [
+     "The original year ended in October. This is what happened when I kept going.",
+     "Frost hit minus four. Six plants made it.",
+     "Everyone empties their balcony in winter. I tried the opposite."
+    ],
+    "hook_visual": "a snowy balcony railing with one green kale plant",
+    "beats": [
+     {
+      "t": "October: I swapped tomatoes for kale, garlic and winter lettuce.",
+      "v": "hands planting garlic cloves in a planter at dusk"
+     },
+     {
+      "t": "A cheap plastic cover bought me four degrees.",
+      "v": "a clear plastic cloche fogged with condensation over small plants"
+     },
+     {
+      "t": "The first frost took the lettuce, but the kale got sweeter.",
+      "v": "frost-covered kale leaves glittering in blue morning light"
+     },
+     {
+      "t": "By February the garlic was the only thing still pushing up.",
+      "v": "green garlic shoots through snow in a planter"
+     },
+     {
+      "t": "Winter will not feed you, but it keeps the balcony alive until spring.",
+      "v": "warm window light behind a snowy balcony garden"
+     }
+    ]
+   },
+   {
+    "id": "a4",
+    "type": "Different storyline",
+    "style": "comic",
+    "score": 81,
+    "effort": "Medium",
+    "potential": "Medium",
+    "origin": "c4",
+    "character": true,
+    "title": "The pigeon war",
+    "pitch": "The same balcony year retold as a rivalry with one very patient pigeon.",
+    "reason": "Same balcony, same viewers, new story. Comments show the pigeon moment was a favorite.",
+    "suggested_title": "Me vs. the Pigeons: A Balcony Garden Rivalry",
+    "tags": [
+     "balcony garden",
+     "pigeons",
+     "garden pests",
+     "funny gardening",
+     "apartment gardening"
+    ],
+    "hooks": [
+     "They took my first strawberry. This meant war.",
+     "Twelve months, seven defenses, one very patient pigeon.",
+     "Every balcony gardener has an enemy. Mine has feathers."
+    ],
+    "hook_visual": "a cartoon pigeon holding a stolen strawberry",
+    "beats": [
+     {
+      "t": "Week one. A pigeon named Gus inspects the new planters.",
+      "v": "cartoon pigeon peering over a planter rim"
+     },
+     {
+      "t": "Defense one: a fake owl. Gus sat on it.",
+      "v": "cartoon pigeon sitting smugly on a plastic owl"
+     },
+     {
+      "t": "Defense two: netting. Gus found the gap in an hour.",
+      "v": "pigeon squeezing through a gap in green netting"
+     },
+     {
+      "t": "What finally worked: shiny tape and a pot of seeds just for him.",
+      "v": "reflective ribbons fluttering while a pigeon eats from its own pot"
+     },
+     {
+      "t": "Truce. Gus gets one pot. I get the strawberries.",
+      "v": "pigeon and gardener sharing the balcony at sunset"
+     }
+    ]
+   },
+   {
+    "id": "a5",
+    "type": "Perspective flip",
+    "style": "comic",
+    "score": 84,
+    "effort": "Medium",
+    "potential": "High",
+    "character": true,
+    "title": "A year on the balcony, told by the tomato plant",
+    "pitch": "The reference video’s exact timeline, narrated by the plant that lived it.",
+    "reason": "Same beats as the reference video from a new point of view, so its viewers recognize every moment.",
+    "suggested_title": "My Balcony Garden Year, From the Tomato’s Point of View",
+    "tags": [
+     "balcony garden",
+     "tomato plant",
+     "growing tomatoes",
+     "plant pov",
+     "apartment gardening"
+    ],
+    "hooks": [
+     "Hi. I am the tomato. Nobody asked me how this year went.",
+     "Day one I was a seed in a yogurt cup. Let me tell you what happened next.",
+     "You watched her grow me. Here is my side of the story."
+    ],
+    "hook_visual": "a cartoon tomato plant with a face standing in a pot on a balcony",
+    "beats": [
+     {
+      "t": "They kept me in a yogurt cup on the windowsill for six weeks.",
+      "v": "small tomato seedling in a yogurt cup on a sunny windowsill"
+     },
+     {
+      "t": "Then the move outside. The wind up here is no joke.",
+      "v": "young tomato plant bending in the wind on a high balcony"
+     },
+     {
+      "t": "July was glorious. I put out forty flowers.",
+      "v": "tomato plant covered in yellow flowers in bright sun"
+     },
+     {
+      "t": "Then the pigeon came for my fruit. We do not speak of it.",
+      "v": "tomato plant glaring at a pigeon on the railing"
+     },
+     {
+      "t": "Eleven tomatoes. Proud. Save my seeds for next year.",
+      "v": "tomato plant beside a bowl of ripe red tomatoes"
+     }
+    ]
+   },
+   {
+    "id": "a6",
+    "type": "Different niche",
+    "style": "botanical",
+    "score": 86,
+    "effort": "Low",
+    "potential": "High",
+    "title": "No balcony at all: a windowsill food garden",
+    "pitch": "The same goal, scaled down to a single 40 cm windowsill.",
+    "reason": "Reaches renters in the same audience who could not follow the original because they have no balcony.",
+    "suggested_title": "No Balcony? I Grew Food on One Windowsill for 6 Months",
+    "tags": [
+     "windowsill garden",
+     "indoor vegetables",
+     "no balcony",
+     "apartment gardening",
+     "microgreens"
+    ],
+    "hooks": [
+     "No balcony. No yard. One windowsill. Six months of food.",
+     "If you do not have a balcony, this one is for you.",
+     "Forty centimetres of windowsill grew more than I expected."
+    ],
+    "hook_visual": "one crowded windowsill of plants seen from inside a small apartment",
+    "beats": [
+     {
+      "t": "The rule: everything had to fit on one sill, forty centimetres wide.",
+      "v": "a narrow windowsill with a tape measure across it"
+     },
+     {
+      "t": "Microgreens were ready in nine days.",
+      "v": "dense tray of microgreens in morning light"
+     },
+     {
+      "t": "Green onions regrew from grocery scraps, again and again.",
+      "v": "green onion roots in a glass of water"
+     },
+     {
+      "t": "A dwarf chili gave me sixty peppers.",
+      "v": "small chili plant covered in red peppers"
+     },
+     {
+      "t": "Start with microgreens this week. The full list is below.",
+      "v": "hands snipping microgreens over a plate"
+     }
+    ]
+   },
+   {
+    "id": "a7",
+    "type": "Deep dive",
+    "style": "infographic",
+    "score": 87,
+    "effort": "Medium",
+    "potential": "Medium",
+    "origin": "c5",
+    "title": "Vacation-proof: testing self-watering pots for 14 days",
+    "pitch": "Three watering setups, two weeks away, one heatwave.",
+    "reason": "Answers a direct question about a product that appears briefly in the reference video.",
+    "suggested_title": "I Left My Balcony Garden Alone for 14 Days. Did Self-Watering Pots Work?",
+    "tags": [
+     "self watering pots",
+     "vacation plant care",
+     "balcony garden",
+     "drip irrigation",
+     "apartment gardening"
+    ],
+    "hooks": [
+     "I left for two weeks and told nobody to water my plants.",
+     "Three watering systems, fourteen days, one heatwave.",
+     "Do self-watering pots really work? I tested them the hard way."
+    ],
+    "hook_visual": "a suitcase by the door with balcony plants behind",
+    "beats": [
+     {
+      "t": "Three setups: wicking pots, a drip timer, and plain pots as a control.",
+      "v": "three labeled planters side by side"
+     },
+     {
+      "t": "Day four, a heatwave hit 34 degrees.",
+      "v": "thermometer reading 34 degrees over a sunny balcony"
+     },
+     {
+      "t": "Plain pots were crisp by day six.",
+      "v": "wilted plant in a dry terracotta pot"
+     },
+     {
+      "t": "Wicking pots held on. The drip timer won outright.",
+      "v": "comparison chart with the drip timer ahead"
+     },
+     {
+      "t": "For a long trip, pair a wicking pot with a drip line.",
+      "v": "diagram of a drip line feeding a wicking pot"
+     }
+    ]
+   },
+   {
+    "id": "a8",
+    "type": "Different topic",
+    "style": "cinematic",
+    "score": 72,
+    "effort": "High",
+    "potential": "Medium",
+    "title": "Who pollinates a fifth-floor garden?",
+    "pitch": "Thirty days of camera footage on the flower boxes to see who shows up.",
+    "reason": "Same niche and viewers with a new topic. Fewer shared keywords lowers the score.",
+    "suggested_title": "Do Bees Reach a 5th-Floor Balcony? I Counted.",
+    "tags": [
+     "balcony pollinators",
+     "urban bees",
+     "balcony garden",
+     "hand pollination",
+     "city gardening"
+    ],
+    "hooks": [
+     "My tomatoes flowered but nothing set. So I started counting visitors.",
+     "Five floors up, who is actually pollinating your plants?",
+     "I filmed my balcony flowers for 30 days to see who showed up."
+    ],
+    "hook_visual": "one bee flying above a city skyline toward a balcony flower",
+    "beats": [
+     {
+      "t": "Thirty days of footage on the flower boxes.",
+      "v": "small camera clipped to a balcony railing pointed at flowers"
+     },
+     {
+      "t": "Bees came, but only on warm, still mornings.",
+      "v": "bee on a yellow tomato flower in morning light"
+     },
+     {
+      "t": "Hoverflies did more work than I expected.",
+      "v": "hoverfly above white flowers, shallow focus"
+     },
+     {
+      "t": "On windy weeks I pollinated by hand with a toothbrush.",
+      "v": "electric toothbrush touching a tomato flower stem"
+     },
+     {
+      "t": "Plant flowers next to your vegetables. Here is what drew the most visitors.",
+      "v": "box of mixed flowers next to vegetable planters"
+     }
+    ]
+   },
+   {
+    "id": "a9",
+    "type": "Different visuals",
+    "style": "watercolor",
+    "score": 77,
+    "effort": "High",
+    "potential": "Medium",
+    "title": "The same year, painted as a watercolor timelapse",
+    "pitch": "The balcony year again, told through one painting a week.",
+    "reason": "Same story as the reference video with a new visual treatment, so the same audience recognizes it.",
+    "suggested_title": "A Year of Balcony Gardening, Painted Week by Week",
+    "tags": [
+     "balcony garden",
+     "watercolor timelapse",
+     "garden journal",
+     "art and gardening",
+     "apartment gardening"
+    ],
+    "hooks": [
+     "I painted my balcony garden every week for a year.",
+     "Fifty-two paintings. One balcony. Watch it grow.",
+     "This is a year of growing food, one watercolor at a time."
+    ],
+    "hook_visual": "watercolor of a balcony garden being painted in fast strokes",
+    "beats": [
+     {
+      "t": "January: bare pots and a sketch of a plan.",
+      "v": "watercolor of empty pots and a pencil garden plan"
+     },
+     {
+      "t": "April: the first seedlings, and the color comes back.",
+      "v": "watercolor of seedlings in bright green washes"
+     },
+     {
+      "t": "July: the page gets crowded.",
+      "v": "dense watercolor of an overflowing summer balcony"
+     },
+     {
+      "t": "October: the harvest, in reds and golds.",
+      "v": "watercolor of a harvest basket in warm reds and gold"
+     },
+     {
+      "t": "The full sketchbook flip is at the end.",
+      "v": "a watercolor sketchbook flipping through pages"
+     }
+    ]
+   },
+   {
+    "id": "a10",
+    "type": "Continuation",
+    "style": "botanical",
+    "score": 83,
+    "effort": "Low",
+    "potential": "Medium",
+    "origin": "c6",
+    "title": "Reusing last year’s soil: what happens",
+    "pitch": "Old soil against new soil, side by side, for one season.",
+    "reason": "A direct follow-up for viewers who started a garden after the reference video and are now in year two.",
+    "suggested_title": "Can You Reuse Potting Soil? My Year-Two Balcony Test",
+    "tags": [
+     "reuse potting soil",
+     "container gardening",
+     "balcony garden",
+     "compost",
+     "year two garden"
+    ],
+    "hooks": [
+     "I could buy new soil or reuse last year’s. So I did both.",
+     "Year two. Same soil. Did it still grow anything?",
+     "Old soil versus new soil, side by side, one season."
+    ],
+    "hook_visual": "a scoop of old potting soil held over a planter",
+    "beats": [
+     {
+      "t": "Half the planters got fresh soil. Half got last year’s.",
+      "v": "two planters, one dark fresh soil and one pale old soil"
+     },
+     {
+      "t": "Old soil, untreated, grew pale and slow.",
+      "v": "pale yellowish lettuce seedlings in old soil"
+     },
+     {
+      "t": "Old soil plus compost and worm castings caught up in three weeks.",
+      "v": "hands mixing compost into a planter"
+     },
+     {
+      "t": "By harvest you could not tell them apart.",
+      "v": "two equally lush planters side by side"
+     },
+     {
+      "t": "Reuse your soil. Just feed it first. My mix is below.",
+      "v": "flat lay of compost, worm castings and a scoop"
+     }
+    ]
+   }
+  ]
+ },
+ "DEFAULT_CHARS": [
+  {
+   "id": "ch-tomi",
+   "name": "Tomi",
+   "description": "A cheerful cartoon tomato plant with a small round face and leaf arms",
+   "notes": "Proud, a little dramatic",
+   "voice_id": "v-juno",
+   "seed": 501
+  },
+  {
+   "id": "ch-gus",
+   "name": "Gus",
+   "description": "A scheming grey city pigeon with an iridescent green neck",
+   "notes": "Deadpan, always hungry",
+   "voice_id": "v-ash",
+   "seed": 733
+  }
+ ]
+}

@@ -1,0 +1,1724 @@
+<title>Angle Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an editing bay. Sticky model bar on top, the pipeline rail on the left, one working surface per step, approval bar at the foot of each step. */
+:root {
+  --bg: #E8EBEF; --surface: #FFFFFF; --sunk: #F2F4F7; --ink: #131820; --muted: #59636F; --line: #D3D8DF;
+  --accent: #1D53CC; --accent-soft: #E2EAFA; --on-accent: #FFFFFF;
+  --rec: #D23F29; --ok: #1B7A51; --ok-soft: #DCEFE5; --warn: #8E6210; --warn-soft: #F6EAD0; --fail: #B23131; --fail-soft: #F7DFDF;
+  --frame: #0A0D12; --cap: #FFE45C;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r: 10px; --r-sm: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0E1116; --surface: #161A21; --sunk: #1C212A; --ink: #E7EAF0; --muted: #98A2B1; --line: #2A313C;
+  --accent: #7097FF; --accent-soft: #1D2A47; --on-accent: #0B1020;
+  --rec: #FF6A52; --ok: #45C48C; --ok-soft: #15302A; --warn: #E2AA48; --warn-soft: #352A15; --fail: #F06C6C; --fail-soft: #3A1E1E;
+  --frame: #05070A; --cap: #FFE45C; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0E1116; --surface: #161A21; --sunk: #1C212A; --ink: #E7EAF0; --muted: #98A2B1; --line: #2A313C;
+  --accent: #7097FF; --accent-soft: #1D2A47; --on-accent: #0B1020;
+  --rec: #FF6A52; --ok: #45C48C; --ok-soft: #15302A; --warn: #E2AA48; --warn-soft: #352A15; --fail: #F06C6C; --fail-soft: #3A1E1E;
+  --frame: #05070A; --cap: #FFE45C; color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 40; background: var(--surface); }
+* { box-sizing: border-box; }
+h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: 1.75rem; line-height: 1.15; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 1rem; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.grow { flex: 1; min-width: 0; }
+
+/* Buttons and controls */
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: var(--r-sm); cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.ghost:hover:not(:disabled) { background: var(--sunk); }
+.btn.sm { padding: 4px 9px; font-size: 13px; }
+.btn.danger { color: var(--fail); }
+.btn .tag { font-family: var(--f-mono); font-size: 12px; opacity: 0.85; }
+.btn svg { width: 15px; height: 15px; flex: none; }
+.input, .select, .textarea { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; }
+.textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
+.input:focus, .textarea:focus, .select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; font-weight: 500; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; background: var(--sunk); border: 1px solid var(--line); white-space: nowrap; }
+.chip.btnchip { cursor: pointer; }
+.chip.btnchip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.ready { color: var(--ok); background: var(--ok-soft); }
+.pill.generating { color: var(--rec); background: var(--fail-soft); }
+.pill.generating::before { animation: blink 1s infinite; }
+.pill.failed { color: var(--fail); background: var(--fail-soft); }
+.pill.pending { color: var(--muted); background: var(--sunk); }
+@keyframes blink { 50% { opacity: 0.2; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+
+/* Top bar */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.brand { display: flex; align-items: center; gap: 9px; font-family: var(--f-display); font-weight: 700; font-size: 17px; }
+.brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); position: relative; flex: none; }
+.brand-mark::after { content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--rec); top: 5px; right: 5px; }
+.brand-mark::before { content: ""; position: absolute; left: 5px; bottom: 5px; width: 12px; height: 8px; border-left: 2px solid var(--bg); border-bottom: 2px solid var(--bg); transform: skewX(-20deg); }
+.proj-title { color: var(--muted); font-size: 13px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.models { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; align-items: center; }
+.picker { position: relative; }
+.picker > button { display: flex; flex-direction: column; align-items: flex-start; gap: 0; border: 1px solid var(--line); background: var(--sunk); border-radius: var(--r-sm); padding: 4px 10px 5px; cursor: pointer; min-width: 150px; text-align: left; }
+.picker > button:hover { border-color: var(--muted); }
+.picker .k { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.picker .v { font-weight: 500; font-size: 13px; white-space: nowrap; }
+.picker .v small { font-family: var(--f-mono); color: var(--muted); font-size: 11px; margin-left: 6px; }
+.menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 12px 32px rgba(0,0,0,0.18); width: min(340px, calc(100vw - 32px)); padding: 6px; }
+.menu-item { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: var(--r-sm); cursor: pointer; }
+.menu-item:hover:not(:disabled) { background: var(--sunk); }
+.menu-item[aria-checked="true"] { background: var(--accent-soft); }
+.menu-item:disabled { opacity: 0.55; cursor: not-allowed; }
+.menu-item .mi-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.menu-item .mi-sub { font-size: 12px; color: var(--muted); }
+.menu-note { font-size: 12px; color: var(--muted); padding: 6px 10px 4px; border-top: 1px solid var(--line); margin-top: 4px; }
+.costpill { font-family: var(--f-mono); font-size: 12px; padding: 5px 10px; border-radius: var(--r-sm); background: var(--sunk); border: 1px solid var(--line); white-space: nowrap; }
+.costpill b { font-weight: 500; color: var(--ink); }
+.saved { font-size: 12px; color: var(--ok); display: inline-flex; align-items: center; gap: 4px; }
+
+/* Shell */
+.shell { flex: 1; display: grid; grid-template-columns: 218px minmax(0, 1fr); gap: 20px; padding-block: 18px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1440px; width: 100%; margin: 0 auto; }
+.rail { position: sticky; top: 76px; align-self: start; display: flex; flex-direction: column; gap: 18px; }
+.rail nav { display: flex; flex-direction: column; gap: 2px; }
+.rail-item { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer; text-align: left; width: 100%; color: var(--ink); }
+.rail-item:hover:not(:disabled) { background: var(--surface); }
+.rail-item[aria-current="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; }
+.rail-item:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.7; }
+.rail-num { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-mono); font-size: 11px; border: 1px solid var(--line); background: var(--surface); flex: none; }
+.rail-item.done .rail-num { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+.rail-item[aria-current="true"] .rail-num { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.rail-item.skipped { color: var(--muted); }
+.rail-item.skipped .rail-label { text-decoration: line-through; }
+.rail-item .rail-meta { margin-left: auto; font-size: 11px; color: var(--muted); }
+.rail-item svg { width: 15px; height: 15px; }
+.rail-count { margin-left: auto; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+/* Panels and step header */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
+.panel.flat { background: transparent; border: 0; padding: 0; }
+.panel-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.stephead { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.stephead p { color: var(--muted); max-width: 62ch; margin-top: 4px; }
+.banner { display: flex; gap: 12px; align-items: flex-start; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); color: var(--ink); padding: 10px 14px; border-radius: var(--r); font-size: 13px; }
+.banner b { color: var(--accent); }
+.note { font-size: 13px; color: var(--muted); }
+.warnbox { background: var(--warn-soft); color: var(--warn); border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; }
+.okbox { background: var(--ok-soft); color: var(--ok); border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; }
+
+/* Approval bar */
+.approve { position: sticky; bottom: max(12px, env(safe-area-inset-bottom, 0px)); z-index: 15; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--ink); color: var(--bg); padding: 10px 12px 10px 16px; border-radius: var(--r); box-shadow: 0 10px 30px rgba(0,0,0,0.22); }
+.approve .cp { font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.approve .cp b { font-family: var(--f-mono); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; background: color-mix(in srgb, var(--bg) 18%, transparent); }
+.approve .btn { border-color: color-mix(in srgb, var(--bg) 30%, transparent); background: transparent; color: var(--bg); }
+.approve .btn.primary { background: var(--bg); color: var(--ink); border-color: var(--bg); }
+.approve .gate { color: var(--ink); }
+.gate { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 8px; max-width: 460px; }
+.gate table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gate td { padding: 2px 0; }
+.gate td:last-child { text-align: right; font-family: var(--f-mono); }
+.gate .tot td { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 600; }
+
+/* Ingest */
+.ingest-hero { display: grid; gap: 16px; padding: 28px; }
+.urlrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.urlrow .input { flex: 1 1 280px; font-family: var(--f-mono); font-size: 13px; padding: 11px 12px; }
+.stages { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.stage { display: flex; gap: 8px; align-items: center; }
+.stage .dot { width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); }
+.stage.done { color: var(--ok); }
+.stage.now { color: var(--rec); font-weight: 600; }
+.stage.todo { color: var(--muted); }
+
+/* Angles */
+.angles-layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; align-items: start; }
+.source-card { display: grid; grid-template-columns: 76px 1fr; gap: 12px; }
+.thumb { border-radius: var(--r-sm); overflow: hidden; background: var(--frame); aspect-ratio: 16/9; position: relative; }
+.thumb svg, .frame svg, .art svg { display: block; width: 100%; height: 100%; }
+.keyframes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.keyframes figure { margin: 0; }
+.keyframes figcaption { font-family: var(--f-mono); font-size: 10px; color: var(--muted); }
+.beats { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.beats li { display: grid; grid-template-columns: 38px 1fr; gap: 6px; }
+.beats .mono { color: var(--muted); font-size: 12px; }
+.gaps { display: flex; flex-direction: column; gap: 6px; }
+.gap { font-size: 13px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--sunk); }
+.gap .eyebrow { font-size: 10px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.acard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; transition: border-color .15s, box-shadow .15s; }
+.acard.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.acard-top { display: flex; gap: 12px; align-items: flex-start; }
+.score { flex: none; width: 46px; height: 46px; position: relative; display: grid; place-items: center; font-family: var(--f-mono); font-weight: 500; font-size: 14px; }
+.score svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.acard h3 { font-size: 15.5px; line-height: 1.25; }
+.acard .pitch { font-size: 13px; color: var(--muted); }
+.why { font-size: 13px; border-left: 2px solid var(--accent); padding-left: 8px; }
+.hookq { font-size: 13px; font-style: italic; background: var(--sunk); padding: 6px 9px; border-radius: var(--r-sm); }
+.meta { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.swatches { display: inline-flex; }
+.swatches i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: -3px; border: 1px solid var(--surface); }
+.origin { font-size: 12px; color: var(--muted); display: flex; gap: 6px; }
+.origin q { font-style: italic; }
+.acard-actions { display: flex; justify-content: space-between; gap: 6px; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--line); padding-top: 10px; }
+details.meta-d summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 500; }
+details.meta-d[open] summary { margin-bottom: 6px; }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.tray { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+
+/* Script */
+.hooks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.hookopt { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px 12px; cursor: pointer; font-size: 13.5px; display: flex; gap: 8px; }
+.hookopt[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.hookopt .radio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; margin-top: 3px; }
+.hookopt[aria-pressed="true"] .radio { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
+.lines { display: flex; flex-direction: column; gap: 8px; }
+.line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 64px 32px; gap: 8px; align-items: start; }
+.line.char { grid-template-columns: 30px 130px minmax(0, 1fr) 64px 32px; }
+.line .idx { font-family: var(--f-mono); font-size: 12px; color: var(--muted); padding-top: 9px; text-align: right; }
+.line .secs { font-family: var(--f-mono); font-size: 12px; color: var(--muted); padding-top: 9px; text-align: right; }
+.line .textarea { min-height: 40px; }
+.meter { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; position: relative; }
+.meter > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 99px; }
+.meter.warn > i { background: var(--warn); }
+.meter.bad > i { background: var(--fail); }
+.script-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+
+/* Style */
+.styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.scard { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); overflow: hidden; cursor: pointer; text-align: left; padding: 0; display: flex; flex-direction: column; }
+.scard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.scard .art { aspect-ratio: 4/3; }
+.scard .sbody { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; }
+.scard .prefix { font-family: var(--f-mono); font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* Voice */
+.voices { display: flex; flex-direction: column; gap: 6px; }
+.voice { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; }
+.voice[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.wave { display: flex; align-items: center; gap: 2px; height: 22px; }
+.wave i { width: 3px; border-radius: 2px; background: var(--accent); opacity: 0.75; }
+.wave.off i { background: var(--line); }
+.audiolist { display: flex; flex-direction: column; gap: 6px; }
+.aline { display: grid; grid-template-columns: 26px minmax(0, 1fr) 110px 54px auto; gap: 10px; align-items: center; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.aline:last-child { border-bottom: 0; }
+.chars { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.charcard { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; }
+.charcard .art { border-radius: var(--r-sm); overflow: hidden; aspect-ratio: 1; }
+
+/* Format */
+.fmt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.aspects { display: flex; gap: 10px; }
+.aspect { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+.aspect[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.aspect i { display: block; background: var(--sunk); border: 2px solid var(--muted); border-radius: 4px; }
+.capopts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.capopt { border: 1px solid var(--line); border-radius: var(--r); background: var(--frame); color: #fff; height: 86px; display: flex; align-items: flex-end; justify-content: center; padding: 8px; cursor: pointer; position: relative; overflow: hidden; }
+.capopt[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--accent); }
+.capopt span.lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: rgba(255,255,255,0.7); }
+
+/* Scenes */
+.scenes { display: flex; flex-direction: column; gap: 12px; }
+.scene { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; }
+.scene.wide { grid-template-columns: 240px minmax(0, 1fr); }
+.scene-media { display: flex; flex-direction: column; gap: 6px; }
+.frame { position: relative; background: var(--frame); border-radius: var(--r-sm); overflow: hidden; aspect-ratio: 9/16; width: 100%; }
+.frame.h { aspect-ratio: 16/9; }
+.frame .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10,13,18,0.55); color: #fff; font-size: 12px; text-align: center; padding: 8px; gap: 6px; align-content: center; }
+.frame .badge { position: absolute; left: 6px; top: 6px; font-family: var(--f-mono); font-size: 10px; color: #fff; background: rgba(0,0,0,0.55); padding: 1px 6px; border-radius: 4px; }
+.versions { display: flex; gap: 4px; flex-wrap: wrap; }
+.versions button { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; cursor: pointer; background: var(--frame); }
+.versions button[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.versions svg, .versions img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.scene-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.scene-lines { font-size: 13.5px; background: var(--sunk); border-radius: var(--r-sm); padding: 8px 10px; }
+.scene-lines b { font-weight: 600; color: var(--accent); }
+.prompt { font-family: var(--f-mono); font-size: 12px; }
+.prefix-chip { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+
+/* Player */
+.player { display: flex; flex-direction: column; gap: 8px; width: min(100%, 300px); }
+.player.h { width: min(100%, 560px); }
+.stage-wrap { position: absolute; inset: -8%; will-change: transform; }
+.caption { position: absolute; left: 6%; right: 6%; bottom: 16%; text-align: center; color: #fff; pointer-events: none; }
+.caption.bold span { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: clamp(16px, 7cqw, 26px); line-height: 1.05; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0,0,0,0.8); -webkit-text-stroke: 1px #000; margin: 0 0.12em; display: inline-block; }
+.caption.bold span.on { color: var(--cap); transform: scale(1.08); }
+.caption.clean { background: rgba(0,0,0,0.62); border-radius: 6px; padding: 6px 10px; font-size: clamp(11px, 4.4cqw, 15px); line-height: 1.35; bottom: 8%; }
+.caption.karaoke { font-weight: 600; font-size: clamp(12px, 5cqw, 17px); line-height: 1.3; text-shadow: 0 1px 3px #000; }
+.caption.karaoke span { color: rgba(255,255,255,0.55); }
+.caption.karaoke span.past { color: var(--cap); }
+.frame { container-type: inline-size; }
+.speaker { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 99px; }
+.drafttag { position: absolute; right: 8px; top: 8px; font-family: var(--f-mono); font-size: 10px; background: var(--rec); color: #fff; padding: 2px 6px; border-radius: 4px; }
+.controls { display: flex; align-items: center; gap: 8px; }
+.controls input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+.ticks { position: relative; height: 6px; margin: -6px 34px 0 36px; }
+.ticks i { position: absolute; top: 0; width: 1px; height: 6px; background: var(--muted); }
+.compile-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: start; }
+.checklist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.checklist li { display: flex; gap: 8px; align-items: center; }
+.checklist svg { width: 16px; height: 16px; color: var(--ok); flex: none; }
+.checklist li.no svg { color: var(--muted); }
+
+/* Export */
+.filecard { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--sunk); flex-wrap: wrap; }
+.fileicon { width: 40px; height: 48px; border-radius: 4px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-family: var(--f-mono); font-size: 10px; font-weight: 500; flex: none; }
+.thumbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tn { position: relative; aspect-ratio: 16/9; border-radius: var(--r-sm); overflow: hidden; background: var(--frame); }
+.tn b { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #fff; font-family: var(--f-display); font-size: clamp(11px, 1.6vw, 15px); line-height: 1.05; text-transform: uppercase; text-shadow: 0 2px 0 #000; -webkit-text-stroke: 0.6px #000; }
+.copyrow { display: flex; gap: 8px; align-items: flex-start; }
+
+/* Library views */
+.list { display: flex; flex-direction: column; gap: 8px; }
+.lrow { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); flex-wrap: wrap; }
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.switch input { accent-color: var(--accent); width: 16px; height: 16px; }
+.kv { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 6px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+
+/* Jobs + toasts */
+.jobs-btn { position: relative; }
+.jobs-btn > .btn { padding-block: 9px; }
+.jobs-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: min(360px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 12px 32px rgba(0,0,0,0.2); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.job { font-size: 13px; display: flex; flex-direction: column; gap: 4px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.job:last-child { border-bottom: 0; }
+.toasts { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 60; display: flex; flex-direction: column; gap: 6px; align-items: center; width: min(520px, calc(100vw - 32px)); pointer-events: none; }
+.toast { background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: var(--r-sm); font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); animation: rise .2s ease-out; }
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } }
+.skeleton { background: linear-gradient(90deg, var(--sunk), var(--line), var(--sunk)); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: var(--r-sm); height: 14px; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+@media (max-width: 1080px) {
+  .angles-layout, .script-grid { grid-template-columns: minmax(0, 1fr); }
+  .tray { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-top: 12px; }
+  .rail { position: static; gap: 8px; }
+  .rail nav { flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+  .rail-item { width: auto; flex: none; white-space: nowrap; }
+  .rail-item .rail-meta, .rail .eyebrow { display: none; }
+  .models { margin-left: 0; width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+  .picker > button { min-width: 130px; }
+  .menu, .jobs-panel { position: fixed; left: 16px; right: 16px; top: 128px; width: auto; }
+  .compile-grid { grid-template-columns: minmax(0, 1fr); }
+  .scene, .scene.wide { grid-template-columns: 110px minmax(0, 1fr); gap: 12px; }
+  .scene.wide { grid-template-columns: minmax(0, 1fr); }
+  .line, .line.char { grid-template-columns: 22px minmax(0, 1fr) 30px; }
+  .line .secs { display: none; }
+  .line.char select { grid-column: 2 / 4; }
+  .line.char .textarea { grid-column: 2; }
+  .aline { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .aline .wave, .aline .secs { display: none; }
+  .capopts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .proj-title { display: none; }
+  .kv { grid-template-columns: minmax(0, 1fr); }
+  .thumbs { grid-template-columns: minmax(0, 1fr); }
+  .ingest-hero { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+}
+</style>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+const { useState, useEffect, useRef, useMemo, useSyncExternalStore } = React;
+const html = htm.bind(React.createElement);
+
+/* ======================================================================
+   Catalog: providers, voices, styles, music, captions
+   Each model is one adapter behind a common interface (MDL-4). Prices are
+   placeholder estimates until real adapters report them.
+   ====================================================================== */
+const MODELS = {
+  voice: [
+    { id: 'elevenlabs-v2', name: 'ElevenLabs Multilingual v2', provider: 'elevenlabs', cost: 0.18, unit: '/1k chars', limits: 'Voice cloning · 29 languages' },
+    { id: 'openai-tts-hd', name: 'OpenAI TTS HD', provider: 'openai', cost: 0.03, unit: '/1k chars', limits: 'Library voices only · no cloning' },
+    { id: 'cartesia-sonic', name: 'Cartesia Sonic', provider: 'cartesia', cost: 0.05, unit: '/1k chars', limits: 'Low latency · voice cloning' },
+  ],
+  image: [
+    { id: 'flux-11-pro', name: 'FLUX 1.1 Pro', provider: 'bfl', cost: 0.04, unit: '/image', limits: '9:16 and 16:9 · fixed seeds · reference images' },
+    { id: 'imagen-4', name: 'Imagen 4', provider: 'google', cost: 0.04, unit: '/image', limits: '9:16 and 16:9 · strong text rendering' },
+    { id: 'sdxl', name: 'Stable Diffusion XL', provider: 'stability', cost: 0.01, unit: '/image', limits: 'Fixed seeds · no reference images' },
+  ],
+  video: [
+    { id: 'kling-21', name: 'Kling 2.1', provider: 'kling', cost: 0.07, unit: '/sec', maxClip: 10, limits: 'Max 10 s clip · character reference' },
+    { id: 'runway-gen4', name: 'Runway Gen-4', provider: 'runway', cost: 0.10, unit: '/sec', maxClip: 10, limits: 'Max 10 s clip · character consistency' },
+    { id: 'veo-3', name: 'Veo 3', provider: 'google', cost: 0.40, unit: '/sec', maxClip: 8, limits: 'Max 8 s clip · lip-sync' },
+  ],
+};
+const PROVIDERS = { elevenlabs: 'ElevenLabs', openai: 'OpenAI', cartesia: 'Cartesia', bfl: 'Black Forest Labs', google: 'Google', stability: 'Stability AI', kling: 'Kling', runway: 'Runway' };
+const KIND_LABEL = { voice: 'Voiceover', image: 'Image', video: 'Video' };
+
+const VOICES = [
+  { id: 'v-mara', name: 'Mara', desc: 'Warm, mid-pitch, conversational', pitch: 1.0, rate: 1.0, speed: 1.0 },
+  { id: 'v-theo', name: 'Theo', desc: 'Calm, low, documentary', pitch: 0.75, rate: 0.92, speed: 0.92 },
+  { id: 'v-juno', name: 'Juno', desc: 'Bright, quick, upbeat', pitch: 1.25, rate: 1.1, speed: 1.1 },
+  { id: 'v-ash', name: 'Ash', desc: 'Dry, wry, deadpan', pitch: 0.9, rate: 0.98, speed: 0.98 },
+  { id: 'v-pip', name: 'Pip', desc: 'Small, squeaky, playful', pitch: 1.6, rate: 1.12, speed: 1.12 },
+  { id: 'v-own', name: 'My voice', desc: 'Your cloned voice · needs consent', pitch: 1.0, rate: 1.0, speed: 1.0, clone: true },
+];
+
+const STYLES = [
+  { id: 'botanical', name: 'Soft botanical', kind: 'soft', mood: 'Calm, tactile, morning light', prefix: 'soft window light, shallow depth of field, muted greens, 35mm film grain', palette: ['#2E4A3B', '#93BF9A', '#F1E6C8', '#D9895B'] },
+  { id: 'infographic', name: 'Clean infographic', kind: 'flat', mood: 'Clear, explanatory, numbers on screen', prefix: 'flat vector illustration, clean geometric shapes, generous negative space, two-tone', palette: ['#12355B', '#4F8BC9', '#EAF2FA', '#F2B134'] },
+  { id: 'comic', name: 'Cartoon comic', kind: 'comic', mood: 'Playful, punchy, expressive', prefix: 'bold ink outlines, cel shading, saturated colors, expressive cartoon characters', palette: ['#2B2D42', '#EF8354', '#FFF3D6', '#4FB0C6'] },
+  { id: 'watercolor', name: 'Watercolor journal', kind: 'watercolor', mood: 'Gentle, nostalgic, handmade', prefix: 'loose watercolor on cold-press paper, soft bleeding edges, hand-drawn feel', palette: ['#5B7B7A', '#C8D5B9', '#FAF3E3', '#E08D79'] },
+  { id: 'cinematic', name: 'Moody cinematic', kind: 'soft', mood: 'Dramatic, high stakes, night', prefix: 'low-key lighting, teal and amber grade, anamorphic lens, deep shadows', palette: ['#0E1A24', '#1F4E5A', '#E7B15A', '#C2563A'] },
+];
+const MUSIC = [
+  { id: 'none', name: 'No music', mood: '' },
+  { id: 'm-soil', name: 'Morning Soil', mood: 'Lo-fi · 84 bpm' },
+  { id: 'm-lanterns', name: 'Paper Lanterns', mood: 'Acoustic · 96 bpm' },
+  { id: 'm-wire', name: 'Tension Wire', mood: 'Pulse · 120 bpm' },
+];
+const CAPTIONS = [
+  { id: 'bold', name: 'Bold pop' },
+  { id: 'clean', name: 'Clean bar' },
+  { id: 'karaoke', name: 'Karaoke' },
+];
+const ANGLE_TYPES = ['Deep dive', 'Continuation', 'Different storyline', 'Perspective flip', 'Different niche', 'Different topic', 'Different visuals'];
+
+/* ======================================================================
+   Sample reference video (fictional). In demo mode any link loads this.
+   ====================================================================== */
+const SAMPLE = {
+  source: {
+    title: 'I Grew Food on My Apartment Balcony for a Year (Here’s the Harvest)',
+    channel: 'Small Space Growing', duration: 702, published: '2026-08-14', views: '2.1M views',
+    transcript: 'Fourteen point six kilos of food from a four square metre balcony. That is what one year of growing on a rented balcony got me. Twelve months ago it looked like this, bare concrete and one sad plastic chair. The rules were simple: no yard, no landlord drama, nothing I could not carry up five floors. I started everything on the windowsill in yogurt cups...',
+    key_frames: [
+      { t: '0:00', d: 'Harvest basket on a kitchen scale', seed: 11 }, { t: '0:41', d: 'Empty concrete balcony', seed: 23 },
+      { t: '2:12', d: 'Seedlings in yogurt cups', seed: 37 }, { t: '4:33', d: 'Plants bent in the wind', seed: 41 },
+      { t: '7:12', d: 'Pigeon on the railing', seed: 59 }, { t: '8:40', d: 'Tomatoes ripening', seed: 61 },
+      { t: '9:25', d: 'Month-by-month montage', seed: 73 }, { t: '11:02', d: 'Totals on a whiteboard', seed: 89 },
+    ],
+    comments: [
+      { id: 'c1', text: 'Mine faces north and gets maybe 3 hours of sun. Is it even worth trying??', likes: '4.2k', kind: 'question' },
+      { id: 'c2', text: 'How much did all of this cost in total? Would love a breakdown.', likes: '3.1k', kind: 'request' },
+      { id: 'c3', text: 'Please do a winter version! What happens after October?', likes: '2.7k', kind: 'request' },
+      { id: 'c4', text: 'The pigeon at 7:12 deserves its own video', likes: '2.2k', kind: 'request' },
+      { id: 'c5', text: 'Did the self-watering pots actually work while you were away?', likes: '1.4k', kind: 'question' },
+      { id: 'c6', text: 'Can I reuse the soil next year or do I need new?', likes: '1.1k', kind: 'question' },
+    ],
+    comments_scanned: 1840,
+  },
+  analysis: {
+    summary: 'A renter turns an empty 4 m² concrete balcony into a food garden over twelve months and weighs every harvest.',
+    hook: 'Opens on the final harvest on a kitchen scale (14.6 kg), then cuts back to the bare balcony twelve months earlier.',
+    beats: [
+      ['0:00', 'Payoff first: the harvest on the scale'], ['0:40', 'The empty balcony and the rules for the year'],
+      ['2:10', 'Seed starting on the windowsill'], ['4:30', 'Moving outside and the wind problem'],
+      ['7:05', 'Summer peak and the pigeon'], ['9:20', 'Month-by-month harvest montage'], ['11:00', 'Totals and what to grow first'],
+    ],
+    pacing: 'Cuts every 3 to 4 seconds in the first minute, then slows into a montage. Talking-head segments never run past 20 seconds.',
+    why_it_worked: ['A hard number in the hook promises a payoff', 'Relatable limit: a rented balcony, no yard', 'Visible change over a fixed time span', 'A small recurring character (the pigeon) viewers remember'],
+    gaps: [
+      { kind: 'Unanswered question', text: 'What grows with very little sun', from: 'c1' },
+      { kind: 'Unanswered question', text: 'Total cost of the setup', from: 'c2' },
+      { kind: 'Unfinished thread', text: 'The story stops in October', from: 'c3' },
+      { kind: 'Audience request', text: 'More of the pigeon', from: 'c4' },
+      { kind: 'Skipped perspective', text: 'Viewers with no balcony at all' },
+      { kind: 'Unexplored visual', text: 'One live-action look the whole way through' },
+    ],
+  },
+  angles: [
+    { id: 'a1', type: 'Deep dive', style: 'botanical', score: 94, effort: 'Low', potential: 'High', origin: 'c1',
+      title: 'Growing food on a balcony that gets 3 hours of sun', pitch: 'The most-liked question in the comments: what actually grows when your balcony faces north.',
+      reason: 'Viewers with shady balconies were left without an answer. This is their obvious next click.',
+      suggested_title: 'Balcony Garden With Only 3 Hours of Sun: What Actually Grew', tags: ['balcony garden', 'shade vegetables', 'north facing balcony', 'apartment gardening', 'small space gardening'],
+      hooks: ['My balcony gets three hours of sun. Everyone said grow nothing. Here is what grew anyway.', 'Got a shady balcony? These five crops do not care.', 'I tracked every hour of light on a north-facing balcony for 90 days.'],
+      hook_visual: 'narrow shaded balcony with a single band of sunlight crossing the planters',
+      beats: [
+        { t: 'First I measured the light. Three hours of direct sun, the rest bright shade.', v: 'phone light meter held up on a narrow concrete balcony' },
+        { t: 'Leafy greens were the surprise. Lettuce, chard and spinach barely noticed.', v: 'rows of lettuce and rainbow chard in long planters in soft shade' },
+        { t: 'Herbs split the room. Mint and parsley thrived, basil sulked.', v: 'thriving mint beside a leggy, sad basil plant' },
+        { t: 'Tomatoes were the hard lesson. Plenty of leaves, four tomatoes total.', v: 'tall tomato vine with only a few small green tomatoes' },
+        { t: 'If your balcony is shady, grow leaves, not fruit. Save this list for spring.', v: 'overhead shot of a full basket of greens and herbs' },
+        { t: 'Lettuce bolts slower in shade, so my harvest window ran three extra weeks.', v: 'calendar with three extra weeks circled beside lettuce' },
+        { t: 'Next time: a reflective panel on the back wall to bounce more light.', v: 'white panel reflecting light onto planters' },
+      ] },
+    { id: 'a2', type: 'Deep dive', style: 'infographic', score: 90, effort: 'Low', potential: 'High', origin: 'c2',
+      title: 'What a year of balcony food actually cost', pitch: 'Every receipt from the setup, set against the grocery value of what came out.',
+      reason: 'Cost was the second most common question. Same viewer, wants the numbers behind the harvest.',
+      suggested_title: 'I Added Up Every Cent of My Balcony Garden. Was It Worth It?', tags: ['balcony garden cost', 'is gardening worth it', 'grow your own food', 'budget gardening', 'apartment gardening'],
+      hooks: ['I spent $214 on a balcony garden. Here is exactly what it grew back.', 'Is growing food on a balcony actually cheaper? I kept every receipt.', 'Cost per tomato: $1.80. Cost per salad: 22 cents. Here is the math.'],
+      hook_visual: 'a long receipt unrolling beside a basket of vegetables',
+      beats: [
+        { t: 'Setup was the big hit. Planters, soil and a drip kit came to $146.', v: 'planters, soil bags and a drip kit with price tags' },
+        { t: 'Seeds were almost free. Eleven packets, $27, most still half full.', v: 'grid of seed packets with small price labels' },
+        { t: 'Greens paid for themselves by month two.', v: 'bar chart where grocery value crosses spend at month two' },
+        { t: 'Tomatoes and peppers never broke even on a balcony.', v: 'a single tomato on a scale with a large price tag' },
+        { t: 'Year two costs a fraction of year one. The full spreadsheet is linked below.', v: 'clean spreadsheet summary card with totals' },
+        { t: 'Water was the cost I forgot: about four dollars for the whole summer.', v: 'watering can with a tiny coin stack' },
+        { t: 'Best value per square metre: salad greens, by a mile.', v: 'ranking chart with salad greens at the top' },
+      ] },
+    { id: 'a3', type: 'Continuation', style: 'cinematic', score: 88, effort: 'Medium', potential: 'High', origin: 'c3',
+      title: 'The winter balcony: growing through the cold months', pitch: 'Picks up in October where the original stopped and follows the balcony through frost.',
+      reason: 'Continues the exact timeline of the reference video. Returning viewers want the next season.',
+      suggested_title: 'Balcony Garden in Winter: What Survives the Cold', tags: ['winter balcony garden', 'cold hardy vegetables', 'balcony garden', 'winter gardening', 'apartment gardening'],
+      hooks: ['The original year ended in October. This is what happened when I kept going.', 'Frost hit minus four. Six plants made it.', 'Everyone empties their balcony in winter. I tried the opposite.'],
+      hook_visual: 'a snowy balcony railing with one green kale plant',
+      beats: [
+        { t: 'October: I swapped tomatoes for kale, garlic and winter lettuce.', v: 'hands planting garlic cloves in a planter at dusk' },
+        { t: 'A cheap plastic cover bought me four degrees.', v: 'a clear plastic cloche fogged with condensation over small plants' },
+        { t: 'The first frost took the lettuce, but the kale got sweeter.', v: 'frost-covered kale leaves glittering in blue morning light' },
+        { t: 'By February the garlic was the only thing still pushing up.', v: 'green garlic shoots through snow in a planter' },
+        { t: 'Winter will not feed you, but it keeps the balcony alive until spring.', v: 'warm window light behind a snowy balcony garden' },
+      ] },
+    { id: 'a4', type: 'Different storyline', style: 'comic', score: 81, effort: 'Medium', potential: 'Medium', origin: 'c4', character: true,
+      title: 'The pigeon war', pitch: 'The same balcony year retold as a rivalry with one very patient pigeon.',
+      reason: 'Same balcony, same viewers, new story. Comments show the pigeon moment was a favorite.',
+      suggested_title: 'Me vs. the Pigeons: A Balcony Garden Rivalry', tags: ['balcony garden', 'pigeons', 'garden pests', 'funny gardening', 'apartment gardening'],
+      hooks: ['They took my first strawberry. This meant war.', 'Twelve months, seven defenses, one very patient pigeon.', 'Every balcony gardener has an enemy. Mine has feathers.'],
+      hook_visual: 'a cartoon pigeon holding a stolen strawberry',
+      beats: [
+        { t: 'Week one. A pigeon named Gus inspects the new planters.', v: 'cartoon pigeon peering over a planter rim' },
+        { t: 'Defense one: a fake owl. Gus sat on it.', v: 'cartoon pigeon sitting smugly on a plastic owl' },
+        { t: 'Defense two: netting. Gus found the gap in an hour.', v: 'pigeon squeezing through a gap in green netting' },
+        { t: 'What finally worked: shiny tape and a pot of seeds just for him.', v: 'reflective ribbons fluttering while a pigeon eats from its own pot' },
+        { t: 'Truce. Gus gets one pot. I get the strawberries.', v: 'pigeon and gardener sharing the balcony at sunset' },
+      ] },
+    { id: 'a5', type: 'Perspective flip', style: 'comic', score: 84, effort: 'Medium', potential: 'High', character: true,
+      title: 'A year on the balcony, told by the tomato plant', pitch: 'The reference video’s exact timeline, narrated by the plant that lived it.',
+      reason: 'Same beats as the reference video from a new point of view, so its viewers recognize every moment.',
+      suggested_title: 'My Balcony Garden Year, From the Tomato’s Point of View', tags: ['balcony garden', 'tomato plant', 'growing tomatoes', 'plant pov', 'apartment gardening'],
+      hooks: ['Hi. I am the tomato. Nobody asked me how this year went.', 'Day one I was a seed in a yogurt cup. Let me tell you what happened next.', 'You watched her grow me. Here is my side of the story.'],
+      hook_visual: 'a cartoon tomato plant with a face standing in a pot on a balcony',
+      beats: [
+        { t: 'They kept me in a yogurt cup on the windowsill for six weeks.', v: 'small tomato seedling in a yogurt cup on a sunny windowsill' },
+        { t: 'Then the move outside. The wind up here is no joke.', v: 'young tomato plant bending in the wind on a high balcony' },
+        { t: 'July was glorious. I put out forty flowers.', v: 'tomato plant covered in yellow flowers in bright sun' },
+        { t: 'Then the pigeon came for my fruit. We do not speak of it.', v: 'tomato plant glaring at a pigeon on the railing' },
+        { t: 'Eleven tomatoes. Proud. Save my seeds for next year.', v: 'tomato plant beside a bowl of ripe red tomatoes' },
+      ] },
+    { id: 'a6', type: 'Different niche', style: 'botanical', score: 86, effort: 'Low', potential: 'High',
+      title: 'No balcony at all: a windowsill food garden', pitch: 'The same goal, scaled down to a single 40 cm windowsill.',
+      reason: 'Reaches renters in the same audience who could not follow the original because they have no balcony.',
+      suggested_title: 'No Balcony? I Grew Food on One Windowsill for 6 Months', tags: ['windowsill garden', 'indoor vegetables', 'no balcony', 'apartment gardening', 'microgreens'],
+      hooks: ['No balcony. No yard. One windowsill. Six months of food.', 'If you do not have a balcony, this one is for you.', 'Forty centimetres of windowsill grew more than I expected.'],
+      hook_visual: 'one crowded windowsill of plants seen from inside a small apartment',
+      beats: [
+        { t: 'The rule: everything had to fit on one sill, forty centimetres wide.', v: 'a narrow windowsill with a tape measure across it' },
+        { t: 'Microgreens were ready in nine days.', v: 'dense tray of microgreens in morning light' },
+        { t: 'Green onions regrew from grocery scraps, again and again.', v: 'green onion roots in a glass of water' },
+        { t: 'A dwarf chili gave me sixty peppers.', v: 'small chili plant covered in red peppers' },
+        { t: 'Start with microgreens this week. The full list is below.', v: 'hands snipping microgreens over a plate' },
+      ] },
+    { id: 'a7', type: 'Deep dive', style: 'infographic', score: 87, effort: 'Medium', potential: 'Medium', origin: 'c5',
+      title: 'Vacation-proof: testing self-watering pots for 14 days', pitch: 'Three watering setups, two weeks away, one heatwave.',
+      reason: 'Answers a direct question about a product that appears briefly in the reference video.',
+      suggested_title: 'I Left My Balcony Garden Alone for 14 Days. Did Self-Watering Pots Work?', tags: ['self watering pots', 'vacation plant care', 'balcony garden', 'drip irrigation', 'apartment gardening'],
+      hooks: ['I left for two weeks and told nobody to water my plants.', 'Three watering systems, fourteen days, one heatwave.', 'Do self-watering pots really work? I tested them the hard way.'],
+      hook_visual: 'a suitcase by the door with balcony plants behind',
+      beats: [
+        { t: 'Three setups: wicking pots, a drip timer, and plain pots as a control.', v: 'three labeled planters side by side' },
+        { t: 'Day four, a heatwave hit 34 degrees.', v: 'thermometer reading 34 degrees over a sunny balcony' },
+        { t: 'Plain pots were crisp by day six.', v: 'wilted plant in a dry terracotta pot' },
+        { t: 'Wicking pots held on. The drip timer won outright.', v: 'comparison chart with the drip timer ahead' },
+        { t: 'For a long trip, pair a wicking pot with a drip line.', v: 'diagram of a drip line feeding a wicking pot' },
+      ] },
+    { id: 'a8', type: 'Different topic', style: 'cinematic', score: 72, effort: 'High', potential: 'Medium',
+      title: 'Who pollinates a fifth-floor garden?', pitch: 'Thirty days of camera footage on the flower boxes to see who shows up.',
+      reason: 'Same niche and viewers with a new topic. Fewer shared keywords lowers the score.',
+      suggested_title: 'Do Bees Reach a 5th-Floor Balcony? I Counted.', tags: ['balcony pollinators', 'urban bees', 'balcony garden', 'hand pollination', 'city gardening'],
+      hooks: ['My tomatoes flowered but nothing set. So I started counting visitors.', 'Five floors up, who is actually pollinating your plants?', 'I filmed my balcony flowers for 30 days to see who showed up.'],
+      hook_visual: 'one bee flying above a city skyline toward a balcony flower',
+      beats: [
+        { t: 'Thirty days of footage on the flower boxes.', v: 'small camera clipped to a balcony railing pointed at flowers' },
+        { t: 'Bees came, but only on warm, still mornings.', v: 'bee on a yellow tomato flower in morning light' },
+        { t: 'Hoverflies did more work than I expected.', v: 'hoverfly above white flowers, shallow focus' },
+        { t: 'On windy weeks I pollinated by hand with a toothbrush.', v: 'electric toothbrush touching a tomato flower stem' },
+        { t: 'Plant flowers next to your vegetables. Here is what drew the most visitors.', v: 'box of mixed flowers next to vegetable planters' },
+      ] },
+    { id: 'a9', type: 'Different visuals', style: 'watercolor', score: 77, effort: 'High', potential: 'Medium',
+      title: 'The same year, painted as a watercolor timelapse', pitch: 'The balcony year again, told through one painting a week.',
+      reason: 'Same story as the reference video with a new visual treatment, so the same audience recognizes it.',
+      suggested_title: 'A Year of Balcony Gardening, Painted Week by Week', tags: ['balcony garden', 'watercolor timelapse', 'garden journal', 'art and gardening', 'apartment gardening'],
+      hooks: ['I painted my balcony garden every week for a year.', 'Fifty-two paintings. One balcony. Watch it grow.', 'This is a year of growing food, one watercolor at a time.'],
+      hook_visual: 'watercolor of a balcony garden being painted in fast strokes',
+      beats: [
+        { t: 'January: bare pots and a sketch of a plan.', v: 'watercolor of empty pots and a pencil garden plan' },
+        { t: 'April: the first seedlings, and the color comes back.', v: 'watercolor of seedlings in bright green washes' },
+        { t: 'July: the page gets crowded.', v: 'dense watercolor of an overflowing summer balcony' },
+        { t: 'October: the harvest, in reds and golds.', v: 'watercolor of a harvest basket in warm reds and gold' },
+        { t: 'The full sketchbook flip is at the end.', v: 'a watercolor sketchbook flipping through pages' },
+      ] },
+    { id: 'a10', type: 'Continuation', style: 'botanical', score: 83, effort: 'Low', potential: 'Medium', origin: 'c6',
+      title: 'Reusing last year’s soil: what happens', pitch: 'Old soil against new soil, side by side, for one season.',
+      reason: 'A direct follow-up for viewers who started a garden after the reference video and are now in year two.',
+      suggested_title: 'Can You Reuse Potting Soil? My Year-Two Balcony Test', tags: ['reuse potting soil', 'container gardening', 'balcony garden', 'compost', 'year two garden'],
+      hooks: ['I could buy new soil or reuse last year’s. So I did both.', 'Year two. Same soil. Did it still grow anything?', 'Old soil versus new soil, side by side, one season.'],
+      hook_visual: 'a scoop of old potting soil held over a planter',
+      beats: [
+        { t: 'Half the planters got fresh soil. Half got last year’s.', v: 'two planters, one dark fresh soil and one pale old soil' },
+        { t: 'Old soil, untreated, grew pale and slow.', v: 'pale yellowish lettuce seedlings in old soil' },
+        { t: 'Old soil plus compost and worm castings caught up in three weeks.', v: 'hands mixing compost into a planter' },
+        { t: 'By harvest you could not tell them apart.', v: 'two equally lush planters side by side' },
+        { t: 'Reuse your soil. Just feed it first. My mix is below.', v: 'flat lay of compost, worm castings and a scoop' },
+      ] },
+  ],
+};
+const DEFAULT_CHARS = [
+  { id: 'ch-tomi', name: 'Tomi', description: 'A cheerful cartoon tomato plant with a small round face and leaf arms', notes: 'Proud, a little dramatic', voice_id: 'v-juno', seed: 501 },
+  { id: 'ch-gus', name: 'Gus', description: 'A scheming grey city pigeon with an iridescent green neck', notes: 'Deadpan, always hungry', voice_id: 'v-ash', seed: 733 },
+];
+const FILLERS = [
+  { t: 'Follow for part two. The results surprised me.', v: 'close-up of a fresh harvest with soft background' },
+  { t: 'Tell me in the comments what you want tested next.', v: 'balcony at golden hour with planters in silhouette' },
+];
+
+/* ======================================================================
+   Small helpers
+   ====================================================================== */
+const uid = (p = 'id') => p + '_' + Math.random().toString(36).slice(2, 8);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clone = o => JSON.parse(JSON.stringify(o));
+const fmt$ = n => '$' + (Math.round(n * 100) / 100).toFixed(2);
+const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); const r = Math.floor(s % 60); return m + ':' + String(r).padStart(2, '0'); };
+const words = s => (s || '').trim().split(/\s+/).filter(Boolean);
+const estSecs = (text, speed = 1) => Math.round((words(text).length / (2.6 * speed) + 0.5) * 10) / 10;
+const randSeed = () => Math.floor(Math.random() * 1e6);
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const voiceById = id => VOICES.find(v => v.id === id) || VOICES[0];
+const styleById = id => STYLES.find(s => s.id === id) || STYLES[0];
+const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || MODELS[kind][0];
+const lineVoice = (p, line) => p.video_type === 'character' ? ((p.characters.find(c => c.id === line.speaker) || {}).voice_id || 'v-mara') : p.audio.voice_id;
+const lineSecs = (p, line) => line.duration || estSecs(line.text, voiceById(lineVoice(p, line)).speed);
+const sceneLines = (p, s) => s.line_ids.map(id => p.script.lines.find(l => l.id === id)).filter(Boolean);
+const sceneSecs = (p, s) => Math.round(sceneLines(p, s).reduce((n, l) => n + lineSecs(p, l), 0) * 10) / 10 || 2;
+const scriptSecs = p => (p.script && p.script.lines ? p.script.lines.reduce((n, l) => n + lineSecs(p, l), 0) : 0);
+const needsAnimate = p => p.scenes.length ? p.scenes.some(s => s.animate) : p.format.animated;
+
+// SCR-6: share of the script's three-word phrases that also appear in the source transcript
+function overlap(a, b) {
+  const tri = s => { const w = words((s || '').toLowerCase().replace(/[^a-z0-9\s']/g, ' ')); const set = new Set(); for (let i = 0; i + 2 < w.length; i++) set.add(w[i] + ' ' + w[i + 1] + ' ' + w[i + 2]); return set; };
+  const A = tri(a), B = tri(b); if (!A.size) return 0; let hit = 0; A.forEach(t => { if (B.has(t)) hit++; }); return hit / A.size;
+}
+
+function estimate(p) {
+  const lines = (p.script && p.script.lines) || [];
+  const chars = lines.reduce((n, l) => n + l.text.length, 0);
+  const nScenes = p.scenes.length || lines.length;
+  const animSecs = p.scenes.length ? p.scenes.filter(s => s.animate).reduce((n, s) => n + sceneSecs(p, s), 0) : (p.format.animated ? scriptSecs(p) : 0);
+  const voice = chars / 1000 * modelOf(p, 'voice').cost;
+  const images = nScenes * modelOf(p, 'image').cost;
+  const video = animSecs * modelOf(p, 'video').cost;
+  return { chars, nScenes, animSecs, voice, images, video, total: voice + images + video };
+}
+
+/* ======================================================================
+   Store: one project JSON per video (PRJ-1), saved on every change
+   ====================================================================== */
+const KEY = 'angle-studio-demo-v1';
+const listeners = new Set();
+const DEFAULT_MODELS = { voice: 'elevenlabs-v2', image: 'flux-11-pro', video: 'kling-21' };
+
+function newProject(title) {
+  return {
+    id: uid('prj'), title: title || 'Untitled project', created_at: Date.now(), updated_at: Date.now(), status: 'draft', template_id: null,
+    video_type: 'voiceover', models: { ...STATE_DEFAULT_MODELS() }, ingest_url: '',
+    source: null, analysis: null, angles: [], selected_angle_ids: [], user_direction: '',
+    script: null, style: null, characters: clone(DEFAULT_CHARS),
+    format: { aspect_ratio: '9:16', target_seconds: 60, animated: false },
+    scenes: [], audio: { voice_id: 'v-mara', music_path: 'm-soil', music_volume: 0.25, duck: true, caption_style: 'bold', consent: false },
+    render: { draft_path: null, final_path: null, cost_estimate: 0, cost_actual: 0 },
+    checkpoints: { angles: false, script: false, style: false, voice: false, format: false, scenes: false, clips: false },
+    step: 'ingest',
+  };
+}
+function STATE_DEFAULT_MODELS() { try { return STATE.settings.defaults; } catch (e) { return DEFAULT_MODELS; } }
+
+function seed() {
+  const s = {
+    version: 1, view: 'flow', projects: {}, currentId: null, ideaBank: [], cache: {}, jobs: [], toasts: [], intro: true,
+    settings: { costLimit: 1.5, defaults: { ...DEFAULT_MODELS }, keys: { elevenlabs: true, openai: true, cartesia: false, bfl: true, google: true, stability: false, kling: true, runway: false } },
+    templates: [{ id: 'tpl-look', name: 'My channel look', style: 'botanical', voice_id: 'v-mara', caption_style: 'bold', music: 'm-soil', aspect: '9:16', tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }],
+  };
+  const p = newProject('Balcony garden follow-up');
+  p.ingest_url = 'https://www.youtube.com/watch?v=bLc9nyG4rdn';
+  p.source = { ...clone(SAMPLE.source), url: p.ingest_url };
+  p.analysis = clone(SAMPLE.analysis);
+  p.angles = clone(SAMPLE.angles).map(a => ({ ...a, saved: false }));
+  p.step = 'angles';
+  s.projects[p.id] = p; s.currentId = p.id; s.cache[p.ingest_url] = true;
+  return s;
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY); if (!raw) return null;
+    const s = JSON.parse(raw); if (!s || s.version !== 1) return null;
+    // Resumability: anything interrupted mid-generation comes back as failed so it can be retried.
+    Object.values(s.projects).forEach(p => {
+      p.ingesting = false;
+      if (p.script && p.script.generating) p.script = null;
+      (p.script && p.script.lines || []).forEach(l => { if (l.audio_status === 'generating') l.audio_status = 'failed'; });
+      p.scenes.forEach(sc => { if (sc.image_status === 'generating') sc.image_status = 'failed'; if (sc.clip_status === 'generating') sc.clip_status = 'failed'; });
+      if (p.rendering) p.rendering = null;
+    });
+    s.jobs = []; s.toasts = [];
+    return s;
+  } catch (e) { return null; }
+}
+let STATE = load() || seed();
+let saveTimer = null;
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...STATE, jobs: [], toasts: [] })); } catch (e) {} }, 250);
+}
+function update(fn) { const next = clone(STATE); fn(next); STATE = next; persist(); listeners.forEach(l => l()); }
+function updateP(pid, fn) { update(s => { const p = s.projects[pid]; if (p) { fn(p, s); p.updated_at = Date.now(); } }); }
+const getState = () => STATE;
+function useStore() { return useSyncExternalStore(cb => { listeners.add(cb); return () => listeners.delete(cb); }, getState); }
+function toast(msg) { const id = uid('t'); update(s => { s.toasts.push({ id, msg }); }); setTimeout(() => update(s => { s.toasts = s.toasts.filter(t => t.id !== id); }), 3600); }
+
+/* ======================================================================
+   Mock backend. Each method mirrors a route in server/app/main.py; when
+   real adapters are connected these become fetch() calls.
+   ====================================================================== */
+async function runJob(pid, label, stages, ms = 650) {
+  const id = uid('job');
+  update(s => { s.jobs.unshift({ id, pid, label, stages, stage: 0, status: 'running' }); s.jobs = s.jobs.slice(0, 25); });
+  for (let i = 0; i < stages.length; i++) {
+    update(s => { const j = s.jobs.find(j => j.id === id); if (j) j.stage = i; });
+    await sleep(ms * (0.7 + Math.random() * 0.6));
+  }
+  update(s => { const j = s.jobs.find(j => j.id === id); if (j) { j.stage = stages.length; j.status = 'done'; } });
+}
+const addCost = (p, n) => { p.render.cost_actual = Math.round((p.render.cost_actual + n) * 1000) / 1000; };
+
+function buildScript(p) {
+  const chosen = p.selected_angle_ids.map(id => p.angles.find(a => a.id === id)).filter(Boolean);
+  const first = chosen[0];
+  const target = p.format.target_seconds;
+  const count = Math.max(3, Math.round(target / 6.5) - 1);
+  let beats = [];
+  if (chosen.length > 1) { const a = chosen[0].beats, b = chosen[1].beats; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) beats.push(a[i]); if (b[i]) beats.push(b[i]); } }
+  else beats = first.beats.slice();
+  beats = beats.slice(0, count);
+  FILLERS.slice(0, count - beats.length).forEach(f => beats.push(f));
+  const chars = p.characters;
+  const all = [{ t: first.hooks[0], v: first.hook_visual }, ...beats];
+  const lines = all.map((b, i) => ({ id: uid('ln'), text: b.t, visual: b.v, speaker: p.video_type === 'character' && chars.length ? chars[i % chars.length].id : null, audio_status: 'pending', duration: null }));
+  const hooks = first.hooks.slice(0, 3);
+  if (chosen.length > 1) hooks[2] = chosen[1].hooks[0];
+  return { hook_options: hooks, chosen_hook: 0, lines, target_seconds: target, written_with: chosen.map(a => a.id), direction: p.user_direction };
+}
+
+const api = {
+  async ingest(pid, url, manualTranscript) {
+    const cached = !!STATE.cache[url] && !manualTranscript;
+    updateP(pid, p => { p.ingest_url = url; p.ingesting = true; });
+    if (!cached) await runJob(pid, 'Analyzing reference video', ['Fetching metadata', manualTranscript ? 'Using your pasted transcript' : 'Reading captions', 'Extracting key frames', 'Filtering 1,840 comments', 'Breaking down the video', 'Writing 10 angle cards'], 700);
+    updateP(pid, (p, s) => {
+      p.source = { ...clone(SAMPLE.source), url, transcript: manualTranscript || SAMPLE.source.transcript };
+      p.analysis = clone(SAMPLE.analysis);
+      p.angles = clone(SAMPLE.angles).map(a => ({ ...a, saved: s.ideaBank.some(i => i.angle.id === a.id) }));
+      p.ingesting = false; p.step = 'angles'; s.cache[url] = true;
+      if (p.title === 'Untitled project') p.title = 'Balcony garden follow-up';
+    });
+    toast(cached ? 'Loaded from cache. This link was analyzed before, so it cost nothing.' : '10 angles are ready.');
+  },
+  async writeScript(pid) {
+    updateP(pid, p => { p.script = { generating: true }; });
+    await runJob(pid, 'Writing script', ['Reading the chosen angles', 'Drafting 3 hooks', 'Writing lines to target length', 'Checking originality'], 550);
+    updateP(pid, p => { p.script = buildScript(p); p.scenes = []; });
+  },
+  async generateAudio(pid, lineIds) {
+    const p0 = STATE.projects[pid];
+    const ids = lineIds || p0.script.lines.map(l => l.id);
+    updateP(pid, p => p.script.lines.forEach(l => { if (ids.includes(l.id)) l.audio_status = 'generating'; }));
+    const runner = runJob(pid, ids.length > 1 ? 'Generating narration' : 'Regenerating one line', ['Sending text to ' + modelOf(p0, 'voice').name, 'Synthesizing ' + ids.length + ' line' + (ids.length > 1 ? 's' : ''), 'Measuring durations'], 500);
+    for (const id of ids) {
+      await sleep(350 + Math.random() * 400);
+      updateP(pid, p => {
+        const l = p.script.lines.find(l => l.id === id); if (!l) return;
+        const v = voiceById(lineVoice(p, l));
+        l.audio_status = 'ready'; l.duration = estSecs(l.text, v.speed); l.voice_used = v.id; l.voice_model = p.models.voice; l.wave = randSeed();
+        addCost(p, l.text.length / 1000 * modelOf(p, 'voice').cost);
+      });
+    }
+    await runner;
+  },
+  async generateScenes(pid) {
+    updateP(pid, p => {
+      const st = styleById(p.style);
+      p.scenes = p.script.lines.map((l, i) => ({
+        id: uid('sc'), order: i, description: l.visual || 'balcony garden, close-up', line_ids: [l.id],
+        character_ids: p.video_type === 'character' && l.speaker ? [l.speaker] : [],
+        image_prompt: l.visual || '', image_versions: [], image_index: -1, image_status: 'pending',
+        animate: p.format.animated, motion_prompt: i === 0 ? 'slow push in, light flickers across the frame' : 'gentle parallax, leaves sway in a light breeze',
+        clip_versions: [], clip_index: -1, clip_status: 'pending', caption_style: p.audio.caption_style, style_prefix: st.prefix,
+      }));
+    });
+    const p = STATE.projects[pid];
+    await Promise.all(p.scenes.map((s, i) => sleep(i * 220).then(() => api.generateImage(pid, s.id))));
+  },
+  async generateImage(pid, sceneId, noFail) {
+    updateP(pid, p => { const s = p.scenes.find(s => s.id === sceneId); if (s) s.image_status = 'generating'; });
+    await sleep(1100 + Math.random() * 1700);
+    const fail = !noFail && Math.random() < 0.08;
+    updateP(pid, p => {
+      const s = p.scenes.find(s => s.id === sceneId); if (!s) return;
+      if (fail) { s.image_status = 'failed'; s.error = 'Provider timed out after 60 s. Retry usually works.'; return; }
+      s.image_versions.push({ seed: randSeed(), prompt: s.image_prompt, model: p.models.image, style: p.style, at: Date.now() });
+      s.image_index = s.image_versions.length - 1; s.image_status = 'ready'; s.error = null;
+      addCost(p, modelOf(p, 'image').cost);
+    });
+  },
+  async animate(pid, sceneIds) {
+    updateP(pid, p => p.scenes.forEach(s => { if (sceneIds.includes(s.id)) s.clip_status = 'generating'; }));
+    await Promise.all(sceneIds.map((id, i) => sleep(i * 300 + 1500 + Math.random() * 2000).then(() => updateP(pid, p => {
+      const s = p.scenes.find(s => s.id === id); if (!s) return;
+      const m = modelOf(p, 'video'); const need = sceneSecs(p, s); const gen = Math.min(m.maxClip, Math.ceil(need / 5) * 5);
+      s.clip_versions.push({ seed: randSeed(), motion: s.motion_prompt, model: m.id, generated: gen, fitted: need, at: Date.now() });
+      s.clip_index = s.clip_versions.length - 1; s.clip_status = 'ready';
+      addCost(p, gen * m.cost);
+    }))));
+  },
+  async buildDraft(pid) {
+    updateP(pid, p => { p.rendering = 'draft'; });
+    await runJob(pid, 'Building 480p draft', ['Placing scenes on the timeline', 'Adding zoom and pan', 'Timing captions to the narration', 'Encoding 480p draft'], 600);
+    updateP(pid, p => { p.rendering = null; p.render.draft_path = 'projects/' + p.id + '/draft_480p.mp4'; });
+    toast('Draft ready. Play it before rendering the final file.');
+  },
+  async renderFinal(pid) {
+    updateP(pid, p => { p.rendering = 'final'; });
+    await runJob(pid, 'Rendering final MP4', ['Mixing voice and music', 'Ducking music under the voice', 'Burning in captions', 'Normalizing loudness to −14 LUFS', 'Checking caption safe areas', 'Encoding 1080p H.264'], 700);
+    updateP(pid, p => { p.rendering = null; p.status = 'rendered'; p.render.final_path = 'projects/' + p.id + '/final_1080p.mp4'; p.step = 'export'; });
+    toast('Final video rendered.');
+  },
+};
+
+/* ======================================================================
+   Pipeline steps and checkpoints (PRJ-2)
+   ====================================================================== */
+const STEPS = [
+  { id: 'ingest', label: 'Paste link' }, { id: 'angles', label: 'Pick angle', cp: 'angles' },
+  { id: 'script', label: 'Script', cp: 'script' }, { id: 'style', label: 'Visual style', cp: 'style' },
+  { id: 'voice', label: 'Voice', cp: 'voice' }, { id: 'format', label: 'Format', cp: 'format' },
+  { id: 'scenes', label: 'Scenes', cp: 'scenes' }, { id: 'animate', label: 'Animate', cp: 'clips' },
+  { id: 'compile', label: 'Compile' }, { id: 'export', label: 'Export' },
+];
+function isSkipped(p, id) { return id === 'animate' && p.checkpoints.format && !needsAnimate(p); }
+function isDone(p, id) {
+  if (id === 'ingest') return !!p.analysis;
+  if (id === 'compile') return !!p.render.final_path;
+  if (id === 'export') return false;
+  const st = STEPS.find(s => s.id === id); return !!p.checkpoints[st.cp];
+}
+function isUnlocked(p, id) {
+  for (const st of STEPS) { if (st.id === id) return true; if (!isSkipped(p, st.id) && !isDone(p, st.id)) return false; }
+  return true;
+}
+function nextStep(p, id) {
+  const i = STEPS.findIndex(s => s.id === id);
+  for (let j = i + 1; j < STEPS.length; j++) if (!isSkipped(p, STEPS[j].id)) return STEPS[j].id;
+  return id;
+}
+function goStep(id) { update(s => { s.view = 'flow'; s.projects[s.currentId].step = id; }); try { window.scrollTo({ top: 0 }); } catch (e) {} }
+function approve(pid, stepId) {
+  updateP(pid, p => { const st = STEPS.find(s => s.id === stepId); p.checkpoints[st.cp] = true; p.step = nextStep(p, stepId); });
+  try { window.scrollTo({ top: 0 }); } catch (e) {}
+}
+// Editing an approved step reopens it and every later checkpoint, but keeps their work for re-approval.
+function reopen(pid, stepId) {
+  updateP(pid, p => {
+    const i = STEPS.findIndex(s => s.id === stepId);
+    STEPS.slice(i).forEach(st => { if (st.cp) p.checkpoints[st.cp] = false; });
+    p.render.draft_path = null; p.render.final_path = null; p.status = 'draft'; p.step = stepId;
+  });
+}
+
+/* ======================================================================
+   Icons
+   ====================================================================== */
+const ICONS = {
+  check: 'M4 10.5l4 4 8-9', lock: 'M6 9V7a4 4 0 018 0v2M5 9h10v8H5z', play: 'M6 4l10 6-10 6z', pause: 'M6 4h3v12H6zM11 4h3v12h-3z',
+  redo: 'M15 4v4h-4M15 8a6 6 0 10.9 5', bookmark: 'M6 3h8v14l-4-3-4 3z', up: 'M10 15V5M5 10l5-5 5 5', down: 'M10 5v10M5 10l5 5 5-5',
+  trash: 'M5 6h10M8 6V4h4v2M6 6l1 11h6l1-11', plus: 'M10 4v12M4 10h12', copy: 'M7 7h9v9H7zM4 13V4h9', upload: 'M10 14V4M6 8l4-4 4 4M4 16h12',
+  merge: 'M5 4v4a4 4 0 004 4h6M12 9l3 3-3 3', split: 'M10 3v14M6 7l-3 3 3 3M14 7l3 3-3 3', speaker: 'M4 8h3l4-3v10l-4-3H4zM14 7a4 4 0 010 6',
+  x: 'M5 5l10 10M15 5L5 15', folder: 'M3 6h5l2 2h7v8H3z', bulb: 'M7 13a5 5 0 116 0v2H7zM8 17h4', layers: 'M10 3l7 4-7 4-7-4zM3 11l7 4 7-4',
+  gear: 'M10 7a3 3 0 100 6 3 3 0 000-6zM10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4',
+  film: 'M3 4h14v12H3zM3 8h14M3 12h14M7 4v12M13 4v12', download: 'M10 4v10M6 10l4 4 4-4M4 16h12', spark: 'M10 3v4M10 13v4M3 10h4M13 10h4',
+};
+function Icon({ n }) { return html`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d=${ICONS[n]} /></svg>`; }
+
+/* ======================================================================
+   Procedural placeholder art. Stands in for generated images until an
+   image adapter is connected; seed + style make every version distinct.
+   ====================================================================== */
+function Art({ seed, styleId, upload, title }) {
+  if (upload) return html`<img src=${upload} alt=${title || 'Uploaded image'} style=${{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />`;
+  const st = styleById(styleId); const [c0, c1, c2, c3] = st.palette; const r = rng(seed || 1); const id = 'g' + seed + st.id;
+  const comic = st.kind === 'comic'; const flat = st.kind === 'flat'; const wc = st.kind === 'watercolor';
+  const stroke = comic ? '#151515' : 'none'; const sw = comic ? 0.9 : 0;
+  const hills = [0, 1, 2].map(i => { const y = 58 + i * 13 + r() * 6; const a = y - 8 - r() * 16, b = y - 4 - r() * 16; return 'M-10 ' + y + ' Q 25 ' + a + ' 50 ' + (y - 2) + ' T 110 ' + b + ' L110 120 L-10 120 Z'; });
+  const plants = Array.from({ length: 3 + Math.floor(r() * 4) }, () => ({ x: 10 + r() * 80, h: 12 + r() * 24, s: 2.5 + r() * 4, y: 86 + r() * 8 }));
+  const sun = { x: 15 + r() * 70, y: 12 + r() * 22, r: 6 + r() * 9 };
+  const rail = r() > 0.4;
+  return html`<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" role="img" aria-label=${title || 'Scene image'}>
+    <defs>
+      <linearGradient id=${id + 'b'} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor=${flat ? c2 : (st.id === 'cinematic' ? c0 : c2)} /><stop offset="1" stopColor=${flat ? c2 : c1} /></linearGradient>
+      ${wc ? html`<filter id=${id + 'f'}><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed=${seed % 97} /><feDisplacementMap in="SourceGraphic" scale="4" /></filter>` : null}
+    </defs>
+    <rect x="-10" y="-10" width="120" height="120" fill=${'url(#' + id + 'b)'} />
+    <circle cx=${sun.x} cy=${sun.y} r=${sun.r} fill=${c3} opacity=${flat ? 1 : 0.9} stroke=${stroke} strokeWidth=${sw} />
+    <g filter=${wc ? 'url(#' + id + 'f)' : undefined} opacity=${wc ? 0.88 : 1}>
+      ${hills.map((d, i) => html`<path key=${i} d=${d} fill=${i === 2 ? c0 : (i === 1 ? c1 : c3)} opacity=${i === 0 ? 0.45 : (i === 1 ? 0.75 : 1)} stroke=${stroke} strokeWidth=${sw} />`)}
+      ${rail ? html`<g stroke=${comic ? '#151515' : c0} strokeWidth=${comic ? 1.2 : 0.8} opacity="0.7"><path d="M-5 70 H105" />${[0, 1, 2, 3, 4, 5, 6, 7].map(i => html`<path key=${i} d=${'M' + (i * 14 + 2) + ' 70 V100'} />`)}</g>` : null}
+      ${plants.map((pl, i) => html`<g key=${'p' + i}>
+        <path d=${'M' + pl.x + ' ' + pl.y + ' V' + (pl.y - pl.h)} stroke=${comic ? '#151515' : c0} strokeWidth=${comic ? 1.4 : 1} />
+        <circle cx=${pl.x - pl.s * 0.6} cy=${pl.y - pl.h * 0.6} r=${pl.s} fill=${c1} stroke=${stroke} strokeWidth=${sw} />
+        <circle cx=${pl.x + pl.s * 0.7} cy=${pl.y - pl.h * 0.8} r=${pl.s * 0.85} fill=${c1} stroke=${stroke} strokeWidth=${sw} />
+        <circle cx=${pl.x} cy=${pl.y - pl.h} r=${pl.s * 0.9} fill=${i % 2 ? c3 : c1} stroke=${stroke} strokeWidth=${sw} />
+        <rect x=${pl.x - 6} y=${pl.y - 1} width="12" height="9" rx="1.5" fill=${c3} opacity=${flat ? 1 : 0.85} stroke=${stroke} strokeWidth=${sw} />
+      </g>`)}
+    </g>
+    ${st.id === 'cinematic' ? html`<rect x="-10" y="-10" width="120" height="120" fill=${c0} opacity="0.28" />` : null}
+  </svg>`;
+}
+
+function Wave({ seed, on = true, n = 28 }) {
+  const r = rng(seed || 7);
+  return html`<div className=${'wave' + (on ? '' : ' off')} aria-hidden="true">${Array.from({ length: n }, (_, i) => html`<i key=${i} style=${{ height: (4 + Math.abs(Math.sin(i * 0.7)) * 10 + r() * 8) + 'px' }} />`)}</div>`;
+}
+
+/* ======================================================================
+   Shared UI
+   ====================================================================== */
+function Pill({ status }) {
+  const label = { ready: 'Ready', generating: 'Generating', failed: 'Failed', pending: 'Not started' }[status] || status;
+  return html`<span className=${'pill ' + status}>${label}</span>`;
+}
+function StepHead({ title, sub, children }) {
+  return html`<div className="stephead"><div><h1>${title}</h1>${sub ? html`<p>${sub}</p>` : null}</div><div className="row">${children}</div></div>`;
+}
+function Seg({ value, options, onChange, label }) {
+  return html`<div className="seg" role="group" aria-label=${label}>${options.map(o => html`<button key=${o.value} type="button" aria-pressed=${value === o.value} onClick=${() => onChange(o.value)}>${o.label}</button>`)}</div>`;
+}
+
+// PRJ-3: estimated cost shown and confirmed before any paid generation step
+function CostGate({ p, label, cost, rows, onGo, disabled, light }) {
+  const s = useStore(); const [open, setOpen] = useState(false); const [ok, setOk] = useState(false);
+  const limit = s.settings.costLimit; const over = p.render.cost_actual + cost > limit;
+  if (!open) return html`<button type="button" className="btn primary" disabled=${disabled} onClick=${() => { setOk(false); setOpen(true); }}>${label}<span className="tag">est. ${fmt$(cost)}</span></button>`;
+  return html`<div className="gate" role="dialog" aria-label="Confirm cost">
+    <strong>Confirm before spending</strong>
+    <table><tbody>
+      ${(rows || []).map(([k, v], i) => html`<tr key=${i}><td>${k}</td><td>${v}</td></tr>`)}
+      <tr className="tot"><td>This step</td><td>${fmt$(cost)}</td></tr>
+      <tr><td className="muted">Spent on this project so far</td><td className="muted">${fmt$(p.render.cost_actual)}</td></tr>
+    </tbody></table>
+    ${over ? html`<label className="switch warnbox"><input id="gate-over" type="checkbox" checked=${ok} onChange=${e => setOk(e.target.checked)} /> This takes the project past your ${fmt$(limit)} limit. Spend anyway.</label>` : null}
+    <div className="row"><button type="button" className="btn primary" disabled=${over && !ok} onClick=${() => { setOpen(false); onGo(); }}>Confirm and generate</button><button type="button" className="btn ghost" onClick=${() => setOpen(false)}>Cancel</button></div>
+  </div>`;
+}
+
+function ApproveBar({ p, step, ready, hint, label, gate, onApprove }) {
+  const st = STEPS.find(s => s.id === step); const approved = st.cp && p.checkpoints[st.cp];
+  if (approved) return html`<div className="approve"><div className="cp"><b>Approved</b> ${st.label} is locked so later steps stay in sync.</div>
+    <div className="row"><button type="button" className="btn" onClick=${() => reopen(p.id, step)}>Edit (reopens later steps)</button><button type="button" className="btn primary" onClick=${() => goStep(nextStep(p, step))}>Next: ${STEPS.find(s => s.id === nextStep(p, step)).label}</button></div></div>`;
+  return html`<div className="approve"><div className="cp"><b>Checkpoint</b> ${ready ? 'Nothing later runs until you approve.' : hint}</div>
+    <div className="row">${gate && ready ? gate : html`<button type="button" className="btn primary" disabled=${!ready} onClick=${onApprove}>${label}</button>`}</div></div>`;
+}
+
+/* ======================================================================
+   Top bar: model selectors (MDL-1..5), cost, save state
+   ====================================================================== */
+function ModelPicker({ kind, p, s }) {
+  const [open, setOpen] = useState(false); const ref = useRef(null);
+  useEffect(() => { if (!open) return; const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, [open]);
+  const cur = modelOf(p, kind);
+  const pick = m => {
+    setOpen(false); if (m.id === cur.id) return;
+    updateP(p.id, q => { q.models[kind] = m.id; });
+    toast(m.name + ' will be used for new ' + (kind === 'voice' ? 'voice lines' : kind === 'image' ? 'images' : 'clips') + '. Existing ones stay until you regenerate them.');
+  };
+  return html`<div className="picker" ref=${ref}>
+    <button type="button" aria-haspopup="listbox" aria-expanded=${open} onClick=${() => setOpen(!open)}>
+      <span className="k">${KIND_LABEL[kind]} model</span><span className="v">${cur.name}<small>${fmt$(cur.cost)}${cur.unit}</small></span>
+    </button>
+    ${open ? html`<div className="menu" role="listbox">
+      ${MODELS[kind].map(m => { const has = s.settings.keys[m.provider]; return html`<button key=${m.id} type="button" role="option" className="menu-item" aria-checked=${m.id === cur.id} disabled=${!has} onClick=${() => pick(m)}>
+        <div className="mi-top"><span>${m.name}</span><span className="mono">${fmt$(m.cost)}${m.unit}</span></div>
+        <div className="mi-sub">${has ? m.limits : 'No ' + PROVIDERS[m.provider] + ' key yet. Add it in Settings.'}</div></button>`; })}
+      <div className="menu-note">Saved with this project. Changing it affects newly generated items only.</div>
+    </div>` : null}
+  </div>`;
+}
+function TopBar({ s, p }) {
+  const est = estimate(p);
+  return html`<header className="topbar">
+    <div className="brand"><span className="brand-mark" aria-hidden="true"></span>Angle Studio</div>
+    <span className="proj-title" title=${p.title}>${p.title}</span>
+    <div className="models">
+      <${ModelPicker} kind="voice" p=${p} s=${s} /><${ModelPicker} kind="image" p=${p} s=${s} /><${ModelPicker} kind="video" p=${p} s=${s} />
+      <span className="costpill" title="Estimated full-run cost for this project, and what has been spent">Est. <b>${fmt$(est.total)}</b> · spent <b>${fmt$(p.render.cost_actual)}</b></span>
+      <span className="saved"><${Icon} n="check" />Saved</span>
+      <${Jobs} s=${s} />
+    </div>
+  </header>`;
+}
+
+/* ======================================================================
+   Left rail
+   ====================================================================== */
+function Rail({ s, p }) {
+  const setView = v => update(st => { st.view = v; });
+  return html`<aside className="rail">
+    <div>
+      <div className="eyebrow" style=${{ padding: '0 8px 6px' }}>This video</div>
+      <nav aria-label="Pipeline">
+        ${STEPS.map((st, i) => {
+          const skipped = isSkipped(p, st.id); const done = isDone(p, st.id); const unlocked = isUnlocked(p, st.id);
+          const cur = s.view === 'flow' && p.step === st.id;
+          return html`<button key=${st.id} type="button" className=${'rail-item' + (done ? ' done' : '') + (skipped ? ' skipped' : '')} aria-current=${cur} disabled=${!unlocked || skipped} onClick=${() => goStep(st.id)}>
+            <span className="rail-num">${done ? html`<${Icon} n="check" />` : i + 1}</span><span className="rail-label">${st.label}</span>
+            ${skipped ? html`<span className="rail-meta">static</span>` : (!unlocked ? html`<span className="rail-meta"><${Icon} n="lock" /></span>` : null)}
+          </button>`;
+        })}
+      </nav>
+    </div>
+    <div>
+      <div className="eyebrow" style=${{ padding: '0 8px 6px' }}>Library</div>
+      <nav aria-label="Library">
+        <button type="button" className="rail-item" aria-current=${s.view === 'projects'} onClick=${() => setView('projects')}><${Icon} n="folder" /><span>Projects</span><span className="rail-count">${Object.keys(s.projects).length}</span></button>
+        <button type="button" className="rail-item" aria-current=${s.view === 'ideas'} onClick=${() => setView('ideas')}><${Icon} n="bulb" /><span>Idea bank</span><span className="rail-count">${s.ideaBank.length}</span></button>
+        <button type="button" className="rail-item" aria-current=${s.view === 'templates'} onClick=${() => setView('templates')}><${Icon} n="layers" /><span>Templates</span><span className="rail-count">${s.templates.length}</span></button>
+        <button type="button" className="rail-item" aria-current=${s.view === 'settings'} onClick=${() => setView('settings')}><${Icon} n="gear" /><span>Settings</span></button>
+      </nav>
+    </div>
+  </aside>`;
+}
+
+/* ======================================================================
+   1. Paste link
+   ====================================================================== */
+function IngestScreen({ p, s }) {
+  const [url, setUrl] = useState(p.ingest_url || '');
+  const [manual, setManual] = useState(false); const [tx, setTx] = useState('');
+  const job = s.jobs.find(j => j.pid === p.id && j.label === 'Analyzing reference video' && j.status === 'running');
+  const valid = /^https?:\/\/\S+\.\S+/.test(url.trim());
+  const cached = valid && s.cache[url.trim()];
+  if (p.analysis && !p.ingesting) return html`<${Fragment}>
+    <${StepHead} title="Reference video" sub="This project is built from the video below. Re-analyzing replaces the angle cards but keeps saved ideas." />
+    <div className="panel"><${SourceCard} p=${p} /></div>
+    <div className="row"><button type="button" className="btn" onClick=${() => updateP(p.id, q => { q.analysis = null; q.angles = []; q.checkpoints.angles = false; })}>Use a different link</button><button type="button" className="btn primary" onClick=${() => goStep('angles')}>Go to angles</button></div>
+  </${Fragment}>`;
+  return html`<${Fragment}>
+    <${StepHead} title="Paste a video that already works" sub="The tool reads its metadata, transcript, key frames and comments, then proposes original angles its viewers would click next." />
+    <div className="panel ingest-hero">
+      <form className="urlrow" onSubmit=${e => { e.preventDefault(); if (valid && !job) api.ingest(p.id, url.trim(), manual ? tx : null); }}>
+        <label htmlFor="url" className="sr" style=${{ position: 'absolute', left: '-9999px' }}>Video link</label>
+        <input id="url" className="input" placeholder="https://www.youtube.com/watch?v=..." value=${url} onChange=${e => setUrl(e.target.value)} disabled=${!!job} />
+        <button className="btn primary" type="submit" disabled=${!valid || !!job}>${job ? html`<span className="spinner"></span> Analyzing` : (cached ? 'Load from cache' : 'Analyze video')}</button>
+      </form>
+      <div className="row note">
+        <button type="button" className="btn sm" onClick=${() => setUrl('https://www.youtube.com/watch?v=bLc9nyG4rdn')}>Use sample link</button>
+        <span>In this demo any link loads the same sample video.</span>
+      </div>
+      <label className="switch"><input id="manual" type="checkbox" checked=${manual} onChange=${e => setManual(e.target.checked)} /> Paste the transcript myself (use when captions can’t be fetched)</label>
+      ${manual ? html`<textarea id="manual-tx" className="textarea" rows="4" placeholder="Paste the transcript here" value=${tx} onChange=${e => setTx(e.target.value)}></textarea>` : null}
+      ${job ? html`<div className="stages" aria-live="polite">${job.stages.map((st, i) => html`<div key=${i} className=${'stage ' + (i < job.stage ? 'done' : i === job.stage ? 'now' : 'todo')}><span className="dot">${i < job.stage ? html`<${Icon} n="check" />` : i === job.stage ? html`<span className="spinner"></span>` : '·'}</span>${st}</div>`)}</div>` : null}
+      <p className="note">Media download is off by default. Only metadata, captions and public comments are read, and nothing from the source is reused in your video.</p>
+    </div>
+  </${Fragment}>`;
+}
+const Fragment = React.Fragment;
+
+function SourceCard({ p }) {
+  const src = p.source;
+  return html`<div className="stack">
+    <div className="source-card">
+      <div className="thumb"><${Art} seed=${11} styleId="botanical" title="Reference video thumbnail" /></div>
+      <div style=${{ minWidth: 0 }}>
+        <div style=${{ fontWeight: 600, lineHeight: 1.3 }}>${src.title}</div>
+        <div className="note">${src.channel} · ${fmtT(src.duration)} · ${src.views} · ${src.published}</div>
+        <div className="note mono" style=${{ fontSize: 11, overflowWrap: 'anywhere' }}>${src.url}</div>
+      </div>
+    </div>
+    <div className="keyframes">${src.key_frames.map(k => html`<figure key=${k.t} title=${k.d}><div className="thumb"><${Art} seed=${k.seed} styleId="botanical" title=${k.d} /></div><figcaption>${k.t}</figcaption></figure>`)}</div>
+  </div>`;
+}
+
+/* ======================================================================
+   2. Angles (ANG-1..9)
+   ====================================================================== */
+function Score({ v }) {
+  const c = 2 * Math.PI * 20; const col = v >= 85 ? 'var(--ok)' : v >= 75 ? 'var(--accent)' : 'var(--warn)';
+  return html`<div className="score" title=${'Relatedness ' + v + ' of 100'}><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="20" fill="none" stroke="var(--line)" strokeWidth="4" /><circle cx="23" cy="23" r="20" fill="none" stroke=${col} strokeWidth="4" strokeLinecap="round" strokeDasharray=${c} strokeDashoffset=${c * (1 - v / 100)} /></svg>${v}</div>`;
+}
+function toggleSave(s, p, a) {
+  update(st => {
+    const q = st.projects[p.id]; const ang = q.angles.find(x => x.id === a.id);
+    const i = st.ideaBank.findIndex(x => x.angle.id === a.id && x.pid === p.id);
+    if (i >= 0) { st.ideaBank.splice(i, 1); ang.saved = false; } else { st.ideaBank.unshift({ id: uid('idea'), pid: p.id, source: q.source.title, angle: { ...clone(a), saved: true }, at: Date.now() }); ang.saved = true; }
+  });
+}
+function AngleCard({ a, p, s, selected, onSelect, locked }) {
+  const st = styleById(a.style); const origin = a.origin && p.source.comments.find(c => c.id === a.origin);
+  return html`<article className=${'acard' + (selected ? ' sel' : '')}>
+    <div className="acard-top"><${Score} v=${a.score} /><div className="grow stack" style=${{ gap: 4 }}><span className="eyebrow">${a.type}</span><h3>${a.title}</h3></div></div>
+    <p className="pitch">${a.pitch}</p>
+    <p className="why"><strong>Why they’d watch next:</strong> ${a.reason}</p>
+    <p className="hookq">“${a.hooks[0]}”</p>
+    <div className="meta">
+      <span className="chip"><span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c }} />`)}</span>${st.name}</span>
+      <span className="chip">Effort: ${a.effort}</span><span className="chip">Potential: ${a.potential}</span>
+      ${a.character ? html`<span className="chip">Suits character video</span>` : null}
+    </div>
+    ${origin ? html`<div className="origin"><span className="eyebrow" style=${{ fontSize: 10 }}>From a comment</span><q>${origin.text}</q><span className="mono">${origin.likes}</span></div>` : null}
+    <details className="meta-d"><summary>Suggested title and tags</summary>
+      <div className="stack" style=${{ gap: 6 }}><div style=${{ fontWeight: 600, fontSize: 13 }}>${a.suggested_title}</div><div className="tags">${a.tags.map(t => html`<span key=${t} className="chip">${t}</span>`)}</div></div>
+    </details>
+    <div className="acard-actions">
+      <button type="button" className=${'btn sm' + (selected ? ' primary' : '')} disabled=${locked} onClick=${onSelect} aria-pressed=${selected}>${selected ? html`<${Icon} n="check" /> Selected` : 'Select'}</button>
+      <button type="button" className="btn sm ghost" onClick=${() => toggleSave(s, p, a)} aria-pressed=${a.saved}><${Icon} n="bookmark" />${a.saved ? 'In idea bank' : 'Save for later'}</button>
+    </div>
+  </article>`;
+}
+function AnglesScreen({ p, s }) {
+  const [type, setType] = useState('All'); const [sort, setSort] = useState('score');
+  const locked = p.checkpoints.angles;
+  const counts = useMemo(() => { const c = {}; p.angles.forEach(a => { c[a.type] = (c[a.type] || 0) + 1; }); return c; }, [p.angles]);
+  const effortRank = { Low: 0, Medium: 1, High: 2 };
+  const list = p.angles.filter(a => type === 'All' || a.type === type).slice().sort((x, y) => sort === 'score' ? y.score - x.score : sort === 'effort' ? effortRank[x.effort] - effortRank[y.effort] : effortRank[y.potential] - effortRank[x.potential]);
+  const sel = p.selected_angle_ids;
+  const toggle = id => updateP(p.id, q => { const i = q.selected_angle_ids.indexOf(id); if (i >= 0) q.selected_angle_ids.splice(i, 1); else { q.selected_angle_ids.push(id); if (q.selected_angle_ids.length > 2) q.selected_angle_ids.shift(); } });
+  const chosen = sel.map(id => p.angles.find(a => a.id === id)).filter(Boolean);
+  const onApprove = () => {
+    updateP(p.id, q => { q.checkpoints.angles = true; q.step = 'script'; if (!q.style) q.style = chosen[0].style; });
+    api.writeScript(p.id);
+    try { window.scrollTo({ top: 0 }); } catch (e) {}
+  };
+  return html`<${Fragment}>
+    ${s.intro ? html`<div className="banner"><div className="grow"><b>Demo mode.</b> Every AI call is simulated and costs nothing. Pick an angle below, then walk the pipeline: script, style, voice, format, scenes, compile and export. Your progress saves in this browser.</div><button type="button" className="btn sm ghost" onClick=${() => update(st => { st.intro = false; })} aria-label="Dismiss"><${Icon} n="x" /></button></div>` : null}
+    <${StepHead} title="Pick an angle" sub="Ten original ideas built so the new video sits next to the reference video in recommendations. Select one, or two to merge." />
+    <div className="angles-layout">
+      <div className="stack">
+        <section className="panel"><div className="panel-h"><h2>Reference</h2><button type="button" className="btn sm ghost" onClick=${() => goStep('ingest')}>Change</button></div><${SourceCard} p=${p} /></section>
+        <section className="panel stack">
+          <h2>Breakdown</h2>
+          <p style=${{ fontSize: 13.5 }}>${p.analysis.summary}</p>
+          <div><div className="eyebrow">Hook</div><p style=${{ fontSize: 13 }}>${p.analysis.hook}</p></div>
+          <div><div className="eyebrow" style=${{ marginBottom: 4 }}>Story beats</div><ol className="beats">${p.analysis.beats.map(([t, b]) => html`<li key=${t}><span className="mono">${t}</span><span>${b}</span></li>`)}</ol></div>
+          <div><div className="eyebrow">Pacing</div><p style=${{ fontSize: 13 }}>${p.analysis.pacing}</p></div>
+          <div><div className="eyebrow" style=${{ marginBottom: 4 }}>Why it likely worked</div><ul style=${{ margin: 0, paddingLeft: 18, fontSize: 13 }}>${p.analysis.why_it_worked.map(w => html`<li key=${w}>${w}</li>`)}</ul></div>
+          <div><div className="eyebrow" style=${{ marginBottom: 6 }}>Gaps worth filling</div><div className="gaps">${p.analysis.gaps.map(g => html`<div key=${g.text} className="gap"><div className="eyebrow">${g.kind}</div>${g.text}${g.from ? html`<span className="muted"> · from comments</span>` : null}</div>`)}</div></div>
+          <p className="note">${p.source.comments_scanned.toLocaleString()} comments scanned, ${p.source.comments.length} kept for questions and requests.</p>
+        </section>
+      </div>
+      <div className="stack">
+        <div className="toolbar">
+          <div className="row" role="group" aria-label="Filter by angle type">
+            <button type="button" className="chip btnchip" aria-pressed=${type === 'All'} onClick=${() => setType('All')}>All ${p.angles.length}</button>
+            ${ANGLE_TYPES.filter(t => counts[t]).map(t => html`<button key=${t} type="button" className="chip btnchip" aria-pressed=${type === t} onClick=${() => setType(t)}>${t} ${counts[t]}</button>`)}
+          </div>
+          <label className="row note" htmlFor="sort">Sort <select id="sort" className="select" style=${{ width: 'auto' }} value=${sort} onChange=${e => setSort(e.target.value)}><option value="score">Relatedness</option><option value="potential">Potential</option><option value="effort">Lowest effort</option></select></label>
+        </div>
+        <div className="cards">${list.map(a => html`<${AngleCard} key=${a.id} a=${a} p=${p} s=${s} selected=${sel.includes(a.id)} locked=${locked} onSelect=${() => toggle(a.id)} />`)}</div>
+        <section className="panel tray">
+          <div className="stack">
+            <div><div className="eyebrow">Selected</div>
+              ${chosen.length ? html`<div style=${{ fontWeight: 600 }}>${chosen.map(a => a.title).join('  +  ')}</div>${chosen.length === 2 ? html`<p className="note">Two angles will be merged into one script.</p>` : null}` : html`<p className="note">Select an angle card to continue. Select a second to merge them.</p>`}</div>
+            <div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${p.video_type} onChange=${v => !locked && updateP(p.id, q => { q.video_type = v; })} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>
+            <p className="note">${p.video_type === 'voiceover' ? 'Narrated, with images that stay still or get animated.' : 'Characters with their own voices, scenes animated from images.'}</p>
+          </div>
+          <label className="field" htmlFor="direction">Your direction (optional)
+            <textarea id="direction" className="textarea" rows="3" disabled=${locked} placeholder="e.g. Keep it under a minute, end on the cheapest crop, talk to renters" value=${p.user_direction} onChange=${e => updateP(p.id, q => { q.user_direction = e.target.value; })}></textarea>
+          </label>
+        </section>
+      </div>
+    </div>
+    <${ApproveBar} p=${p} step="angles" ready=${chosen.length > 0} hint="Select at least one angle." label=${'Approve and write script'} onApprove=${onApprove} />
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   3. Script (SCR-1..3, SCR-5, SCR-6)
+   ====================================================================== */
+function ScriptScreen({ p, s }) {
+  const sc = p.script; const locked = p.checkpoints.script;
+  const [custom, setCustom] = useState(![30, 60, 90].includes(p.format.target_seconds));
+  if (!sc || sc.generating) return html`<${Fragment}><${StepHead} title="Writing the script" sub="Drafting three hook options and the lines to fit your target length." /><div className="panel stack">${[90, 70, 85, 60, 75].map((w, i) => html`<div key=${i} className="skeleton" style=${{ width: w + '%' }}></div>`)}</div></${Fragment}>`;
+  const total = scriptSecs(p); const target = p.format.target_seconds;
+  const fullText = sc.lines.map(l => l.text).join(' ');
+  const ov = overlap(fullText, p.source.transcript); const ovPct = Math.round(ov * 100);
+  const isChar = p.video_type === 'character';
+  const setLine = (id, patch) => updateP(p.id, q => { const l = q.script.lines.find(l => l.id === id); Object.assign(l, patch, patch.text !== undefined ? { audio_status: 'pending', duration: null } : {}); });
+  const pickHook = i => updateP(p.id, q => { q.script.chosen_hook = i; q.script.lines[0].text = q.script.hook_options[i]; q.script.lines[0].audio_status = 'pending'; q.script.lines[0].duration = null; });
+  const tpl = s.templates[0];
+  const setTarget = v => updateP(p.id, q => { q.format.target_seconds = v; });
+  return html`<${Fragment}>
+    <${StepHead} title="Script" sub=${isChar ? 'Dialogue lines tagged with the speaking character. Edit anything.' : 'Narration lines, one per future scene. Edit anything.'}>
+      <div className="row"><span className="note">Target</span>
+        <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
+        ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
+      </div>
+      <button type="button" className="btn" disabled=${locked} onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Rewrite to ${target}s</button>
+    </${StepHead}>
+    <div className="script-grid">
+      <div className="stack">
+        <section className="panel stack">
+          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Opening hook</h2><span className="note">Pick one of three</span></div>
+          <div className="hooks">${sc.hook_options.map((h, i) => html`<button key=${i} type="button" className="hookopt" aria-pressed=${sc.chosen_hook === i} disabled=${locked} onClick=${() => pickHook(i)}><span className="radio"></span><span>${h}</span></button>`)}</div>
+        </section>
+        <section className="panel stack">
+          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${isChar ? 'Dialogue' : 'Narration'}</h2><span className="note mono">${sc.lines.length} lines · ${fmtT(total)} of ${fmtT(target)}</span></div>
+          <div className=${'meter' + (Math.abs(total - target) > target * 0.25 ? ' warn' : '')} aria-hidden="true"><i style=${{ width: Math.min(100, total / target * 100) + '%' }}></i></div>
+          <div className="lines">
+            ${sc.lines.map((l, i) => html`<div key=${l.id} className=${'line' + (isChar ? ' char' : '')}>
+              <span className="idx">${i + 1}</span>
+              ${isChar ? html`<select className="select" aria-label="Speaker" disabled=${locked} value=${l.speaker || ''} onChange=${e => setLine(l.id, { speaker: e.target.value })}>${p.characters.map(c => html`<option key=${c.id} value=${c.id}>${c.name}</option>`)}</select>` : null}
+              <textarea className="textarea" rows="2" aria-label=${'Line ' + (i + 1)} disabled=${locked} value=${l.text} onChange=${e => setLine(l.id, { text: e.target.value })}></textarea>
+              <span className="secs">${lineSecs(p, l).toFixed(1)}s</span>
+              <button type="button" className="btn ghost sm" aria-label="Delete line" disabled=${locked || sc.lines.length < 2} onClick=${() => updateP(p.id, q => { q.script.lines = q.script.lines.filter(x => x.id !== l.id); })}><${Icon} n="trash" /></button>
+            </div>`)}
+          </div>
+          <div><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.script.lines.push({ id: uid('ln'), text: '', visual: 'balcony garden detail', speaker: isChar ? q.characters[0] && q.characters[0].id : null, audio_status: 'pending' }); })}><${Icon} n="plus" />Add line</button></div>
+        </section>
+      </div>
+      <div className="stack">
+        <section className="panel stack">
+          <h3>Originality check</h3>
+          <div className=${'meter ' + (ovPct > 25 ? 'bad' : ovPct > 10 ? 'warn' : '')}><i style=${{ width: Math.max(3, Math.min(100, ovPct * 2)) + '%' }}></i></div>
+          ${ovPct > 25 ? html`<div className="warnbox">${ovPct}% of phrases match the source transcript. Reword the flagged lines so the script is your own.</div>` : html`<div className="okbox">${ovPct}% phrase overlap with the source. Wording is original.</div>`}
+          <p className="note">Compares three-word phrases against the reference transcript. Try pasting “fourteen point six kilos of food from a four square metre balcony” into a line.</p>
+        </section>
+        <section className="panel stack">
+          <h3>Style guide applied</h3>
+          <dl className="kv"><dt>Template</dt><dd>${tpl.name}</dd><dt>Tone</dt><dd>${tpl.tone}</dd><dt>Pacing</dt><dd>${tpl.pacing}</dd></dl>
+          ${sc.direction ? html`<p className="note">Your direction: “${sc.direction}”</p>` : null}
+        </section>
+        <section className="panel stack"><h3>Written from</h3>${sc.written_with.map(id => { const a = p.angles.find(x => x.id === id); return a ? html`<div key=${id} style=${{ fontSize: 13 }}><span className="eyebrow">${a.type}</span><div>${a.title}</div></div>` : null; })}</section>
+      </div>
+    </div>
+    <${ApproveBar} p=${p} step="script" ready=${sc.lines.every(l => l.text.trim())} hint="Fill or delete empty lines." label="Approve script" onApprove=${() => approve(p.id, 'script')} />
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   4. Visual style (SCR-4)
+   ====================================================================== */
+function StyleScreen({ p, s }) {
+  const locked = p.checkpoints.style; const suggested = (p.angles.find(a => a.id === p.selected_angle_ids[0]) || {}).style;
+  const cur = p.style || suggested;
+  return html`<${Fragment}>
+    <${StepHead} title="Visual style" sub="Keep the style the angle suggested, or pick another. The style prefix is added to every image prompt so scenes stay consistent." />
+    <div className="styles">${STYLES.map(st => html`<button key=${st.id} type="button" className="scard" aria-pressed=${cur === st.id} disabled=${locked} onClick=${() => updateP(p.id, q => { q.style = st.id; })}>
+      <div className="art"><${Art} seed=${hashSeed(st.id)} styleId=${st.id} title=${st.name + ' example'} /></div>
+      <div className="sbody"><div className="row" style=${{ justifyContent: 'space-between' }}><strong>${st.name}</strong>${st.id === suggested ? html`<span className="chip">Suggested</span>` : null}</div>
+        <span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c, width: 14, height: 14 }} />`)}</span>
+        <span className="note">${st.mood}</span><span className="prefix">${st.prefix}</span></div>
+    </button>`)}</div>
+    <section className="panel row"><div className="grow"><strong>Saved templates</strong><p className="note">Apply your channel look: style, voice, captions, music and aspect ratio in one click.</p></div>
+      ${s.templates.map(t => html`<button key=${t.id} type="button" className="btn" disabled=${locked} onClick=${() => { applyTemplate(p.id, t); toast('Applied “' + t.name + '”.'); }}>Apply “${t.name}”</button>`)}</section>
+    <${ApproveBar} p=${p} step="style" ready=${!!cur} label="Approve style" onApprove=${() => { updateP(p.id, q => { q.style = cur; }); approve(p.id, 'style'); }} />
+  </${Fragment}>`;
+}
+function hashSeed(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) % 100000; }
+function applyTemplate(pid, t) { updateP(pid, q => { q.style = t.style; q.audio.voice_id = t.voice_id; q.audio.caption_style = t.caption_style; q.audio.music_path = t.music; q.format.aspect_ratio = t.aspect; q.template_id = t.id; }); }
+
+/* ======================================================================
+   5. Voice (AUD-1..4, CHR-1..4)
+   ====================================================================== */
+function speak(text, v) {
+  try { const synth = window.speechSynthesis; if (!synth) return false; synth.cancel(); const u = new SpeechSynthesisUtterance(text); u.pitch = Math.min(2, v.pitch); u.rate = v.rate; synth.speak(u); return true; } catch (e) { return false; }
+}
+function PreviewBtn({ text, voice }) {
+  const [on, setOn] = useState(false);
+  return html`<button type="button" className="btn sm" onClick=${e => { e.stopPropagation(); speak(text, voice); setOn(true); setTimeout(() => setOn(false), 2500); }}><${Icon} n=${on ? 'speaker' : 'play'} />${on ? 'Playing' : 'Preview'}</button>`;
+}
+function VoiceScreen({ p, s }) {
+  const locked = p.checkpoints.voice; const isChar = p.video_type === 'character';
+  const lines = p.script.lines; const vm = modelOf(p, 'voice');
+  const canClone = /cloning/i.test(vm.limits);
+  const allReady = lines.every(l => l.audio_status === 'ready');
+  const generating = lines.some(l => l.audio_status === 'generating');
+  const chars = lines.reduce((n, l) => n + l.text.length, 0);
+  const pending = lines.filter(l => l.audio_status !== 'ready');
+  const pendingCost = pending.reduce((n, l) => n + l.text.length, 0) / 1000 * vm.cost;
+  const voiceOk = isChar || !voiceById(p.audio.voice_id).clone || p.audio.consent;
+  const firstLine = lines[0] ? lines[0].text : 'Hello';
+  const usedVoices = isChar ? p.characters : null;
+  const voiceList = VOICES.filter(v => !v.clone || canClone);
+  return html`<${Fragment}>
+    <${StepHead} title=${isChar ? 'Characters and voices' : 'Voice'} sub=${isChar ? 'Give each character a look and a voice. Each dialogue line is spoken in its character’s voice.' : 'Preview a voice on the first line, then generate the narration. Audio length sets each scene’s length.'} />
+    ${isChar ? html`<section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Characters</h2><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.characters.push({ id: uid('ch'), name: 'New character', description: '', notes: '', voice_id: 'v-mara', seed: randSeed() }); })}><${Icon} n="plus" />Add character</button></div>
+      <div className="chars">${p.characters.map(c => html`<div key=${c.id} className="charcard">
+        <div className="stack" style=${{ gap: 6 }}><div className="art"><${Art} seed=${c.seed} styleId=${p.style} title=${c.name + ' reference'} /></div><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.characters.find(x => x.id === c.id).seed = randSeed(); addCost(q, modelOf(q, 'image').cost); })}><${Icon} n="redo" />New look</button></div>
+        <div className="stack" style=${{ gap: 6 }}>
+          <input className="input" aria-label="Character name" disabled=${locked} value=${c.name} onChange=${e => updateP(p.id, q => { q.characters.find(x => x.id === c.id).name = e.target.value; })} />
+          <textarea className="textarea" rows="2" aria-label="Description" disabled=${locked} placeholder="What they look like" value=${c.description} onChange=${e => updateP(p.id, q => { q.characters.find(x => x.id === c.id).description = e.target.value; })}></textarea>
+          <input className="input" aria-label="Personality notes" disabled=${locked} placeholder="Personality notes" value=${c.notes} onChange=${e => updateP(p.id, q => { q.characters.find(x => x.id === c.id).notes = e.target.value; })} />
+          <div className="row"><select className="select grow" aria-label="Voice" disabled=${locked} value=${c.voice_id} onChange=${e => updateP(p.id, q => { const ch = q.characters.find(x => x.id === c.id); ch.voice_id = e.target.value; q.script.lines.forEach(l => { if (l.speaker === c.id) { l.audio_status = 'pending'; l.duration = null; } }); })}>${voiceList.filter(v => !v.clone).map(v => html`<option key=${v.id} value=${v.id}>${v.name} · ${v.desc}</option>`)}</select><${PreviewBtn} text=${(lines.find(l => l.speaker === c.id) || { text: 'Hi, I am ' + c.name + '.' }).text} voice=${voiceById(c.voice_id)} /></div>
+        </div>
+      </div>`)}</div>
+      <p className="note">Character voices come from the voice model’s library or your own cloned voice, never an imitation of a real person.</p>
+    </section>` : html`<section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Voices in ${vm.name}</h2><span className="note">Previewing uses your browser’s voice as a stand-in.</span></div>
+      <div className="voices" role="radiogroup" aria-label="Voice">${voiceList.map(v => html`<div key=${v.id} className="voice" role="radio" tabIndex="0" aria-checked=${p.audio.voice_id === v.id} onClick=${() => !locked && updateP(p.id, q => { q.audio.voice_id = v.id; q.script.lines.forEach(l => { l.audio_status = l.audio_status === 'ready' ? 'pending' : l.audio_status; }); })} onKeyDown=${e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); !locked && updateP(p.id, q => { q.audio.voice_id = v.id; }); } }}>
+        <span className="rail-num" style=${{ width: 18, height: 18 }}>${p.audio.voice_id === v.id ? html`<${Icon} n="check" />` : ''}</span>
+        <div style=${{ minWidth: 0 }}><strong>${v.name}</strong> <span className="note">${v.desc}</span></div>
+        <${PreviewBtn} text=${firstLine} voice=${v} />
+      </div>`)}</div>
+      ${voiceById(p.audio.voice_id).clone ? html`<label className="switch warnbox"><input id="consent" type="checkbox" checked=${p.audio.consent} disabled=${locked} onChange=${e => updateP(p.id, q => { q.audio.consent = e.target.checked; })} /> This is my own voice and I consent to cloning it for my videos.</label>` : null}
+      ${!canClone ? html`<p className="note">${vm.name} has no voice cloning. Switch the voiceover model in the top bar to use your own voice.</p>` : null}
+    </section>`}
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${isChar ? 'Dialogue audio' : 'Narration'}</h2><span className="note mono">${lines.filter(l => l.audio_status === 'ready').length}/${lines.length} ready · ${fmtT(scriptSecs(p))}</span></div>
+      <div className="audiolist">${lines.map((l, i) => { const v = voiceById(lineVoice(p, l)); const ch = isChar && p.characters.find(c => c.id === l.speaker); return html`<div key=${l.id} className="aline">
+        <span className="mono muted">${i + 1}</span>
+        <span style=${{ minWidth: 0 }}>${ch ? html`<b style=${{ color: 'var(--accent)' }}>${ch.name}: </b>` : null}${l.text}</span>
+        <${Wave} seed=${l.wave || i + 3} on=${l.audio_status === 'ready'} n=${18} />
+        <span className="mono muted secs">${l.audio_status === 'ready' ? l.duration.toFixed(1) + 's' : '–'}</span>
+        <span className="row" style=${{ gap: 4, justifyContent: 'flex-end' }}><${Pill} status=${l.audio_status || 'pending'} />${l.audio_status === 'ready' || l.audio_status === 'failed' ? html`<button type="button" className="btn ghost sm" disabled=${locked} aria-label="Regenerate this line" title="Regenerate this line" onClick=${() => api.generateAudio(p.id, [l.id])}><${Icon} n="redo" /></button>` : null}${l.audio_status === 'ready' ? html`<button type="button" className="btn ghost sm" aria-label="Play line" onClick=${() => speak(l.text, v)}><${Icon} n="play" /></button>` : null}</span>
+      </div>`; })}</div>
+      ${!allReady && !locked ? html`<div className="row">${generating ? html`<span className="row note"><span className="spinner"></span> Generating with ${vm.name}</span>` : html`<${CostGate} p=${p} label=${pending.length === lines.length ? 'Generate ' + (isChar ? 'dialogue' : 'narration') : 'Generate ' + pending.length + ' remaining line' + (pending.length > 1 ? 's' : '')} cost=${pendingCost} disabled=${!voiceOk} rows=${[[vm.name, fmt$(vm.cost) + vm.unit], ['Characters to speak', pending.reduce((n, l) => n + l.text.length, 0).toLocaleString()]]} onGo=${() => api.generateAudio(p.id, pending.map(l => l.id))} />`}</div>` : null}
+    </section>
+    <${ApproveBar} p=${p} step="voice" ready=${allReady} hint="Generate audio for every line first." label="Approve voice" onApprove=${() => approve(p.id, 'voice')} />
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   6. Format (aspect, animated or static, captions, music)
+   ====================================================================== */
+function CapSample({ id }) {
+  if (id === 'bold') return html`<div className="caption bold" style=${{ position: 'static' }}><span>Three</span><span className="on">hours</span><span>of sun</span></div>`;
+  if (id === 'clean') return html`<div className="caption clean" style=${{ position: 'static' }}>Three hours of sun.</div>`;
+  return html`<div className="caption karaoke" style=${{ position: 'static' }}><span className="past">Three </span><span className="past">hours </span><span>of sun</span></div>`;
+}
+function FormatScreen({ p, s }) {
+  const locked = p.checkpoints.format; const est = estimate(p); const im = modelOf(p, 'image'); const vm = modelOf(p, 'video');
+  const nScenes = p.script.lines.length; const imgCost = nScenes * im.cost;
+  const set = fn => !locked && updateP(p.id, fn);
+  const go = () => { approve(p.id, 'format'); api.generateScenes(p.id); };
+  const hasScenes = p.scenes.length > 0;
+  return html`<${Fragment}>
+    <${StepHead} title="Video format" sub="Choose the frame, whether scenes move, and how captions and music sound. The cost estimate updates as you choose." />
+    <div className="fmt-grid">
+      <section className="panel stack"><h3>Aspect ratio</h3>
+        <div className="aspects">${[['9:16', 'Shorts, vertical', 22, 38], ['16:9', 'Standard, horizontal', 48, 27]].map(([v, d, w, h]) => html`<button key=${v} type="button" className="aspect" aria-pressed=${p.format.aspect_ratio === v} disabled=${locked} onClick=${() => set(q => { q.format.aspect_ratio = v; })}><i style=${{ width: w, height: h }}></i><strong className="mono">${v}</strong><span className="note">${d}</span></button>`)}</div>
+        <p className="note">Exports at 1080p MP4. Length target: <span className="mono">${p.format.target_seconds}s</span>, script runs <span className="mono">${fmtT(scriptSecs(p))}</span>.</p>
+      </section>
+      <section className="panel stack"><h3>Scenes</h3>
+        <${Seg} label="Scene motion" value=${p.format.animated ? 'a' : 's'} onChange=${v => set(q => { q.format.animated = v === 'a'; q.scenes.forEach(sc => { sc.animate = v === 'a'; }); })} options=${[{ value: 's', label: 'Static: zoom and pan' }, { value: 'a', label: 'Animated clips' }]} />
+        <p className="note">${p.format.animated ? 'Each scene image becomes a clip with ' + vm.name + ' (about ' + fmt$(vm.cost) + ' per second). You can still mark single scenes static later.' : 'Images move with zoom and pan in the compile step. No video model cost, and the Animate step is skipped.'}</p>
+      </section>
+      <section className="panel stack"><h3>Captions</h3>
+        <div className="capopts">${CAPTIONS.map(c => html`<button key=${c.id} type="button" className="capopt" aria-pressed=${p.audio.caption_style === c.id} disabled=${locked} onClick=${() => set(q => { q.audio.caption_style = c.id; q.scenes.forEach(sc => { sc.caption_style = c.id; }); })}><span className="lbl">${c.name}</span><${CapSample} id=${c.id} /></button>`)}</div>
+      </section>
+      <section className="panel stack"><h3>Music</h3>
+        <select id="music" className="select" aria-label="Background music" disabled=${locked} value=${p.audio.music_path} onChange=${e => set(q => { q.audio.music_path = e.target.value; })}>${MUSIC.map(m => html`<option key=${m.id} value=${m.id}>${m.name}${m.mood ? ' · ' + m.mood : ''}</option>`)}</select>
+        <label className="field" htmlFor="vol">Volume under voice <span className="mono muted">${Math.round(p.audio.music_volume * 100)}%</span><input id="vol" type="range" min="0" max="0.6" step="0.05" disabled=${locked || p.audio.music_path === 'none'} value=${p.audio.music_volume} onChange=${e => set(q => { q.audio.music_volume = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
+        <label className="switch"><input id="duck" type="checkbox" checked=${p.audio.duck} disabled=${locked} onChange=${e => set(q => { q.audio.duck = e.target.checked; })} />Duck music while someone speaks</label>
+      </section>
+      <section className="panel stack"><h3>Estimated cost for this video</h3>
+        <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>
+          <dt>Voice (${est.chars.toLocaleString()} chars)</dt><dd>${fmt$(est.voice)}</dd>
+          <dt>Images (${est.nScenes} × ${fmt$(im.cost)})</dt><dd>${fmt$(est.images)}</dd>
+          <dt>Animation (${Math.round(est.animSecs)} s)</dt><dd>${fmt$(est.video)}</dd>
+          <dt>Compile (FFmpeg, local)</dt><dd>$0.00</dd>
+          <dt style=${{ color: 'var(--ink)', fontWeight: 600 }}>Total</dt><dd style=${{ fontWeight: 600 }}>${fmt$(est.total)}</dd>
+        </dl>
+        <p className="note">Your per-project limit is ${fmt$(s.settings.costLimit)}. Steps that go over it ask for confirmation.</p>
+      </section>
+    </div>
+    <${ApproveBar} p=${p} step="format" ready=${true} label="Approve format" onApprove=${go}
+      gate=${hasScenes ? html`<button type="button" className="btn primary" onClick=${() => approve(p.id, 'format')}>Approve format (keep current scenes)</button>` : html`<${CostGate} p=${p} label=${'Approve and generate ' + nScenes + ' scene images'} cost=${imgCost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Scenes', nScenes]]} onGo=${go} />`} />
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   7. Scenes (VIS-1..6, CHR-5, ANM-4)
+   ====================================================================== */
+function readImage(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => { const img = new Image(); img.onload = () => { const k = Math.min(1, 640 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = img.width * k; c.height = img.height * k; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.8)); }; img.onerror = rej; img.src = fr.result; };
+    fr.onerror = rej; fr.readAsDataURL(file);
+  });
+}
+function SceneImage({ p, sc, small }) {
+  const v = sc.image_versions[sc.image_index];
+  const h = p.format.aspect_ratio === '16:9';
+  return html`<div className=${'frame' + (h ? ' h' : '')}>
+    ${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} title=${sc.description} />` : null}
+    ${sc.image_status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>${small ? '' : 'Generating'}</div>` : null}
+    ${sc.image_status === 'failed' ? html`<div className="overlay"><span>Failed</span><button type="button" className="btn sm" onClick=${() => api.generateImage(p.id, sc.id, true)}>Retry</button></div>` : null}
+    ${sc.image_status === 'pending' && !v ? html`<div className="overlay">Not generated</div>` : null}
+  </div>`;
+}
+function ScenesScreen({ p, s }) {
+  const locked = p.checkpoints.scenes; const isChar = p.video_type === 'character'; const h = p.format.aspect_ratio === '16:9';
+  const im = modelOf(p, 'image');
+  const ready = p.scenes.filter(x => x.image_status === 'ready').length;
+  const total = p.scenes.reduce((n, sc) => n + sceneSecs(p, sc), 0);
+  const setS = (id, fn) => !locked && updateP(p.id, q => { const sc = q.scenes.find(x => x.id === id); fn(sc, q); });
+  const move = (i, d) => !locked && updateP(p.id, q => { const j = i + d; if (j < 0 || j >= q.scenes.length) return; const t = q.scenes[i]; q.scenes[i] = q.scenes[j]; q.scenes[j] = t; q.scenes.forEach((sc, k) => { sc.order = k; }); });
+  const merge = i => !locked && updateP(p.id, q => { const a = q.scenes[i], b = q.scenes[i + 1]; if (!b) return; a.line_ids = a.line_ids.concat(b.line_ids); a.description = a.description + '; ' + b.description; a.character_ids = Array.from(new Set(a.character_ids.concat(b.character_ids))); q.scenes.splice(i + 1, 1); });
+  const split = i => !locked && updateP(p.id, q => { const a = q.scenes[i]; if (a.line_ids.length < 2) return; const b = clone(a); b.id = uid('sc'); const half = Math.ceil(a.line_ids.length / 2); b.line_ids = a.line_ids.slice(half); a.line_ids = a.line_ids.slice(0, half); b.image_versions = []; b.image_index = -1; b.image_status = 'pending'; b.clip_versions = []; b.clip_index = -1; b.clip_status = 'pending'; q.scenes.splice(i + 1, 0, b); });
+  const del = i => !locked && updateP(p.id, q => { q.scenes.splice(i, 1); });
+  const add = () => !locked && updateP(p.id, q => { const l = { id: uid('ln'), text: 'New line for this scene.', visual: '', speaker: isChar && q.characters[0] ? q.characters[0].id : null, audio_status: 'pending' }; q.script.lines.push(l); q.scenes.push({ id: uid('sc'), order: q.scenes.length, description: 'New scene', line_ids: [l.id], character_ids: [], image_prompt: '', image_versions: [], image_index: -1, image_status: 'pending', animate: q.format.animated, motion_prompt: 'slow push in', clip_versions: [], clip_index: -1, clip_status: 'pending', caption_style: q.audio.caption_style }); q.checkpoints.voice = q.checkpoints.voice; });
+  const upload = async (id, file) => { if (!file) return; try { const data = await readImage(file); setS(id, sc => { sc.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); sc.image_index = sc.image_versions.length - 1; sc.image_status = 'ready'; }); toast('Your image was placed in the scene.'); } catch (e) { toast('That file could not be read as an image. Try a JPG or PNG.'); } };
+  const unvoiced = p.scenes.some(sc => sceneLines(p, sc).some(l => l.audio_status !== 'ready'));
+  const allReady = p.scenes.length > 0 && ready === p.scenes.length;
+  return html`<${Fragment}>
+    <${StepHead} title="Scenes" sub=${'One image per scene with ' + im.name + ' and the ' + styleById(p.style).name.toLowerCase() + ' style prefix. Edit any description or prompt and regenerate just that scene. Earlier versions are kept.'}>
+      <span className="note mono">${p.scenes.length} scenes · ${fmtT(total)} · ${ready}/${p.scenes.length} images</span>
+      <button type="button" className="btn" disabled=${locked} onClick=${() => api.generateScenes(p.id)}><${Icon} n="redo" />Rebuild from script</button>
+    </${StepHead}>
+    ${unvoiced ? html`<div className="warnbox">Some scenes have lines without audio. Generate them in the Voice step so scene lengths match the narration.</div>` : null}
+    <div className="scenes">${p.scenes.map((sc, i) => { const ls = sceneLines(p, sc); return html`<section key=${sc.id} className=${'panel scene' + (h ? ' wide' : '')}>
+      <div className="scene-media">
+        <${SceneImage} p=${p} sc=${sc} />
+        ${sc.image_versions.length > 1 ? html`<div className="versions" aria-label="Versions">${sc.image_versions.map((v, k) => html`<button key=${k} type="button" aria-pressed=${k === sc.image_index} title=${'Version ' + (k + 1) + ' · ' + (v.model === 'upload' ? 'Your upload' : (MODELS.image.find(m => m.id === v.model) || {}).name)} onClick=${() => setS(sc.id, x => { x.image_index = k; })}><${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} /></button>`)}</div>` : null}
+        <div className="row" style=${{ gap: 4 }}>
+          <button type="button" className="btn sm" disabled=${locked || sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Regenerate' : 'Generate'}</button>
+          <label className="btn sm ghost" title="Upload your own image"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden disabled=${locked} onChange=${e => upload(sc.id, e.target.files[0])} /></label>
+        </div>
+      </div>
+      <div className="scene-body">
+        <div className="row" style=${{ justifyContent: 'space-between' }}>
+          <div className="row"><strong>Scene ${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span><${Pill} status=${sc.image_status} /></div>
+          <div className="row" style=${{ gap: 2 }}>
+            <button type="button" className="btn ghost sm" aria-label="Move up" title="Move up" disabled=${locked || i === 0} onClick=${() => move(i, -1)}><${Icon} n="up" /></button>
+            <button type="button" className="btn ghost sm" aria-label="Move down" title="Move down" disabled=${locked || i === p.scenes.length - 1} onClick=${() => move(i, 1)}><${Icon} n="down" /></button>
+            <button type="button" className="btn ghost sm" aria-label="Merge with next" title="Merge with next scene" disabled=${locked || i === p.scenes.length - 1} onClick=${() => merge(i)}><${Icon} n="merge" /></button>
+            <button type="button" className="btn ghost sm" aria-label="Split scene" title="Split into two scenes" disabled=${locked || sc.line_ids.length < 2} onClick=${() => split(i)}><${Icon} n="split" /></button>
+            <button type="button" className="btn ghost sm danger" aria-label="Delete scene" title="Delete scene" disabled=${locked || p.scenes.length < 2} onClick=${() => del(i)}><${Icon} n="trash" /></button>
+          </div>
+        </div>
+        <div className="scene-lines">${ls.map(l => { const ch = isChar && p.characters.find(c => c.id === l.speaker); return html`<div key=${l.id}>${ch ? html`<b>${ch.name}: </b>` : null}${l.text}</div>`; })}</div>
+        ${sc.error && sc.image_status === 'failed' ? html`<div className="warnbox">${sc.error}</div>` : null}
+        <label className="field">Scene description<textarea className="textarea" rows="2" disabled=${locked} value=${sc.description} onChange=${e => setS(sc.id, x => { x.description = e.target.value; })}></textarea></label>
+        <label className="field">Image prompt<span className="prefix-chip">${styleById(p.style).prefix},</span><textarea className="textarea prompt" rows="2" disabled=${locked} value=${sc.image_prompt} onChange=${e => setS(sc.id, x => { x.image_prompt = e.target.value; })}></textarea></label>
+        <div className="row" style=${{ justifyContent: 'space-between' }}>
+          ${isChar ? html`<div className="row"><span className="note">In scene</span>${p.characters.map(c => html`<button key=${c.id} type="button" className="chip btnchip" aria-pressed=${sc.character_ids.includes(c.id)} disabled=${locked} onClick=${() => setS(sc.id, x => { x.character_ids = x.character_ids.includes(c.id) ? x.character_ids.filter(y => y !== c.id) : x.character_ids.concat(c.id); })}>${c.name}</button>`)}</div>` : html`<span></span>`}
+          <${Seg} label="Scene motion" value=${sc.animate ? 'a' : 's'} onChange=${v => setS(sc.id, x => { x.animate = v === 'a'; })} options=${[{ value: 's', label: 'Static' }, { value: 'a', label: 'Animated' }]} />
+        </div>
+        ${isChar && sc.character_ids.length ? html`<p className="note">Reference images for ${sc.character_ids.map(id => (p.characters.find(c => c.id === id) || {}).name).join(' and ')} are sent with this prompt.</p>` : null}
+      </div>
+    </section>`; })}</div>
+    <div><button type="button" className="btn" disabled=${locked} onClick=${add}><${Icon} n="plus" />Add scene</button></div>
+    <${ApproveBar} p=${p} step="scenes" ready=${allReady} hint=${p.scenes.some(x => x.image_status === 'generating') ? 'Images are still generating.' : 'Every scene needs an image.'} label=${needsAnimate(p) ? 'Approve scenes' : 'Approve scenes (skip Animate)'} onApprove=${() => approve(p.id, 'scenes')} />
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   8. Animate (ANM-1..6)
+   ====================================================================== */
+function ClipPreview({ p, sc }) {
+  const v = sc.image_versions[sc.image_index]; const c = sc.clip_versions[sc.clip_index];
+  const [t, setT] = useState(0);
+  useEffect(() => { if (!c) return; let raf, st = performance.now(); const f = now => { setT(((now - st) / 1000) % 4); raf = requestAnimationFrame(f); }; raf = requestAnimationFrame(f); return () => cancelAnimationFrame(raf); }, [c && c.seed]);
+  const k = t / 4; const tr = c ? 'scale(' + (1.08 + 0.08 * k) + ') translate(' + (Math.sin(k * 6.28) * 2) + '%, ' + (Math.cos(k * 6.28) * 1.5) + '%) rotate(' + Math.sin(k * 6.28) * 0.8 + 'deg)' : 'none';
+  return html`<div className=${'frame' + (p.format.aspect_ratio === '16:9' ? ' h' : '')}>
+    <div className="stage-wrap" style=${{ transform: tr }}>${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} />` : null}</div>
+    ${c ? html`<span className="badge">Take ${sc.clip_index + 1}</span>` : null}
+    ${sc.clip_status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>Animating</div>` : null}
+    ${sc.clip_status === 'failed' ? html`<div className="overlay"><span>Failed</span><button type="button" className="btn sm" onClick=${() => api.animate(p.id, [sc.id])}>Retry</button></div>` : null}
+    ${!c && sc.clip_status === 'pending' ? html`<div className="overlay">Still image</div>` : null}
+  </div>`;
+}
+function AnimateScreen({ p, s }) {
+  const locked = p.checkpoints.clips; const vm = modelOf(p, 'video'); const h = p.format.aspect_ratio === '16:9';
+  const anim = p.scenes.filter(sc => sc.animate);
+  const todo = anim.filter(sc => sc.clip_status !== 'ready' && sc.clip_status !== 'generating');
+  const genSecs = sc => Math.min(vm.maxClip, Math.ceil(sceneSecs(p, sc) / 5) * 5);
+  const cost = todo.reduce((n, sc) => n + genSecs(sc) * vm.cost, 0);
+  const allReady = anim.every(sc => sc.clip_status === 'ready');
+  const setS = (id, fn) => !locked && updateP(p.id, q => fn(q.scenes.find(x => x.id === id)));
+  return html`<${Fragment}>
+    <${StepHead} title="Animate" sub=${'Turn ' + anim.length + ' of ' + p.scenes.length + ' scenes into clips with ' + vm.name + '. Each clip is trimmed or extended to match its scene’s audio. Static scenes get zoom and pan instead.'}>
+      ${todo.length && !locked ? html`<${CostGate} p=${p} label=${'Animate ' + todo.length + ' scene' + (todo.length > 1 ? 's' : '')} cost=${cost} rows=${[[vm.name, fmt$(vm.cost) + ' per second'], ['Seconds to generate', todo.reduce((n, sc) => n + genSecs(sc), 0)], ['Max clip length', vm.maxClip + ' s']]} onGo=${() => api.animate(p.id, todo.map(sc => sc.id))} />` : null}
+    </${StepHead}>
+    <div className="scenes">${anim.map(sc => { const i = p.scenes.indexOf(sc); const c = sc.clip_versions[sc.clip_index]; return html`<section key=${sc.id} className=${'panel scene' + (h ? ' wide' : '')}>
+      <div className="scene-media"><${ClipPreview} p=${p} sc=${sc} />
+        ${sc.clip_versions.length > 1 ? html`<div className="row" style=${{ gap: 4 }}>${sc.clip_versions.map((v, k) => html`<button key=${k} type="button" className="chip btnchip" aria-pressed=${k === sc.clip_index} onClick=${() => setS(sc.id, x => { x.clip_index = k; })}>Take ${k + 1}</button>`)}</div>` : null}
+      </div>
+      <div className="scene-body">
+        <div className="row" style=${{ justifyContent: 'space-between' }}><div className="row"><strong>Scene ${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span><${Pill} status=${sc.clip_status} /></div>
+          <button type="button" className="btn sm" disabled=${locked || sc.clip_status === 'generating' || sc.clip_status === 'pending'} onClick=${() => api.animate(p.id, [sc.id])}><${Icon} n="redo" />New take <span className="tag">${fmt$(genSecs(sc) * vm.cost)}</span></button></div>
+        <div className="scene-lines">${sceneLines(p, sc).map(l => html`<div key=${l.id}>${l.text}</div>`)}</div>
+        <label className="field">Motion prompt<textarea className="textarea prompt" rows="2" disabled=${locked} value=${sc.motion_prompt} onChange=${e => setS(sc.id, x => { x.motion_prompt = e.target.value; })}></textarea></label>
+        ${c ? html`<p className="note mono">Generated ${c.generated}s → ${c.fitted < c.generated ? 'trimmed' : 'extended'} to ${c.fitted.toFixed(1)}s to match audio</p>` : null}
+        <div className="row"><button type="button" className="btn sm ghost" disabled=${locked} onClick=${() => setS(sc.id, x => { x.animate = false; })}>Make this scene static</button></div>
+      </div>
+    </section>`; })}</div>
+    <${ApproveBar} p=${p} step="animate" ready=${anim.length > 0 && allReady} hint="Every animated scene needs a clip." label="Approve clips" onApprove=${() => approve(p.id, 'animate')} />
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   Player: draft and final preview (ASM-1, ASM-2, ASM-4)
+   ====================================================================== */
+function Player({ p, mode }) {
+  const scenes = p.scenes; const durs = scenes.map(sc => sceneSecs(p, sc)); const total = durs.reduce((a, b) => a + b, 0) || 1;
+  const [t, setT] = useState(0); const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (!playing) return; let last = performance.now(), raf;
+    const tick = now => { const dt = (now - last) / 1000; last = now; setT(x => { const n = x + dt; if (n >= total) { setPlaying(false); return total; } return n; }); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf);
+  }, [playing, total]);
+  let acc = 0, idx = 0; for (let i = 0; i < durs.length; i++) { if (t < acc + durs[i] || i === durs.length - 1) { idx = i; break; } acc += durs[i]; }
+  const sc = scenes[idx]; if (!sc) return null;
+  const local = Math.min(1, Math.max(0, (t - acc) / durs[idx]));
+  const v = sc.image_versions[sc.image_index];
+  const clip = sc.animate && sc.clip_versions[sc.clip_index];
+  const dir = idx % 2 ? -1 : 1;
+  const tr = clip
+    ? 'scale(' + (1.1 + 0.08 * local) + ') translate(' + (Math.sin(local * 6.28) * 2.5) + '%, ' + (Math.cos(local * 6.28) * 2) + '%) rotate(' + Math.sin(local * 6.28) * 1 + 'deg)'
+    : 'scale(' + (1.05 + 0.12 * local) + ') translate(' + (dir * (local - 0.5) * 5) + '%, ' + ((0.5 - local) * 2) + '%)';
+  const ls = sceneLines(p, sc); const text = ls.map(l => l.text).join(' '); const ws = words(text); const wi = Math.min(ws.length - 1, Math.floor(local * ws.length));
+  const cap = p.audio.caption_style;
+  const speaker = p.video_type === 'character' && ls[0] && p.characters.find(c => c.id === ls[0].speaker);
+  const h = p.format.aspect_ratio === '16:9';
+  let caption = null;
+  if (cap === 'bold') { const start = Math.floor(wi / 3) * 3; caption = html`<div className="caption bold">${ws.slice(start, start + 3).map((w, k) => html`<span key=${k} className=${start + k === wi ? 'on' : ''}>${w}</span>`)}</div>`; }
+  else if (cap === 'clean') caption = html`<div className="caption clean">${text}</div>`;
+  else caption = html`<div className="caption karaoke">${ws.map((w, k) => html`<span key=${k} className=${k <= wi ? 'past' : ''}>${w + ' '}</span>`)}</div>`;
+  const music = MUSIC.find(m => m.id === p.audio.music_path);
+  return html`<div className=${'player' + (h ? ' h' : '')}>
+    <div className=${'frame' + (h ? ' h' : '')} style=${{ borderRadius: 14 }}>
+      <div className="stage-wrap" style=${{ transform: tr }}>${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} />` : null}</div>
+      ${t > 0 || playing ? caption : null}
+      ${speaker ? html`<span className="speaker">${speaker.name}</span>` : null}
+      ${mode === 'draft' ? html`<span className="drafttag">DRAFT 480p</span>` : null}
+      ${!playing && t === 0 ? html`<button type="button" className="overlay" style=${{ border: 0, cursor: 'pointer' }} onClick=${() => setPlaying(true)} aria-label="Play preview"><span style=${{ width: 54, height: 54, borderRadius: '50%', background: 'rgba(255,255,255,0.92)', color: '#111', display: 'grid', placeItems: 'center' }}><svg viewBox="0 0 20 20" width="22" height="22"><path d="M6 4l10 6-10 6z" fill="currentColor" /></svg></span><span>${fmtT(total)} · ${scenes.length} scenes</span></button>` : null}
+    </div>
+    <div className="controls">
+      <button type="button" className="btn sm" aria-label=${playing ? 'Pause' : 'Play'} onClick=${() => { if (t >= total) setT(0); setPlaying(!playing); }}><${Icon} n=${playing ? 'pause' : 'play'} /></button>
+      <input type="range" min="0" max=${total} step="0.05" value=${t} aria-label="Scrub" onChange=${e => { setT(+e.target.value); }} />
+      <span className="mono muted" style=${{ fontSize: 12 }}>${fmtT(t)}/${fmtT(total)}</span>
+    </div>
+    <div className="note" style=${{ fontSize: 12 }}>Scene ${idx + 1} of ${scenes.length} · ${clip ? 'animated clip' : 'zoom and pan'}${music && music.id !== 'none' ? ' · music: ' + music.name + ' ' + Math.round(p.audio.music_volume * 100) + '%' + (p.audio.duck ? ', ducked' : '') : ''}</div>
+  </div>`;
+}
+
+/* ======================================================================
+   9. Compile (ASM-1..4, ASM-6)
+   ====================================================================== */
+function CompileScreen({ p, s }) {
+  const anim = p.scenes.filter(sc => sc.animate).length;
+  const draftJob = p.rendering === 'draft'; const finalJob = p.rendering === 'final';
+  const job = s.jobs.find(j => j.pid === p.id && j.status === 'running' && /draft|final/i.test(j.label));
+  const checks = [
+    [p.scenes.length + ' scenes with images', true], [anim ? anim + ' animated, ' + (p.scenes.length - anim) + ' zoom and pan' : 'All scenes zoom and pan', true],
+    [(p.video_type === 'character' ? 'Dialogue' : 'Narration') + ' audio, ' + fmtT(scriptSecs(p)), p.script.lines.every(l => l.audio_status === 'ready')],
+    ['Captions: ' + CAPTIONS.find(c => c.id === p.audio.caption_style).name, true],
+    ['Music: ' + MUSIC.find(m => m.id === p.audio.music_path).name + (p.audio.duck ? ', ducked under voice' : ''), p.audio.music_path !== 'none'],
+    [p.format.aspect_ratio + ' at 1080p, MP4', true],
+  ];
+  return html`<${Fragment}>
+    <${StepHead} title="Compile" sub="Scenes, voice, captions and music come together here. Watch the draft, go back and redo any single scene if needed, then render the final file." />
+    <div className="compile-grid">
+      <${Player} p=${p} mode=${p.render.final_path ? 'final' : 'draft'} key=${'pl' + p.scenes.map(x => x.id + x.image_index + x.clip_index).join()} />
+      <div className="stack">
+        <section className="panel stack"><h2>What goes in</h2>
+          <ul className="checklist">${checks.map(([k, ok]) => html`<li key=${k} className=${ok ? '' : 'no'}><${Icon} n=${ok ? 'check' : 'x'} />${k}</li>`)}</ul>
+        </section>
+        <section className="panel stack"><h2>Final polish</h2>
+          <ul className="checklist"><li><${Icon} n="check" />Loudness normalized to −14 LUFS</li><li><${Icon} n="check" />Same transition between every scene</li><li><${Icon} n="check" />Captions kept inside the platform’s safe area</li></ul>
+        </section>
+        ${job ? html`<section className="panel stack" aria-live="polite"><strong>${job.label}</strong><div className="stages">${job.stages.map((st, i) => html`<div key=${i} className=${'stage ' + (i < job.stage ? 'done' : i === job.stage ? 'now' : 'todo')}><span className="dot">${i < job.stage ? html`<${Icon} n="check" />` : i === job.stage ? html`<span className="spinner"></span>` : '·'}</span>${st}</div>`)}</div></section>` : null}
+        <div className="row">
+          <button type="button" className="btn" disabled=${!!p.rendering} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />${p.render.draft_path ? 'Rebuild draft' : 'Build 480p draft'}</button>
+          <button type="button" className="btn primary" disabled=${!!p.rendering || !p.render.draft_path} onClick=${() => api.renderFinal(p.id)}>${finalJob ? html`<span className="spinner"></span> Rendering` : 'Render final 1080p MP4'}<span className="tag">$0.00</span></button>
+        </div>
+        <p className="note">${p.render.draft_path ? 'Draft built. Rendering runs on your server with FFmpeg, so it has no provider cost.' : 'Build the draft first. It takes under 3 minutes for a 60-second video once the backend is connected.'}</p>
+      </div>
+    </div>
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   10. Export (ASM-3, ASM-5)
+   ====================================================================== */
+function CopyBtn({ text }) {
+  const [done, setDone] = useState(false);
+  return html`<button type="button" className="btn sm" onClick=${() => { const ok = () => { setDone(true); setTimeout(() => setDone(false), 1500); }; try { navigator.clipboard.writeText(text).then(ok, () => toast('Copy was blocked. Select the text and copy it by hand.')); } catch (e) { toast('Copy was blocked. Select the text and copy it by hand.'); } }}><${Icon} n=${done ? 'check' : 'copy'} />${done ? 'Copied' : 'Copy'}</button>`;
+}
+function ExportScreen({ p, s }) {
+  const a = p.angles.find(x => x.id === p.selected_angle_ids[0]) || p.angles[0];
+  const secs = p.scenes.reduce((n, sc) => n + sceneSecs(p, sc), 0);
+  const fname = (a.id + '-' + a.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 28)).replace(/-+$/, '') + '_' + p.format.aspect_ratio.replace(':', 'x') + '_1080p.mp4';
+  const desc = a.pitch + ' A follow-up for anyone who watched a year of balcony growing and asked: ' + (a.origin ? '“' + (p.source.comments.find(c => c.id === a.origin) || {}).text + '”' : 'what next?') + '\n\nVisuals in this video are AI-generated.';
+  const hashtags = a.tags.slice(0, 4).map(t => '#' + t.replace(/\s+/g, '')).join(' ');
+  const thumbs = [a.suggested_title.split(':')[0].split('.')[0], a.hooks[1].split('.')[0], (a.title.match(/\d+[^ ]* \w+/) || [a.type])[0]];
+  const [disclose, setDisclose] = useState(true);
+  return html`<${Fragment}>
+    <${StepHead} title="Export" sub="Your video is rendered. Copy the suggested title, description and tags. They use the reference video’s key terms and describe your video honestly." />
+    <div className="compile-grid">
+      <${Player} p=${p} mode="final" />
+      <div className="stack">
+        <div className="filecard"><span className="fileicon">MP4</span><div className="grow" style=${{ minWidth: 0 }}><div className="mono" style=${{ fontSize: 13, overflowWrap: 'anywhere' }}>${fname}</div><div className="note mono">${p.format.aspect_ratio} · 1080p · H.264 · ${fmtT(secs)} · ~${Math.round(secs * 0.7)} MB</div></div>
+          <button type="button" className="btn primary" disabled title="In this preview no real file is rendered. Downloads work once the backend is connected."><${Icon} n="download" />Download</button></div>
+        <p className="note">This preview renders no real file. Once the backend is connected, Download saves the MP4 and the project folder keeps it.</p>
+        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h3>Title</h3><${CopyBtn} text=${a.suggested_title} /></div><p style=${{ fontWeight: 600 }}>${a.suggested_title}</p></section>
+        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h3>Description</h3><${CopyBtn} text=${desc + '\n\n' + hashtags} /></div><p style=${{ whiteSpace: 'pre-wrap', fontSize: 13.5 }}>${desc}</p><p className="mono" style=${{ fontSize: 12, color: 'var(--accent)' }}>${hashtags}</p></section>
+        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h3>Tags</h3><${CopyBtn} text=${a.tags.join(', ')} /></div><div className="tags">${a.tags.map(t => html`<span key=${t} className="chip">${t}</span>`)}</div></section>
+      </div>
+    </div>
+    <section className="panel stack"><h2>Thumbnail ideas</h2>
+      <div className="thumbs">${thumbs.map((t, i) => { const sc = p.scenes[Math.min(p.scenes.length - 1, i * 2)]; const v = sc && sc.image_versions[sc.image_index]; return html`<div key=${i} className="tn">${v ? html`<${Art} seed=${v.seed} styleId=${p.style} upload=${v.upload} />` : null}<b>${t}</b></div>`; })}</div>
+      <p className="note">Styled to fit what the reference video’s audience clicks on, without copying its thumbnail.</p>
+    </section>
+    <section className="panel row">
+      <label className="switch grow"><input id="disclose" type="checkbox" checked=${disclose} onChange=${e => setDisclose(e.target.checked)} />Remind me to tick the platform’s “altered or synthetic content” box when uploading</label>
+      <button type="button" className="btn" onClick=${() => { update(st => { st.templates.push({ id: uid('tpl'), name: p.title + ' look', style: p.style, voice_id: p.audio.voice_id, caption_style: p.audio.caption_style, music: p.audio.music_path, aspect: p.format.aspect_ratio, tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }); }); toast('Saved this look as a template.'); }}><${Icon} n="layers" />Save this look as a template</button>
+      <button type="button" className="btn primary" onClick=${() => update(st => { st.view = 'ideas'; })}>Next video from the idea bank</button>
+    </section>
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   Library views: projects, idea bank, templates, settings
+   ====================================================================== */
+function openProject(id) { update(s => { s.currentId = id; s.view = 'flow'; }); }
+function ProjectsView({ s }) {
+  const list = Object.values(s.projects).sort((a, b) => b.updated_at - a.updated_at);
+  const create = () => { const p = newProject(); update(st => { st.projects[p.id] = p; st.currentId = p.id; st.view = 'flow'; }); };
+  return html`<${Fragment}>
+    <${StepHead} title="Projects" sub="Every video is a project saved on its own. Close the app any time and pick up where you left off."><button type="button" className="btn primary" onClick=${create}><${Icon} n="plus" />New project</button></${StepHead}>
+    <div className="list">${list.map(p => { const done = STEPS.filter(st => isDone(p, st.id)).length; const st = STEPS.find(x => x.id === p.step); return html`<div key=${p.id} className="lrow">
+      <div className="grow" style=${{ minWidth: 0 }}><strong>${p.title}</strong><div className="note">${p.video_type === 'character' ? 'Character video' : 'Voiceover video'} · at ${st.label} · ${done} of ${STEPS.length} steps · spent ${fmt$(p.render.cost_actual)}</div></div>
+      ${p.status === 'rendered' ? html`<span className="pill ready">Rendered</span>` : html`<span className="pill pending">In progress</span>`}
+      <button type="button" className="btn" onClick=${() => openProject(p.id)}>${p.id === s.currentId ? 'Continue' : 'Open'}</button>
+      ${Object.keys(s.projects).length > 1 ? html`<button type="button" className="btn ghost sm danger" aria-label="Delete project" onClick=${() => update(x => { delete x.projects[p.id]; if (x.currentId === p.id) x.currentId = Object.keys(x.projects)[0]; })}><${Icon} n="trash" /></button>` : null}
+    </div>`; })}</div>
+  </${Fragment}>`;
+}
+function IdeasView({ s }) {
+  const start = idea => {
+    const src = s.projects[idea.pid]; const p = newProject(idea.angle.title);
+    if (src) { p.source = clone(src.source); p.analysis = clone(src.analysis); p.angles = clone(src.angles); p.ingest_url = src.ingest_url; }
+    else { p.source = { ...clone(SAMPLE.source), url: '' }; p.analysis = clone(SAMPLE.analysis); p.angles = clone(SAMPLE.angles); }
+    p.selected_angle_ids = [idea.angle.id]; p.style = idea.angle.style; p.video_type = idea.angle.character ? 'character' : 'voiceover'; p.step = 'angles';
+    update(st => { st.projects[p.id] = p; st.currentId = p.id; st.view = 'flow'; });
+    toast('New project started from “' + idea.angle.title + '”. Approve the angle to write its script.');
+  };
+  return html`<${Fragment}>
+    <${StepHead} title="Idea bank" sub="Angles you saved for later, with the reference video they came from." />
+    ${s.ideaBank.length ? html`<div className="list">${s.ideaBank.map(i => html`<div key=${i.id} className="lrow">
+      <${Score} v=${i.angle.score} />
+      <div className="grow" style=${{ minWidth: 0 }}><span className="eyebrow">${i.angle.type}</span><div><strong>${i.angle.title}</strong></div><div className="note">From “${i.source}”</div></div>
+      <button type="button" className="btn ghost sm" onClick=${() => update(st => { st.ideaBank = st.ideaBank.filter(x => x.id !== i.id); const p = st.projects[i.pid]; const a = p && p.angles.find(x => x.id === i.angle.id); if (a) a.saved = false; })}>Remove</button>
+      <button type="button" className="btn primary" onClick=${() => start(i)}>Start a video</button>
+    </div>`)}</div>` : html`<div className="panel stack" style=${{ alignItems: 'flex-start' }}><strong>No saved angles yet</strong><p className="note">On the Pick angle step, press “Save for later” on any card. It shows up here so you can turn it into its own video.</p><button type="button" className="btn" onClick=${() => goStep('angles')}>Go to angles</button></div>`}
+  </${Fragment}>`;
+}
+function TemplatesView({ s }) {
+  const p = s.projects[s.currentId];
+  return html`<${Fragment}>
+    <${StepHead} title="Templates" sub="Your channel look: voice, style, captions, music and aspect ratio, reused across videos." />
+    <div className="list">${s.templates.map(t => html`<div key=${t.id} className="lrow">
+      <div style=${{ width: 64, flex: 'none' }}><div className="thumb" style=${{ aspectRatio: '1' }}><${Art} seed=${hashSeed(t.style)} styleId=${t.style} /></div></div>
+      <div className="grow" style=${{ minWidth: 0 }}><strong>${t.name}</strong><div className="note">${styleById(t.style).name} · voice ${voiceById(t.voice_id).name} · ${CAPTIONS.find(c => c.id === t.caption_style).name} captions · ${MUSIC.find(m => m.id === t.music).name} · ${t.aspect}</div><div className="note">Tone: ${t.tone}. Pacing: ${t.pacing}.</div></div>
+      <button type="button" className="btn" disabled=${p.checkpoints.style} title=${p.checkpoints.style ? 'Reopen the Visual style step to apply a template' : ''} onClick=${() => { applyTemplate(p.id, t); toast('Applied to “' + p.title + '”.'); }}>Apply to current project</button>
+    </div>`)}</div>
+  </${Fragment}>`;
+}
+function SettingsView({ s }) {
+  const [confirm, setConfirm] = useState(false);
+  const byProv = {}; Object.values(MODELS).flat().forEach(m => { (byProv[m.provider] = byProv[m.provider] || []).push(m.name); });
+  return html`<${Fragment}>
+    <${StepHead} title="Settings" sub="Providers, default models and cost limits. API keys live in the server’s environment variables and never reach the browser." />
+    <section className="panel stack"><h2>Providers</h2>
+      <p className="note">Model selectors only list providers with a key. In this demo, toggle a key to see the selectors change.</p>
+      <div className="list">${Object.keys(PROVIDERS).map(k => html`<div key=${k} className="lrow" style=${{ padding: '10px 12px' }}>
+        <div className="grow" style=${{ minWidth: 0 }}><strong>${PROVIDERS[k]}</strong><div className="note">${byProv[k].join(', ')}</div><div className="mono note" style=${{ fontSize: 11 }}>${k.toUpperCase()}_API_KEY</div></div>
+        <label className="switch"><input id=${'key-' + k} type="checkbox" checked=${s.settings.keys[k]} onChange=${e => update(st => { st.settings.keys[k] = e.target.checked; })} />${s.settings.keys[k] ? 'Key present' : 'No key'}</label>
+      </div>`)}</div>
+    </section>
+    <section className="panel stack"><h2>Defaults for new projects</h2>
+      <div className="fmt-grid">${['voice', 'image', 'video'].map(kind => html`<label key=${kind} className="field">${KIND_LABEL[kind]} model<select className="select" value=${s.settings.defaults[kind]} onChange=${e => update(st => { st.settings.defaults[kind] = e.target.value; })}>${MODELS[kind].filter(m => s.settings.keys[m.provider]).map(m => html`<option key=${m.id} value=${m.id}>${m.name}</option>`)}</select></label>`)}</div>
+    </section>
+    <section className="panel stack"><h2>Cost limit</h2>
+      <label className="field" htmlFor="limit">Ask before a project spends more than<div className="row"><span className="mono">$</span><input id="limit" className="input mono" type="number" min="0.1" step="0.1" style=${{ width: 100 }} value=${s.settings.costLimit} onChange=${e => update(st => { st.settings.costLimit = Math.max(0.1, +e.target.value || 1); })} /></div></label>
+    </section>
+    <section className="panel stack"><h2>Demo data</h2>
+      <p className="note">Everything here is stored in this browser only. Resetting brings back the sample project at the Pick angle step.</p>
+      ${confirm ? html`<div className="row"><span>Delete all projects, ideas and templates in this demo?</span><button type="button" className="btn danger" onClick=${() => { STATE = seed(); persist(); listeners.forEach(l => l()); setConfirm(false); }}>Reset demo</button><button type="button" className="btn ghost" onClick=${() => setConfirm(false)}>Cancel</button></div>` : html`<div><button type="button" className="btn" onClick=${() => setConfirm(true)}>Reset demo data</button></div>`}
+    </section>
+  </${Fragment}>`;
+}
+
+/* ======================================================================
+   Jobs drawer and toasts
+   ====================================================================== */
+function Jobs({ s }) {
+  const [open, setOpen] = useState(false);
+  const running = s.jobs.filter(j => j.status === 'running');
+  const genImgs = Object.values(s.projects).reduce((n, p) => n + p.scenes.filter(x => x.image_status === 'generating' || x.clip_status === 'generating').length, 0);
+  const busy = running.length + genImgs;
+  return html`<div className="jobs-btn">
+    ${open ? html`<div className="jobs-panel" role="dialog" aria-label="Job queue">
+      <div className="row" style=${{ justifyContent: 'space-between' }}><strong>Job queue</strong><button type="button" className="btn ghost sm" aria-label="Close" onClick=${() => setOpen(false)}><${Icon} n="x" /></button></div>
+      ${genImgs ? html`<div className="job"><div className="row"><span className="spinner" style=${{ color: 'var(--rec)' }}></span>${genImgs} scene ${genImgs > 1 ? 'items' : 'item'} generating</div></div>` : null}
+      ${s.jobs.length ? s.jobs.map(j => html`<div key=${j.id} className="job"><div className="row" style=${{ justifyContent: 'space-between' }}><span>${j.label}</span>${j.status === 'running' ? html`<span className="pill generating">Running</span>` : html`<span className="pill ready">Done</span>`}</div>
+        <div className="meter"><i style=${{ width: (j.stage / j.stages.length * 100) + '%' }}></i></div>
+        <span className="note">${j.status === 'running' ? j.stages[j.stage] : 'Finished'}</span></div>`) : (!genImgs ? html`<p className="note">Slow work like analysis, voice, images and rendering runs here in the background. Nothing has run yet this session.</p>` : null)}
+    </div>` : null}
+    <button type="button" className="btn" onClick=${() => setOpen(!open)} aria-expanded=${open}>${busy ? html`<span className="spinner" style=${{ color: 'var(--rec)' }}></span>` : html`<${Icon} n="layers" />`}Jobs${busy ? ' · ' + busy + ' running' : ''}</button>
+  </div>`;
+}
+function Toasts({ s }) { return html`<div className="toasts" aria-live="polite">${s.toasts.map(t => html`<div key=${t.id} className="toast">${t.msg}</div>`)}</div>`; }
+
+/* ======================================================================
+   App
+   ====================================================================== */
+function Flow({ p, s }) {
+  let step = p.step;
+  if (!isUnlocked(p, step) || isSkipped(p, step)) step = STEPS.slice().reverse().find(st => isUnlocked(p, st.id) && !isSkipped(p, st.id)).id;
+  const Screen = { ingest: IngestScreen, angles: AnglesScreen, script: ScriptScreen, style: StyleScreen, voice: VoiceScreen, format: FormatScreen, scenes: ScenesScreen, animate: AnimateScreen, compile: CompileScreen, export: ExportScreen }[step];
+  return html`<${Screen} p=${p} s=${s} />`;
+}
+function App() {
+  const s = useStore(); const p = s.projects[s.currentId];
+  const View = { flow: Flow, projects: ProjectsView, ideas: IdeasView, templates: TemplatesView, settings: SettingsView }[s.view] || Flow;
+  return html`<div className="app">
+    <${TopBar} s=${s} p=${p} />
+    <div className="shell"><${Rail} s=${s} p=${p} /><main className="main"><${View} p=${p} s=${s} /></main></div>
+    <${Toasts} s=${s} />
+  </div>`;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+</script>
