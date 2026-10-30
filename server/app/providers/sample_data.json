@@ -1,42 +1,42 @@
 {
  "VOICES": [
   {
-   "id": "v-mara",
-   "name": "Mara",
-   "desc": "Warm, mid-pitch, conversational",
+   "id": "v-aoede",
+   "name": "Aoede",
+   "desc": "Breezy, warm, conversational",
    "pitch": 1,
    "rate": 1,
    "speed": 1
   },
   {
-   "id": "v-theo",
-   "name": "Theo",
-   "desc": "Calm, low, documentary",
+   "id": "v-kore",
+   "name": "Kore",
+   "desc": "Firm, clear, confident",
+   "pitch": 0.95,
+   "rate": 1,
+   "speed": 1
+  },
+  {
+   "id": "v-charon",
+   "name": "Charon",
+   "desc": "Informative, low, documentary",
    "pitch": 0.75,
    "rate": 0.92,
    "speed": 0.92
   },
   {
-   "id": "v-juno",
-   "name": "Juno",
-   "desc": "Bright, quick, upbeat",
+   "id": "v-puck",
+   "name": "Puck",
+   "desc": "Upbeat, bright, quick",
    "pitch": 1.25,
    "rate": 1.1,
    "speed": 1.1
   },
   {
-   "id": "v-ash",
-   "name": "Ash",
-   "desc": "Dry, wry, deadpan",
-   "pitch": 0.9,
-   "rate": 0.98,
-   "speed": 0.98
-  },
-  {
-   "id": "v-pip",
-   "name": "Pip",
-   "desc": "Small, squeaky, playful",
-   "pitch": 1.6,
+   "id": "v-fenrir",
+   "name": "Fenrir",
+   "desc": "Excitable, punchy",
+   "pitch": 1.05,
    "rate": 1.12,
    "speed": 1.12
   },
@@ -128,42 +128,42 @@
    "key_frames": [
     {
      "t": "0:00",
-     "d": "Harvest basket on a kitchen scale",
+     "d": "Close-up: a wicker basket of tomatoes, chard and herbs on a kitchen scale reading 14.6 kg. Bold white number on screen.",
      "seed": 11
     },
     {
      "t": "0:41",
-     "d": "Empty concrete balcony",
+     "d": "Wide shot of an empty grey concrete balcony, one plastic chair, overcast light. Text: 12 MONTHS EARLIER.",
      "seed": 23
     },
     {
      "t": "2:12",
-     "d": "Seedlings in yogurt cups",
+     "d": "Top-down: rows of seedlings in labeled yogurt cups on a sunny windowsill. Hands with a spray bottle.",
      "seed": 37
     },
     {
      "t": "4:33",
-     "d": "Plants bent in the wind",
+     "d": "Handheld, shaky: young plants bending hard in the wind, creator ties stems to bamboo stakes.",
      "seed": 41
     },
     {
      "t": "7:12",
-     "d": "Pigeon on the railing",
+     "d": "A grey pigeon walks along the railing and pecks a strawberry. Creator laughs off-camera. Zoom-in meme cut.",
      "seed": 59
     },
     {
      "t": "8:40",
-     "d": "Tomatoes ripening",
+     "d": "Macro: tomatoes turning from green to red, golden-hour backlight.",
      "seed": 61
     },
     {
      "t": "9:25",
-     "d": "Month-by-month montage",
+     "d": "Fast montage, one shot per month, a month label in the corner each time. Music swells.",
      "seed": 73
     },
     {
      "t": "11:02",
-     "d": "Totals on a whiteboard",
+     "d": "Creator to camera beside a whiteboard listing harvest totals by crop.",
      "seed": 89
     }
    ],
@@ -781,7 +781,7 @@
    "name": "Tomi",
    "description": "A cheerful cartoon tomato plant with a small round face and leaf arms",
    "notes": "Proud, a little dramatic",
-   "voice_id": "v-juno",
+   "voice_id": "v-puck",
    "seed": 501
   },
   {
@@ -789,7 +789,7 @@
    "name": "Gus",
    "description": "A scheming grey city pigeon with an iridescent green neck",
    "notes": "Deadpan, always hungry",
-   "voice_id": "v-ash",
+   "voice_id": "v-charon",
    "seed": 733
   }
  ]

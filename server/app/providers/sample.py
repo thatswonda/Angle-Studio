@@ -15,10 +15,11 @@ DEFAULT_CHARACTERS = [{"name": c["name"], "description": c["description"], "note
 _likes = lambda s: int(float(s.rstrip("k")) * 1000) if s.endswith("k") else int(s)
 VIDEO = {
     "title": _S["source"]["title"], "channel": _S["source"]["channel"], "duration": _S["source"]["duration"],
-    "published": _S["source"]["published"], "captions": _S["source"]["transcript"],
+    "published": _S["source"]["published"], "views": 2_100_000, "comments_scanned": _S["source"]["comments_scanned"],
     "comments": [{"id": c["id"], "text": c["text"], "likes": _likes(c["likes"]), "kind": c["kind"]} for c in _S["source"]["comments"]],
-    "key_frames": [{"t": k["t"], "description": k["d"]} for k in _S["source"]["key_frames"]],
 }
+TRANSCRIPT = _S["source"]["transcript"]
+SCENES = [{"t": k["t"], "description": k["d"]} for k in _S["source"]["key_frames"]]
 _a = _S["analysis"]
 ANALYSIS = {
     "summary": _a["summary"], "hook": _a["hook"], "beats": [f"{t} {b}" for t, b in _a["beats"]], "pacing": _a["pacing"],

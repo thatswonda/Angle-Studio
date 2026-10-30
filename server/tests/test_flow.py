@@ -35,6 +35,9 @@ def test_link_to_rendered_video(client):
     p = c.get(f"/api/projects/{pid}").json()
     assert 8 <= len(p["angles"]) <= 12
     assert all(a["relatedness_reason"] for a in p["angles"])
+    # Gemini watched the video; Claude wrote the angles from its report.
+    assert p["analysis"]["analyzed_by"] == "Gemini Pro" and p["angles_written_by"] == "Claude Opus 5.5"
+    assert p["source"]["key_frames"] and p["source"]["transcript"]
 
     # Downstream stages refuse to run before their checkpoint (PRJ-2).
     assert c.post(f"/api/projects/{pid}/script").status_code == 409
@@ -43,7 +46,7 @@ def test_link_to_rendered_video(client):
     c.post(f"/api/projects/{pid}/checkpoints/angles")
     wait(c, c.post(f"/api/projects/{pid}/script").json())
     p = c.get(f"/api/projects/{pid}").json()
-    assert len(p["script"]["hook_options"]) == 3
+    assert len(p["script"]["hook_options"]) == 3 and p["script"]["written_by"] == "Claude Opus 5.5"
     assert c.get(f"/api/projects/{pid}/originality").json()["too_close"] is False
 
     for cp in ("script", "style"):
@@ -90,7 +93,8 @@ def test_cost_limit_needs_confirmation(client, monkeypatch):
 def test_models_and_cache(client):
     c = client
     m = c.get("/api/models").json()
-    assert set(m) == {"voice", "image", "video"} and all(x["configured"] for x in m["voice"])
+    assert set(m) == {"analyst", "writer", "voice", "image", "video"} and all(x["configured"] for x in m["voice"])
+    assert {x["provider"] for x in m["video"]} == {"google", "higgsfield"}
     a = c.post("/api/projects", json={}).json()["id"]
     b = c.post("/api/projects", json={}).json()["id"]
     wait(c, c.post(f"/api/projects/{a}/ingest", json={"url": "https://example.com/same"}).json())

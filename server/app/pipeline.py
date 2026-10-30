@@ -39,7 +39,7 @@ class CostLimitError(Exception):
 
 
 def cost_limit() -> float:
-    return float(os.getenv("ANGLE_STUDIO_COST_LIMIT", "1.50"))
+    return float(os.getenv("ANGLE_STUDIO_COST_LIMIT", "3.00"))
 
 
 def require(p: Project, *checkpoints: str) -> None:
@@ -73,6 +73,7 @@ def estimate(p: Project) -> dict:
     vm = registry.model("video", p.models.video)
     anim_secs = sum(min(vm["limits"]["max_clip"], max(5, -(-scene_seconds(p, s) // 5) * 5)) for s in anim)
     out = {
+        "analysis_and_writing": 0.0 if p.analysis else registry.model("analyst", p.models.analyst)["per_video"] + registry.model("writer", p.models.writer)["per_video"],
         "voice": chars / 1000 * registry.model("voice", p.models.voice)["cost"],
         "images": n_img * registry.model("image", p.models.image)["cost"],
         "video": anim_secs * vm["cost"],
@@ -97,45 +98,60 @@ def overlap(script_text: str, transcript: str) -> float:
 # ---------- stages
 
 async def ingest(pid: str, url: str, manual_transcript: str | None, progress: Callable[[str], None]) -> None:
+    """Gemini watches the video and writes a report; the writer turns the report into angle cards."""
     cached = storage.kv_get("ingest_cache", url) if not manual_transcript else None  # ING-6
     if cached:
         progress("Loaded from cache")
         async with editing(pid) as p:
             p.source, p.analysis = Source(**cached["source"]), Analysis(**cached["analysis"])
-            p.angles = [Angle(**a) for a in cached["angles"]]
+            p.angles, p.angles_written_by = [Angle(**a) for a in cached["angles"]], cached["written_by"]
         return
-    progress("Fetching metadata and comments")
+    p = storage.load(pid)
+    analyst_m, writer_m = registry.model("analyst", p.models.analyst), registry.model("writer", p.models.writer)
+
+    progress("YouTube Data API: title, stats and comments")
     info = await registry.source().fetch(url)
-    progress("Reading captions")
-    transcript = manual_transcript or info.captions or await registry.stt().transcribe(storage.project_dir(pid) / "source_audio")
     comments = [Comment(**c) for c in info.comments if c["kind"] in ("question", "request", "confusion")]  # ING-4
+
+    progress(f"{analyst_m['name']} is watching the video")
+    report = await registry.analyst(p.models.analyst).watch(url, info, manual_transcript)
     source = Source(url=url, title=info.title, channel=info.channel, duration=info.duration, published=info.published,
-                    transcript=transcript, key_frames=[KeyFrame(**k) for k in info.key_frames], comments=comments)
-    llm = registry.llm()
-    progress("Breaking down the video")
-    payload = json.dumps({"metadata": {"title": info.title, "channel": info.channel}, "transcript": transcript,
-                          "frames": info.key_frames, "comments": [c.model_dump() for c in comments]})
-    analysis = Analysis(**await llm.complete_json(PROMPTS["analysis"], payload, Analysis.model_json_schema() | {"title": "Analysis"}))
-    progress("Writing angle cards")
-    raw = await llm.complete_json(PROMPTS["angles"], payload + "\n" + analysis.model_dump_json(),
-                                  {"title": "AngleList", "type": "object", "properties": {"angles": {"type": "array", "items": Angle.model_json_schema()}}})
-    angles = [Angle(**a) for a in raw["angles"]]  # pydantic validates; a real LLM call retries on ValidationError
+                    transcript=report.transcript, comments=comments,
+                    key_frames=[KeyFrame(t=sc["t"], description=sc["description"]) for sc in report.scenes])
+    analysis = Analysis(**report.analysis, analyzed_by=analyst_m["name"])
+
+    progress(f"{writer_m['name']} is writing angle cards")
+    handoff = json.dumps({
+        "video": {"title": info.title, "channel": info.channel, "duration": info.duration, "views": info.views},
+        "transcript": report.transcript, "scenes": report.scenes,
+        "analysis": analysis.model_dump(exclude={"analyzed_by"}), "comments": [c.model_dump() for c in comments],
+    })
+    raw, writer_cost = await registry.writer(p.models.writer).complete_json(
+        PROMPTS["system"], PROMPTS["angles"] + "\n\n" + handoff,
+        {"title": "AngleList", "type": "object", "properties": {"angles": {"type": "array", "items": Angle.model_json_schema()}}})
+    angles = [Angle(**a) for a in raw["angles"]]  # pydantic validates; a real call retries on ValidationError
     async with editing(pid) as p:
-        p.source, p.analysis, p.angles = source, analysis, angles
-    storage.kv_put("ingest_cache", url, {"source": source.model_dump(), "analysis": analysis.model_dump(), "angles": [a.model_dump() for a in angles]})
+        p.source, p.analysis, p.angles, p.angles_written_by = source, analysis, angles, writer_m["name"]
+        p.render.cost_actual += report.cost + writer_cost
+    storage.kv_put("ingest_cache", url, {"source": source.model_dump(), "analysis": analysis.model_dump(),
+                                         "angles": [a.model_dump() for a in angles], "written_by": writer_m["name"]})
 
 
 async def write_script(pid: str, progress: Callable[[str], None]) -> None:
     p = storage.load(pid)
     require(p, "angles")
-    progress("Drafting hooks and lines")
-    prompt = f"angles={','.join(p.selected_angle_ids)} seconds={p.format.target_seconds}\n{PROMPTS['script']}\nDirection: {p.user_direction}"
-    raw = await registry.llm().complete_json(PROMPTS["system"], prompt, {"title": "Script"})
+    writer_m = registry.model("writer", p.models.writer)
+    progress(f"{writer_m['name']} is drafting hooks and lines")
+    chosen = [a.model_dump() for a in p.angles if a.id in p.selected_angle_ids]
+    prompt = (f"angles={','.join(p.selected_angle_ids)} seconds={p.format.target_seconds}\n{PROMPTS['script']}\n"
+              f"Direction: {p.user_direction}\nAngles: {json.dumps(chosen)}\nReference breakdown: {p.analysis.model_dump_json()}")
+    raw, cost = await registry.writer(p.models.writer).complete_json(PROMPTS["system"], prompt, {"title": "Script"})
     async with editing(pid) as p:
+        p.render.cost_actual += cost
         if p.video_type == "character" and not p.characters:
             p.characters = [Character(**c) for c in sample.DEFAULT_CHARACTERS]
         speakers = [c.id for c in p.characters] if p.video_type == "character" else [None]
-        p.script = Script(hook_options=raw["hook_options"],
+        p.script = Script(written_by=writer_m["name"], hook_options=raw["hook_options"],
                           lines=[ScriptLine(text=l["text"], visual=l.get("visual", ""), speaker=speakers[i % len(speakers)]) for i, l in enumerate(raw["lines"])])
         p.scenes = []
 
@@ -234,9 +250,11 @@ async def compile_video(pid: str, final: bool, progress: Callable[[str], None]) 
 
 PROMPTS = {
     "system": "You write original short-form video scripts. Never reuse the reference video's wording. Return JSON only.",
-    "analysis": "Break down the reference video: summary, hook, story beats with timecodes, pacing, why it likely worked, and gaps "
-                "(unanswered questions, skipped perspectives, unexplored visuals, unfinished threads, audience requests from comments).",
-    "angles": "Propose 8 to 12 original angles a viewer of the reference video would click next. For each give a relatedness score "
+    "watch": "Watch this video. Return: a full transcript with timestamps; a scene-by-scene description of what is on screen "
+             "(shot type, subject, text overlays, edits); and a breakdown with summary, hook, story beats with timecodes, pacing, "
+             "why it likely worked, and gaps (unanswered questions, skipped perspectives, unexplored visuals, unfinished threads, "
+             "and audience requests from the comments provided).",
+    "angles": "You are given a report on a reference video written by a model that watched it. Propose 8 to 12 original angles a viewer of the reference video would click next. For each give a relatedness score "
               "from topic, audience, format and keyword overlap, and a one-line reason. Titles and tags must honestly describe the new video.",
     "script": "Write a script for the chosen angle(s) at the target length. Give 3 hook options. One line per future scene, each with a visual.",
 }

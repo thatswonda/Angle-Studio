@@ -88,7 +88,7 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .proj-title { color: var(--muted); font-size: 13px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .models { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; align-items: center; }
 .picker { position: relative; }
-.picker > button { display: flex; flex-direction: column; align-items: flex-start; gap: 0; border: 1px solid var(--line); background: var(--sunk); border-radius: var(--r-sm); padding: 4px 10px 5px; cursor: pointer; min-width: 150px; text-align: left; }
+.picker > button { display: flex; flex-direction: column; align-items: flex-start; gap: 0; border: 1px solid var(--line); background: var(--sunk); border-radius: var(--r-sm); padding: 4px 10px 5px; cursor: pointer; min-width: 132px; text-align: left; }
 .picker > button:hover { border-color: var(--muted); }
 .picker .k { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .picker .v { font-weight: 500; font-size: 13px; white-space: nowrap; }
@@ -366,31 +366,46 @@ const html = htm.bind(React.createElement);
    placeholder estimates until real adapters report them.
    ====================================================================== */
 const MODELS = {
+  writer: [
+    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', provider: 'anthropic', price: '$4/$20 per 1M tok', perVideo: 0.40, limits: 'Best writing quality · strict JSON output' },
+    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', provider: 'anthropic', price: '$2/$10 per 1M tok', perVideo: 0.20, limits: 'Faster and about half the cost · strict JSON output' },
+    { id: 'gemini-pro-writer', name: 'Gemini Pro', provider: 'google', price: '~$0.10/video', perVideo: 0.10, limits: 'Same Google account as the analysis step' },
+  ],
   voice: [
-    { id: 'elevenlabs-v2', name: 'ElevenLabs Multilingual v2', provider: 'elevenlabs', cost: 0.18, unit: '/1k chars', limits: 'Voice cloning · 29 languages' },
-    { id: 'openai-tts-hd', name: 'OpenAI TTS HD', provider: 'openai', cost: 0.03, unit: '/1k chars', limits: 'Library voices only · no cloning' },
-    { id: 'cartesia-sonic', name: 'Cartesia Sonic', provider: 'cartesia', cost: 0.05, unit: '/1k chars', limits: 'Low latency · voice cloning' },
+    { id: 'gemini-tts-flash', name: 'Gemini TTS Flash', provider: 'google', cost: 0.01, unit: '/1k chars', limits: 'Library voices · style prompts · no cloning' },
+    { id: 'gemini-tts-pro', name: 'Gemini TTS Pro', provider: 'google', cost: 0.02, unit: '/1k chars', limits: 'Richer delivery · multi-speaker dialogue · no cloning' },
+    { id: 'elevenlabs-v2', name: 'ElevenLabs Multilingual v2', provider: 'elevenlabs', cost: 0.18, unit: '/1k chars', clone: true, limits: 'Clone your own voice · 29 languages' },
   ],
   image: [
-    { id: 'flux-11-pro', name: 'FLUX 1.1 Pro', provider: 'bfl', cost: 0.04, unit: '/image', limits: '9:16 and 16:9 · fixed seeds · reference images' },
-    { id: 'imagen-4', name: 'Imagen 4', provider: 'google', cost: 0.04, unit: '/image', limits: '9:16 and 16:9 · strong text rendering' },
-    { id: 'sdxl', name: 'Stable Diffusion XL', provider: 'stability', cost: 0.01, unit: '/image', limits: 'Fixed seeds · no reference images' },
+    { id: 'nano-banana-2', name: 'Nano Banana 2', provider: 'google', cost: 0.05, unit: '/image', limits: 'Character reference images · edits · up to 4K' },
+    { id: 'imagen-4', name: 'Imagen 4', provider: 'google', cost: 0.04, unit: '/image', limits: 'Strong photo realism · 9:16 and 16:9' },
+    { id: 'imagen-4-fast', name: 'Imagen 4 Fast', provider: 'google', cost: 0.02, unit: '/image', limits: 'Cheapest drafts · 9:16 and 16:9' },
   ],
   video: [
-    { id: 'kling-21', name: 'Kling 2.1', provider: 'kling', cost: 0.07, unit: '/sec', maxClip: 10, limits: 'Max 10 s clip · character reference' },
-    { id: 'runway-gen4', name: 'Runway Gen-4', provider: 'runway', cost: 0.10, unit: '/sec', maxClip: 10, limits: 'Max 10 s clip · character consistency' },
-    { id: 'veo-3', name: 'Veo 3', provider: 'google', cost: 0.40, unit: '/sec', maxClip: 8, limits: 'Max 8 s clip · lip-sync' },
+    { id: 'veo-31-fast', name: 'Veo 3.1 Fast', provider: 'google', cost: 0.15, unit: '/sec', maxClip: 8, limits: 'Max 8 s clip · native audio · 9:16 and 16:9' },
+    { id: 'veo-31', name: 'Veo 3.1', provider: 'google', cost: 0.40, unit: '/sec', maxClip: 8, limits: 'Max 8 s clip · most cinematic · native audio' },
+    { id: 'veo-31-lite', name: 'Veo 3.1 Lite', provider: 'google', cost: 0.06, unit: '/sec', maxClip: 8, limits: 'Max 8 s clip · cheapest Google option' },
+    { id: 'seedance-2', name: 'Seedance 2.0 (Higgsfield)', provider: 'higgsfield', cost: 0.12, unit: '/sec', maxClip: 15, limits: 'Max 15 s clip · top realism and physics' },
+    { id: 'kling-3', name: 'Kling 3.0 (Higgsfield)', provider: 'higgsfield', cost: 0.12, unit: '/sec', maxClip: 15, limits: 'Max 15 s clip · up to 4K · price not confirmed' },
   ],
 };
-const PROVIDERS = { elevenlabs: 'ElevenLabs', openai: 'OpenAI', cartesia: 'Cartesia', bfl: 'Black Forest Labs', google: 'Google', stability: 'Stability AI', kling: 'Kling', runway: 'Runway' };
-const KIND_LABEL = { voice: 'Voiceover', image: 'Image', video: 'Video' };
+// The model that watches the reference video. Chosen in Settings.
+const ANALYSTS = [
+  { id: 'gemini-pro', name: 'Gemini Pro', perVideo: 0.06, limits: 'Most detailed scene-by-scene descriptions' },
+  { id: 'gemini-flash', name: 'Gemini Flash', perVideo: 0.02, limits: 'Faster and cheaper' },
+];
+const PROVIDERS = { google: 'Google (Gemini API)', youtube: 'YouTube Data API', anthropic: 'Anthropic (Claude API)', higgsfield: 'Higgsfield API', elevenlabs: 'ElevenLabs' };
+const PROVIDER_ENV = { google: 'GEMINI_API_KEY', youtube: 'YOUTUBE_API_KEY', anthropic: 'ANTHROPIC_API_KEY', higgsfield: 'HIGGSFIELD_API_KEY', elevenlabs: 'ELEVENLABS_API_KEY' };
+const PROVIDER_USE = { youtube: 'Video title, stats and comments' };
+const KIND_LABEL = { writer: 'Writing', voice: 'Voiceover', image: 'Image', video: 'Video' };
+const analystOf = () => ANALYSTS.find(a => a.id === STATE.settings.analyst) || ANALYSTS[0];
 
 const VOICES = [
-  { id: 'v-mara', name: 'Mara', desc: 'Warm, mid-pitch, conversational', pitch: 1.0, rate: 1.0, speed: 1.0 },
-  { id: 'v-theo', name: 'Theo', desc: 'Calm, low, documentary', pitch: 0.75, rate: 0.92, speed: 0.92 },
-  { id: 'v-juno', name: 'Juno', desc: 'Bright, quick, upbeat', pitch: 1.25, rate: 1.1, speed: 1.1 },
-  { id: 'v-ash', name: 'Ash', desc: 'Dry, wry, deadpan', pitch: 0.9, rate: 0.98, speed: 0.98 },
-  { id: 'v-pip', name: 'Pip', desc: 'Small, squeaky, playful', pitch: 1.6, rate: 1.12, speed: 1.12 },
+  { id: 'v-aoede', name: 'Aoede', desc: 'Breezy, warm, conversational', pitch: 1.0, rate: 1.0, speed: 1.0 },
+  { id: 'v-kore', name: 'Kore', desc: 'Firm, clear, confident', pitch: 0.95, rate: 1.0, speed: 1.0 },
+  { id: 'v-charon', name: 'Charon', desc: 'Informative, low, documentary', pitch: 0.75, rate: 0.92, speed: 0.92 },
+  { id: 'v-puck', name: 'Puck', desc: 'Upbeat, bright, quick', pitch: 1.25, rate: 1.1, speed: 1.1 },
+  { id: 'v-fenrir', name: 'Fenrir', desc: 'Excitable, punchy', pitch: 1.05, rate: 1.12, speed: 1.12 },
   { id: 'v-own', name: 'My voice', desc: 'Your cloned voice · needs consent', pitch: 1.0, rate: 1.0, speed: 1.0, clone: true },
 ];
 
@@ -423,10 +438,10 @@ const SAMPLE = {
     channel: 'Small Space Growing', duration: 702, published: '2026-08-14', views: '2.1M views',
     transcript: 'Fourteen point six kilos of food from a four square metre balcony. That is what one year of growing on a rented balcony got me. Twelve months ago it looked like this, bare concrete and one sad plastic chair. The rules were simple: no yard, no landlord drama, nothing I could not carry up five floors. I started everything on the windowsill in yogurt cups...',
     key_frames: [
-      { t: '0:00', d: 'Harvest basket on a kitchen scale', seed: 11 }, { t: '0:41', d: 'Empty concrete balcony', seed: 23 },
-      { t: '2:12', d: 'Seedlings in yogurt cups', seed: 37 }, { t: '4:33', d: 'Plants bent in the wind', seed: 41 },
-      { t: '7:12', d: 'Pigeon on the railing', seed: 59 }, { t: '8:40', d: 'Tomatoes ripening', seed: 61 },
-      { t: '9:25', d: 'Month-by-month montage', seed: 73 }, { t: '11:02', d: 'Totals on a whiteboard', seed: 89 },
+      { t: '0:00', d: 'Close-up: a wicker basket of tomatoes, chard and herbs on a kitchen scale reading 14.6 kg. Bold white number on screen.', seed: 11 }, { t: '0:41', d: 'Wide shot of an empty grey concrete balcony, one plastic chair, overcast light. Text: 12 MONTHS EARLIER.', seed: 23 },
+      { t: '2:12', d: 'Top-down: rows of seedlings in labeled yogurt cups on a sunny windowsill. Hands with a spray bottle.', seed: 37 }, { t: '4:33', d: 'Handheld, shaky: young plants bending hard in the wind, creator ties stems to bamboo stakes.', seed: 41 },
+      { t: '7:12', d: 'A grey pigeon walks along the railing and pecks a strawberry. Creator laughs off-camera. Zoom-in meme cut.', seed: 59 }, { t: '8:40', d: 'Macro: tomatoes turning from green to red, golden-hour backlight.', seed: 61 },
+      { t: '9:25', d: 'Fast montage, one shot per month, a month label in the corner each time. Music swells.', seed: 73 }, { t: '11:02', d: 'Creator to camera beside a whiteboard listing harvest totals by crop.', seed: 89 },
     ],
     comments: [
       { id: 'c1', text: 'Mine faces north and gets maybe 3 hours of sun. Is it even worth trying??', likes: '4.2k', kind: 'question' },
@@ -595,8 +610,8 @@ const SAMPLE = {
   ],
 };
 const DEFAULT_CHARS = [
-  { id: 'ch-tomi', name: 'Tomi', description: 'A cheerful cartoon tomato plant with a small round face and leaf arms', notes: 'Proud, a little dramatic', voice_id: 'v-juno', seed: 501 },
-  { id: 'ch-gus', name: 'Gus', description: 'A scheming grey city pigeon with an iridescent green neck', notes: 'Deadpan, always hungry', voice_id: 'v-ash', seed: 733 },
+  { id: 'ch-tomi', name: 'Tomi', description: 'A cheerful cartoon tomato plant with a small round face and leaf arms', notes: 'Proud, a little dramatic', voice_id: 'v-puck', seed: 501 },
+  { id: 'ch-gus', name: 'Gus', description: 'A scheming grey city pigeon with an iridescent green neck', notes: 'Deadpan, always hungry', voice_id: 'v-charon', seed: 733 },
 ];
 const FILLERS = [
   { t: 'Follow for part two. The results surprised me.', v: 'close-up of a fresh harvest with soft background' },
@@ -618,7 +633,7 @@ function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79
 const voiceById = id => VOICES.find(v => v.id === id) || VOICES[0];
 const styleById = id => STYLES.find(s => s.id === id) || STYLES[0];
 const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || MODELS[kind][0];
-const lineVoice = (p, line) => p.video_type === 'character' ? ((p.characters.find(c => c.id === line.speaker) || {}).voice_id || 'v-mara') : p.audio.voice_id;
+const lineVoice = (p, line) => p.video_type === 'character' ? ((p.characters.find(c => c.id === line.speaker) || {}).voice_id || 'v-aoede') : p.audio.voice_id;
 const lineSecs = (p, line) => line.duration || estSecs(line.text, voiceById(lineVoice(p, line)).speed);
 const sceneLines = (p, s) => s.line_ids.map(id => p.script.lines.find(l => l.id === id)).filter(Boolean);
 const sceneSecs = (p, s) => Math.round(sceneLines(p, s).reduce((n, l) => n + lineSecs(p, l), 0) * 10) / 10 || 2;
@@ -639,15 +654,16 @@ function estimate(p) {
   const voice = chars / 1000 * modelOf(p, 'voice').cost;
   const images = nScenes * modelOf(p, 'image').cost;
   const video = animSecs * modelOf(p, 'video').cost;
-  return { chars, nScenes, animSecs, voice, images, video, total: voice + images + video };
+  const writing = analystOf().perVideo + modelOf(p, 'writer').perVideo;
+  return { chars, nScenes, animSecs, voice, images, video, writing, total: writing + voice + images + video };
 }
 
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v1';
+const KEY = 'angle-studio-demo-v2';
 const listeners = new Set();
-const DEFAULT_MODELS = { voice: 'elevenlabs-v2', image: 'flux-11-pro', video: 'kling-21' };
+const DEFAULT_MODELS = { writer: 'claude-opus-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
 function newProject(title) {
   return {
@@ -656,7 +672,7 @@ function newProject(title) {
     source: null, analysis: null, angles: [], selected_angle_ids: [], user_direction: '',
     script: null, style: null, characters: clone(DEFAULT_CHARS),
     format: { aspect_ratio: '9:16', target_seconds: 60, animated: false },
-    scenes: [], audio: { voice_id: 'v-mara', music_path: 'm-soil', music_volume: 0.25, duck: true, caption_style: 'bold', consent: false },
+    scenes: [], audio: { voice_id: 'v-aoede', music_path: 'm-soil', music_volume: 0.25, duck: true, caption_style: 'bold', consent: false },
     render: { draft_path: null, final_path: null, cost_estimate: 0, cost_actual: 0 },
     checkpoints: { angles: false, script: false, style: false, voice: false, format: false, scenes: false, clips: false },
     step: 'ingest',
@@ -667,14 +683,16 @@ function STATE_DEFAULT_MODELS() { try { return STATE.settings.defaults; } catch 
 function seed() {
   const s = {
     version: 1, view: 'flow', projects: {}, currentId: null, ideaBank: [], cache: {}, jobs: [], toasts: [], intro: true,
-    settings: { costLimit: 1.5, defaults: { ...DEFAULT_MODELS }, keys: { elevenlabs: true, openai: true, cartesia: false, bfl: true, google: true, stability: false, kling: true, runway: false } },
-    templates: [{ id: 'tpl-look', name: 'My channel look', style: 'botanical', voice_id: 'v-mara', caption_style: 'bold', music: 'm-soil', aspect: '9:16', tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }],
+    settings: { costLimit: 3, analyst: 'gemini-pro', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, anthropic: true, higgsfield: true, elevenlabs: false } },
+    templates: [{ id: 'tpl-look', name: 'My channel look', style: 'botanical', voice_id: 'v-aoede', caption_style: 'bold', music: 'm-soil', aspect: '9:16', tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }],
   };
   const p = newProject('Balcony garden follow-up');
   p.ingest_url = 'https://www.youtube.com/watch?v=bLc9nyG4rdn';
   p.source = { ...clone(SAMPLE.source), url: p.ingest_url };
   p.analysis = clone(SAMPLE.analysis);
   p.angles = clone(SAMPLE.angles).map(a => ({ ...a, saved: false }));
+  p.analysis.analyzed_by = 'Gemini Pro'; p.angles_written_by = 'Claude Opus 5.5';
+  p.render.cost_actual = 0.34;
   p.step = 'angles';
   s.projects[p.id] = p; s.currentId = p.id; s.cache[p.ingest_url] = true;
   return s;
@@ -744,10 +762,21 @@ const api = {
   async ingest(pid, url, manualTranscript) {
     const cached = !!STATE.cache[url] && !manualTranscript;
     updateP(pid, p => { p.ingest_url = url; p.ingesting = true; });
-    if (!cached) await runJob(pid, 'Analyzing reference video', ['Fetching metadata', manualTranscript ? 'Using your pasted transcript' : 'Reading captions', 'Extracting key frames', 'Filtering 1,840 comments', 'Breaking down the video', 'Writing 10 angle cards'], 700);
+    const an = analystOf().name; const wr = modelOf(STATE.projects[pid], 'writer').name;
+    if (!cached) await runJob(pid, 'Analyzing reference video', [
+      'YouTube Data API: title, stats and 1,840 comments',
+      an + ' is watching the video',
+      an + ': ' + (manualTranscript ? 'using your pasted transcript' : 'transcript with timestamps'),
+      an + ': describing each scene on screen',
+      an + ': breakdown and gaps from the comments',
+      'Handing the report to ' + wr,
+      wr + ' is writing 10 angle cards',
+    ], 650);
     updateP(pid, (p, s) => {
+      if (!cached) addCost(p, analystOf().perVideo + modelOf(p, 'writer').perVideo * 0.7);
+      p.angles_written_by = wr;
       p.source = { ...clone(SAMPLE.source), url, transcript: manualTranscript || SAMPLE.source.transcript };
-      p.analysis = clone(SAMPLE.analysis);
+      p.analysis = { ...clone(SAMPLE.analysis), analyzed_by: an };
       p.angles = clone(SAMPLE.angles).map(a => ({ ...a, saved: s.ideaBank.some(i => i.angle.id === a.id) }));
       p.ingesting = false; p.step = 'angles'; s.cache[url] = true;
       if (p.title === 'Untitled project') p.title = 'Balcony garden follow-up';
@@ -756,8 +785,9 @@ const api = {
   },
   async writeScript(pid) {
     updateP(pid, p => { p.script = { generating: true }; });
-    await runJob(pid, 'Writing script', ['Reading the chosen angles', 'Drafting 3 hooks', 'Writing lines to target length', 'Checking originality'], 550);
-    updateP(pid, p => { p.script = buildScript(p); p.scenes = []; });
+    const wr = modelOf(STATE.projects[pid], 'writer').name;
+    await runJob(pid, 'Writing script', [wr + ' is reading the chosen angles', wr + ' is drafting 3 hooks', wr + ' is writing lines to target length', 'Checking originality'], 550);
+    updateP(pid, p => { p.script = buildScript(p); p.script.written_by = wr; p.scenes = []; addCost(p, modelOf(p, 'writer').perVideo * 0.3); });
   },
   async generateAudio(pid, lineIds) {
     const p0 = STATE.projects[pid];
@@ -968,15 +998,15 @@ function ModelPicker({ kind, p, s }) {
   const pick = m => {
     setOpen(false); if (m.id === cur.id) return;
     updateP(p.id, q => { q.models[kind] = m.id; });
-    toast(m.name + ' will be used for new ' + (kind === 'voice' ? 'voice lines' : kind === 'image' ? 'images' : 'clips') + '. Existing ones stay until you regenerate them.');
+    toast(m.name + ' will be used for new ' + ({ writer: 'angles and scripts', voice: 'voice lines', image: 'images', video: 'clips' })[kind] + '. Existing ones stay until you regenerate them.');
   };
   return html`<div className="picker" ref=${ref}>
     <button type="button" aria-haspopup="listbox" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-      <span className="k">${KIND_LABEL[kind]} model</span><span className="v">${cur.name}<small>${fmt$(cur.cost)}${cur.unit}</small></span>
+      <span className="k">${KIND_LABEL[kind]} model</span><span className="v">${cur.name}<small>${cur.price || fmt$(cur.cost) + cur.unit}</small></span>
     </button>
     ${open ? html`<div className="menu" role="listbox">
       ${MODELS[kind].map(m => { const has = s.settings.keys[m.provider]; return html`<button key=${m.id} type="button" role="option" className="menu-item" aria-checked=${m.id === cur.id} disabled=${!has} onClick=${() => pick(m)}>
-        <div className="mi-top"><span>${m.name}</span><span className="mono">${fmt$(m.cost)}${m.unit}</span></div>
+        <div className="mi-top"><span>${m.name}</span><span className="mono">${m.price || fmt$(m.cost) + m.unit}</span></div>
         <div className="mi-sub">${has ? m.limits : 'No ' + PROVIDERS[m.provider] + ' key yet. Add it in Settings.'}</div></button>`; })}
       <div className="menu-note">Saved with this project. Changing it affects newly generated items only.</div>
     </div>` : null}
@@ -988,7 +1018,7 @@ function TopBar({ s, p }) {
     <div className="brand"><span className="brand-mark" aria-hidden="true"></span>Angle Studio</div>
     <span className="proj-title" title=${p.title}>${p.title}</span>
     <div className="models">
-      <${ModelPicker} kind="voice" p=${p} s=${s} /><${ModelPicker} kind="image" p=${p} s=${s} /><${ModelPicker} kind="video" p=${p} s=${s} />
+      <${ModelPicker} kind="writer" p=${p} s=${s} /><${ModelPicker} kind="voice" p=${p} s=${s} /><${ModelPicker} kind="image" p=${p} s=${s} /><${ModelPicker} kind="video" p=${p} s=${s} />
       <span className="costpill" title="Estimated full-run cost for this project, and what has been spent">Est. <b>${fmt$(est.total)}</b> · spent <b>${fmt$(p.render.cost_actual)}</b></span>
       <span className="saved"><${Icon} n="check" />Saved</span>
       <${Jobs} s=${s} />
@@ -1128,23 +1158,35 @@ function AnglesScreen({ p, s }) {
     try { window.scrollTo({ top: 0 }); } catch (e) {}
   };
   return html`<${Fragment}>
-    ${s.intro ? html`<div className="banner"><div className="grow"><b>Demo mode.</b> Every AI call is simulated and costs nothing. Pick an angle below, then walk the pipeline: script, style, voice, format, scenes, compile and export. Your progress saves in this browser.</div><button type="button" className="btn sm ghost" onClick=${() => update(st => { st.intro = false; })} aria-label="Dismiss"><${Icon} n="x" /></button></div>` : null}
+    ${s.intro ? html`<div className="banner"><div className="grow"><b>Demo mode.</b> Every AI call is simulated and costs nothing. Gemini watched the reference video and wrote the breakdown; Claude wrote the angle cards from that report. Pick an angle below, then walk the pipeline: script, style, voice, format, scenes, compile and export. Your progress saves in this browser.</div><button type="button" className="btn sm ghost" onClick=${() => update(st => { st.intro = false; })} aria-label="Dismiss"><${Icon} n="x" /></button></div>` : null}
     <${StepHead} title="Pick an angle" sub="Ten original ideas built so the new video sits next to the reference video in recommendations. Select one, or two to merge." />
     <div className="angles-layout">
       <div className="stack">
         <section className="panel"><div className="panel-h"><h2>Reference</h2><button type="button" className="btn sm ghost" onClick=${() => goStep('ingest')}>Change</button></div><${SourceCard} p=${p} /></section>
         <section className="panel stack">
-          <h2>Breakdown</h2>
+          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Breakdown</h2><span className="chip">Watched by ${p.analysis.analyzed_by || analystOf().name}</span></div>
           <p style=${{ fontSize: 13.5 }}>${p.analysis.summary}</p>
           <div><div className="eyebrow">Hook</div><p style=${{ fontSize: 13 }}>${p.analysis.hook}</p></div>
           <div><div className="eyebrow" style=${{ marginBottom: 4 }}>Story beats</div><ol className="beats">${p.analysis.beats.map(([t, b]) => html`<li key=${t}><span className="mono">${t}</span><span>${b}</span></li>`)}</ol></div>
+          <div><div className="eyebrow" style=${{ marginBottom: 4 }}>On screen, scene by scene</div><ol className="beats">${p.source.key_frames.map(k => html`<li key=${k.t}><span className="mono">${k.t}</span><span>${k.d}</span></li>`)}</ol></div>
+          <details className="meta-d"><summary>Transcript</summary><p style=${{ fontSize: 13, marginTop: 4 }}><span className="mono muted">0:00 </span>${p.source.transcript}</p></details>
           <div><div className="eyebrow">Pacing</div><p style=${{ fontSize: 13 }}>${p.analysis.pacing}</p></div>
           <div><div className="eyebrow" style=${{ marginBottom: 4 }}>Why it likely worked</div><ul style=${{ margin: 0, paddingLeft: 18, fontSize: 13 }}>${p.analysis.why_it_worked.map(w => html`<li key=${w}>${w}</li>`)}</ul></div>
           <div><div className="eyebrow" style=${{ marginBottom: 6 }}>Gaps worth filling</div><div className="gaps">${p.analysis.gaps.map(g => html`<div key=${g.text} className="gap"><div className="eyebrow">${g.kind}</div>${g.text}${g.from ? html`<span className="muted"> · from comments</span>` : null}</div>`)}</div></div>
-          <p className="note">${p.source.comments_scanned.toLocaleString()} comments scanned, ${p.source.comments.length} kept for questions and requests.</p>
+          <p className="note">${p.source.comments_scanned.toLocaleString()} comments read by ${p.analysis.analyzed_by || analystOf().name}, ${p.source.comments.length} kept for questions and requests.</p>
+          <details className="meta-d"><summary>What ${p.angles_written_by || 'Claude'} received</summary>
+            <ul style=${{ margin: '4px 0 0', paddingLeft: 18, fontSize: 13 }}>
+              <li>Title, channel and stats from the YouTube Data API</li>
+              <li>Transcript, about ${words(p.source.transcript).length * 30} words</li>
+              <li>${p.source.key_frames.length} scene descriptions</li>
+              <li>Breakdown, ${p.analysis.gaps.length} gaps and ${p.source.comments.length} key comments</li>
+            </ul>
+            <p className="note" style=${{ marginTop: 4 }}>The writing model never sees the video itself, only this report.</p>
+          </details>
         </section>
       </div>
       <div className="stack">
+        <p className="note">Angle cards written by <strong style=${{ color: 'var(--ink)' }}>${p.angles_written_by || modelOf(p, 'writer').name}</strong> from the analysis report.</p>
         <div className="toolbar">
           <div className="row" role="group" aria-label="Filter by angle type">
             <button type="button" className="chip btnchip" aria-pressed=${type === 'All'} onClick=${() => setType('All')}>All ${p.angles.length}</button>
@@ -1186,7 +1228,7 @@ function ScriptScreen({ p, s }) {
   const tpl = s.templates[0];
   const setTarget = v => updateP(p.id, q => { q.format.target_seconds = v; });
   return html`<${Fragment}>
-    <${StepHead} title="Script" sub=${isChar ? 'Dialogue lines tagged with the speaking character. Edit anything.' : 'Narration lines, one per future scene. Edit anything.'}>
+    <${StepHead} title="Script" sub=${(isChar ? 'Dialogue lines tagged with the speaking character.' : 'Narration lines, one per future scene.') + ' Written by ' + (sc.written_by || modelOf(p, 'writer').name) + '. Edit anything.'}>
       <div className="row"><span className="note">Target</span>
         <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
         ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
@@ -1268,7 +1310,7 @@ function PreviewBtn({ text, voice }) {
 function VoiceScreen({ p, s }) {
   const locked = p.checkpoints.voice; const isChar = p.video_type === 'character';
   const lines = p.script.lines; const vm = modelOf(p, 'voice');
-  const canClone = /cloning/i.test(vm.limits);
+  const canClone = !!vm.clone;
   const allReady = lines.every(l => l.audio_status === 'ready');
   const generating = lines.some(l => l.audio_status === 'generating');
   const chars = lines.reduce((n, l) => n + l.text.length, 0);
@@ -1281,7 +1323,7 @@ function VoiceScreen({ p, s }) {
   return html`<${Fragment}>
     <${StepHead} title=${isChar ? 'Characters and voices' : 'Voice'} sub=${isChar ? 'Give each character a look and a voice. Each dialogue line is spoken in its character’s voice.' : 'Preview a voice on the first line, then generate the narration. Audio length sets each scene’s length.'} />
     ${isChar ? html`<section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Characters</h2><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.characters.push({ id: uid('ch'), name: 'New character', description: '', notes: '', voice_id: 'v-mara', seed: randSeed() }); })}><${Icon} n="plus" />Add character</button></div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Characters</h2><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.characters.push({ id: uid('ch'), name: 'New character', description: '', notes: '', voice_id: 'v-aoede', seed: randSeed() }); })}><${Icon} n="plus" />Add character</button></div>
       <div className="chars">${p.characters.map(c => html`<div key=${c.id} className="charcard">
         <div className="stack" style=${{ gap: 6 }}><div className="art"><${Art} seed=${c.seed} styleId=${p.style} title=${c.name + ' reference'} /></div><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.characters.find(x => x.id === c.id).seed = randSeed(); addCost(q, modelOf(q, 'image').cost); })}><${Icon} n="redo" />New look</button></div>
         <div className="stack" style=${{ gap: 6 }}>
@@ -1300,7 +1342,7 @@ function VoiceScreen({ p, s }) {
         <${PreviewBtn} text=${firstLine} voice=${v} />
       </div>`)}</div>
       ${voiceById(p.audio.voice_id).clone ? html`<label className="switch warnbox"><input id="consent" type="checkbox" checked=${p.audio.consent} disabled=${locked} onChange=${e => updateP(p.id, q => { q.audio.consent = e.target.checked; })} /> This is my own voice and I consent to cloning it for my videos.</label>` : null}
-      ${!canClone ? html`<p className="note">${vm.name} has no voice cloning. Switch the voiceover model in the top bar to use your own voice.</p>` : null}
+      ${!canClone ? html`<p className="note">${vm.name} can\u2019t clone voices. To narrate in your own voice, switch the voiceover model to ElevenLabs in the top bar (add its key in Settings first).</p>` : null}
     </section>`}
     <section className="panel stack">
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${isChar ? 'Dialogue audio' : 'Narration'}</h2><span className="note mono">${lines.filter(l => l.audio_status === 'ready').length}/${lines.length} ready · ${fmtT(scriptSecs(p))}</span></div>
@@ -1352,6 +1394,7 @@ function FormatScreen({ p, s }) {
       </section>
       <section className="panel stack"><h3>Estimated cost for this video</h3>
         <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>
+          <dt>Analysis + writing (${analystOf().name}, ${modelOf(p, 'writer').name})</dt><dd>${fmt$(est.writing)}</dd>
           <dt>Voice (${est.chars.toLocaleString()} chars)</dt><dd>${fmt$(est.voice)}</dd>
           <dt>Images (${est.nScenes} × ${fmt$(im.cost)})</dt><dd>${fmt$(est.images)}</dd>
           <dt>Animation (${Math.round(est.animSecs)} s)</dt><dd>${fmt$(est.video)}</dd>
@@ -1658,18 +1701,20 @@ function TemplatesView({ s }) {
 }
 function SettingsView({ s }) {
   const [confirm, setConfirm] = useState(false);
-  const byProv = {}; Object.values(MODELS).flat().forEach(m => { (byProv[m.provider] = byProv[m.provider] || []).push(m.name); });
+  const byProv = { google: ANALYSTS.map(a => a.name + ' (video analysis)') }; Object.values(MODELS).flat().forEach(m => { (byProv[m.provider] = byProv[m.provider] || []).push(m.name); });
   return html`<${Fragment}>
     <${StepHead} title="Settings" sub="Providers, default models and cost limits. API keys live in the server’s environment variables and never reach the browser." />
     <section className="panel stack"><h2>Providers</h2>
-      <p className="note">Model selectors only list providers with a key. In this demo, toggle a key to see the selectors change.</p>
+      <p className="note">Gemini watches the video and writes the breakdown; the writing model turns that report into angles and scripts. Model selectors only list providers with a key. In this demo, toggle a key to see the selectors change.</p>
       <div className="list">${Object.keys(PROVIDERS).map(k => html`<div key=${k} className="lrow" style=${{ padding: '10px 12px' }}>
-        <div className="grow" style=${{ minWidth: 0 }}><strong>${PROVIDERS[k]}</strong><div className="note">${byProv[k].join(', ')}</div><div className="mono note" style=${{ fontSize: 11 }}>${k.toUpperCase()}_API_KEY</div></div>
+        <div className="grow" style=${{ minWidth: 0 }}><strong>${PROVIDERS[k]}</strong><div className="note">${byProv[k] ? Array.from(new Set(byProv[k])).join(', ') : PROVIDER_USE[k]}</div><div className="mono note" style=${{ fontSize: 11 }}>${PROVIDER_ENV[k]}</div></div>
         <label className="switch"><input id=${'key-' + k} type="checkbox" checked=${s.settings.keys[k]} onChange=${e => update(st => { st.settings.keys[k] = e.target.checked; })} />${s.settings.keys[k] ? 'Key present' : 'No key'}</label>
       </div>`)}</div>
     </section>
     <section className="panel stack"><h2>Defaults for new projects</h2>
-      <div className="fmt-grid">${['voice', 'image', 'video'].map(kind => html`<label key=${kind} className="field">${KIND_LABEL[kind]} model<select className="select" value=${s.settings.defaults[kind]} onChange=${e => update(st => { st.settings.defaults[kind] = e.target.value; })}>${MODELS[kind].filter(m => s.settings.keys[m.provider]).map(m => html`<option key=${m.id} value=${m.id}>${m.name}</option>`)}</select></label>`)}</div>
+      <div className="fmt-grid">
+        <label className="field">Video analysis (watches the video)<select id="analyst" className="select" value=${s.settings.analyst} onChange=${e => update(st => { st.settings.analyst = e.target.value; })}>${ANALYSTS.map(a => html`<option key=${a.id} value=${a.id}>${a.name} \u00b7 ${a.limits}</option>`)}</select></label>
+        ${['writer', 'voice', 'image', 'video'].map(kind => html`<label key=${kind} className="field">${KIND_LABEL[kind]} model<select className="select" value=${s.settings.defaults[kind]} onChange=${e => update(st => { st.settings.defaults[kind] = e.target.value; })}>${MODELS[kind].filter(m => s.settings.keys[m.provider]).map(m => html`<option key=${m.id} value=${m.id}>${m.name}</option>`)}</select></label>`)}</div>
     </section>
     <section className="panel stack"><h2>Cost limit</h2>
       <label className="field" htmlFor="limit">Ask before a project spends more than<div className="row"><span className="mono">$</span><input id="limit" className="input mono" type="number" min="0.1" step="0.1" style=${{ width: 100 }} value=${s.settings.costLimit} onChange=${e => update(st => { st.settings.costLimit = Math.max(0.1, +e.target.value || 1); })} /></div></label>

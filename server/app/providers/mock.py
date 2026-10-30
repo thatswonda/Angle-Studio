@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import sample
-from .base import (LLM, AudioResult, ImageGenerator, ImageToVideo, MediaResult,
-                   SpeechToText, TextToSpeech, VideoInfo, VideoSource)
+from .base import (AudioResult, ImageGenerator, ImageToVideo, MediaResult, TextToSpeech,
+                   VideoAnalyst, VideoInfo, VideoSource, WatchReport, Writer)
 
 DELAY = 0.05  # seconds; keep tests fast. Raise it to feel real latency.
 
@@ -26,23 +26,28 @@ class MockVideoSource(VideoSource):
         return VideoInfo(**sample.VIDEO)
 
 
-class MockSpeechToText(SpeechToText):
-    async def transcribe(self, audio_path: Path) -> str:
+class MockAnalyst(VideoAnalyst):
+    def __init__(self, cost_per_video: float):
+        self.cost = cost_per_video
+
+    async def watch(self, url: str, info: VideoInfo, manual_transcript: Optional[str] = None) -> WatchReport:
         await asyncio.sleep(DELAY)
-        return sample.VIDEO["captions"]
+        return WatchReport(transcript=manual_transcript or sample.TRANSCRIPT, scenes=sample.SCENES,
+                           analysis=sample.ANALYSIS, cost=self.cost)
 
 
-class MockLLM(LLM):
-    async def complete_json(self, system: str, prompt: str, schema: dict) -> dict:
+class MockWriter(Writer):
+    def __init__(self, cost_per_call: float):
+        self.cost = cost_per_call
+
+    async def complete_json(self, system: str, prompt: str, schema: dict) -> tuple[dict, float]:
         await asyncio.sleep(DELAY)
         name = schema.get("title")
-        if name == "Analysis":
-            return sample.ANALYSIS
         if name == "AngleList":
-            return {"angles": sample.ANGLES}
+            return {"angles": sample.ANGLES}, self.cost
         if name == "Script":
-            return sample.script_for(prompt)
-        raise ValueError(f"MockLLM has no canned answer for schema {name!r}")
+            return sample.script_for(prompt), self.cost
+        raise ValueError(f"MockWriter has no canned answer for schema {name!r}")
 
 
 class MockTTS(TextToSpeech):

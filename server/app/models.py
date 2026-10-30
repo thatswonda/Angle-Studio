@@ -20,9 +20,11 @@ def new_id(prefix: str) -> str:
 
 
 class Models(BaseModel):
-    voice: str = "elevenlabs-v2"
-    image: str = "flux-11-pro"
-    video: str = "kling-21"
+    analyst: str = "gemini-pro"        # watches the reference video
+    writer: str = "claude-opus-5-5"    # writes angles, scripts, prompts, metadata
+    voice: str = "gemini-tts-flash"
+    image: str = "nano-banana-2"
+    video: str = "veo-31-fast"
 
 
 class KeyFrame(BaseModel):
@@ -56,6 +58,7 @@ class Gap(BaseModel):
 
 
 class Analysis(BaseModel):
+    analyzed_by: str = ""
     summary: str
     hook: str
     beats: list[str]
@@ -92,6 +95,7 @@ class ScriptLine(BaseModel):
 
 
 class Script(BaseModel):
+    written_by: str = ""
     hook_options: list[str]
     chosen_hook: int = 0
     lines: list[ScriptLine]
@@ -114,7 +118,7 @@ class Character(BaseModel):
     description: str = ""
     notes: str = ""
     reference_images: list[str] = []
-    voice_id: str = "v-mara"
+    voice_id: str = "v-aoede"
 
 
 class Format(BaseModel):
@@ -152,7 +156,7 @@ class Scene(BaseModel):
 
 
 class Audio(BaseModel):
-    voice_id: str = "v-mara"
+    voice_id: str = "v-aoede"
     music_path: Optional[str] = None
     music_volume: float = 0.25
     duck: bool = True
@@ -187,6 +191,7 @@ class Project(BaseModel):
     source: Optional[Source] = None
     analysis: Optional[Analysis] = None
     angles: list[Angle] = []
+    angles_written_by: str = ""
     selected_angle_ids: list[str] = []
     user_direction: str = ""
     script: Optional[Script] = None

@@ -3,6 +3,10 @@
 Each provider is a small adapter that implements one of these. Adding a model
 means writing one adapter and registering it in registry.py; nothing else in
 the tool changes.
+
+The analysis is split in two: a VideoAnalyst (Gemini) watches the reference
+video and writes a report; a Writer (Claude by default) never sees the video,
+only that report, and writes the angles, scripts and metadata.
 """
 from __future__ import annotations
 
@@ -18,9 +22,18 @@ class VideoInfo:
     channel: str
     duration: float
     published: str
-    captions: Optional[str]
+    views: int
     comments: list[dict]
-    key_frames: list[dict]
+    comments_scanned: int
+
+
+@dataclass
+class WatchReport:
+    """What the analyst hands to the writer."""
+    transcript: str
+    scenes: list[dict]  # [{"t": "0:41", "description": "what is on screen"}]
+    analysis: dict      # summary, hook, beats, pacing, why_it_worked, gaps
+    cost: float
 
 
 @dataclass
@@ -38,24 +51,26 @@ class MediaResult:
 
 
 class VideoSource(ABC):
-    """Reads metadata, captions, comments and key frames for a link (ING-1..4)."""
+    """Metadata, stats and top comments for a link (ING-1, ING-4). YouTube Data API."""
 
     @abstractmethod
     async def fetch(self, url: str) -> VideoInfo: ...
 
 
-class SpeechToText(ABC):
-    """Transcribes audio when no captions exist (ING-2)."""
+class VideoAnalyst(ABC):
+    """Watches the video from its link and returns transcript, scene descriptions,
+    breakdown and gaps (ING-2, ING-3, ANG-1, ANG-2). Gemini takes a YouTube URL directly,
+    so the app never downloads the video."""
 
     @abstractmethod
-    async def transcribe(self, audio_path: Path) -> str: ...
+    async def watch(self, url: str, info: VideoInfo, manual_transcript: Optional[str] = None) -> WatchReport: ...
 
 
-class LLM(ABC):
-    """Analysis and writing. Must return JSON matching the requested schema (PRD 7.3)."""
+class Writer(ABC):
+    """Angles, scripts, prompts and metadata. Must return JSON matching the schema (PRD 7.3)."""
 
     @abstractmethod
-    async def complete_json(self, system: str, prompt: str, schema: dict) -> dict: ...
+    async def complete_json(self, system: str, prompt: str, schema: dict) -> tuple[dict, float]: ...
 
 
 class TextToSpeech(ABC):
@@ -73,7 +88,7 @@ class ImageGenerator(ABC):
 
 
 class ImageToVideo(ABC):
-    max_clip_seconds: float = 10
+    max_clip_seconds: float = 8
 
     @abstractmethod
     async def animate(self, image: Path, motion_prompt: str, seconds: float, aspect_ratio: str, out: Path) -> MediaResult: ...
