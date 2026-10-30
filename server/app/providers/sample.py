@@ -51,8 +51,17 @@ def script_for(prompt: str) -> dict:
     if missing > 0:
         beats += _D["FILLERS"][-missing:]
     first = _RAW[ids[0]]
-    lines = [{"text": first["hooks"][0], "visual": first["hook_visual"]}] + [{"text": b["t"], "visual": b["v"]} for b in beats]
     hooks = list(first["hooks"][:3])
     if len(ids) > 1:
         hooks[2] = _RAW[ids[1]]["hooks"][0]
-    return {"hook_options": hooks, "lines": lines}
+    hints = {first["hooks"][0]: first["hook_visual"], **{b["t"]: b["v"] for b in beats}}
+    if head.get("type") == "character":
+        names = [n.strip() for n in prompt.split("Characters:")[-1].splitlines()[0].split(",")] if "Characters:" in prompt else ["Narrator"]
+        story = "\n".join(f"{names[i % len(names)]}: {t}" for i, t in enumerate([hooks[0]] + [b["t"] for b in beats]))
+    else:
+        paras = [" ".join(b["t"] for b in beats[i:i + 3]) for i in range(0, len(beats), 3)]
+        story = "\n\n".join([hooks[0]] + paras)
+    # Sentence-level hints, as the real writer returns them.
+    import re
+    split = lambda t: [x.strip() for x in re.findall(r"[^.!?]+[.!?]+|[^.!?]+$", t) if x.strip()]
+    return {"hook_options": hooks, "story": story, "visual_hints": {sent: v for t, v in hints.items() for sent in split(t)}}

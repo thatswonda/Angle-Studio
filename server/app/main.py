@@ -14,7 +14,7 @@ from .providers import registry, sample
 
 app = FastAPI(title="Angle Studio API", version="0.1.0")
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
-CHECKPOINT_ORDER = ["angles", "script", "plan", "style", "voice", "format", "scenes", "clips"]
+CHECKPOINT_ORDER = ["angles", "script", "style", "scenes", "voice", "format", "clips"]
 
 
 @app.exception_handler(pipeline.CheckpointError)
@@ -121,6 +121,10 @@ def approve(pid: str, name: str):
     if name == "clips" and not any(s.animate for s in p.scenes):
         raise HTTPException(409, "No scenes are animated, so there are no clips to approve.")
     pipeline.require(p, *[c for c in earlier if not (c == "clips")])
+    if name == "script":
+        pipeline.approve_story(p)  # the story becomes sentences for scenes and narration
+    if name == "scenes" and not (p.scenes and all(s.image_status == "ready" for s in p.scenes)):
+        raise HTTPException(409, "Every scene needs an image before the scenes can be approved.")
     setattr(p.checkpoints, name, True)
     storage.save(p)
     return p.checkpoints
@@ -176,7 +180,7 @@ async def script(pid: str):
 @app.post("/api/projects/{pid}/audio", status_code=202)
 async def audio(pid: str, body: AudioBody):
     p = _project(pid)
-    pipeline.require(p, "script", "style")
+    pipeline.require(p, "scenes")
     pipeline.guard_cost(p, pipeline.estimate(p)["voice"], body.confirm_over_limit)
     return jobs.submit(pid, "Generating narration", lambda prog: pipeline.generate_audio(pid, body.line_ids, prog))
 
@@ -191,16 +195,18 @@ def pacing(pid: str):
 def plan_scenes(pid: str, body: Optional[Pacing] = None):
     """Free, right after the script: splits it into scenes at the chosen pacing. Re-planning discards scene images."""
     p = _project(pid)
-    pipeline.require(p, "script")
-    if p.checkpoints.plan:
-        raise HTTPException(409, "The scene plan is approved. Reopen it to change the pacing.")
+    pipeline.require(p, "script", "style")
+    if p.checkpoints.scenes:
+        raise HTTPException(409, "The scenes are approved. Reopen them to change the pacing.")
     return pipeline.plan_scenes(pid, body)
 
 
 @app.post("/api/projects/{pid}/scenes/images", status_code=202)
 async def scene_images(pid: str, body: Paid):
     p = _project(pid)
-    pipeline.require(p, "plan", "voice", "format")
+    pipeline.require(p, "script", "style")
+    if not p.scenes:
+        raise HTTPException(409, "Plan the scenes first.")
     pipeline.guard_cost(p, pipeline.estimate(p)["images"], body.confirm_over_limit)
     ids = [s.id for s in p.scenes if s.image_status in ("pending", "failed")]
     return jobs.submit(pid, f"Generating {len(ids)} images", lambda prog: pipeline.generate_images(pid, ids, prog))

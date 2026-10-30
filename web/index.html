@@ -211,6 +211,7 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .meter > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 99px; }
 .meter.warn > i { background: var(--warn); }
 .meter.bad > i { background: var(--fail); }
+.textarea.story { font-size: 15px; line-height: 1.65; min-height: 320px; }
 .script-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
 
 /* Style */
@@ -260,8 +261,10 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .strip { display: flex; gap: 2px; height: 10px; width: 100%; }
 .strip i { background: var(--accent); opacity: 0.55; border-radius: 2px; min-width: 2px; }
 .pace[aria-pressed="true"] .strip i { opacity: 0.9; }
-.scene { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; }
-.scene.wide { grid-template-columns: 240px minmax(0, 1fr); }
+.scene { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 16px; align-items: start; }
+.scene.wide { grid-template-columns: minmax(0, 1fr) 320px; }
+.scene.anim { grid-template-columns: 150px minmax(0, 1fr); }
+.scene.anim.wide { grid-template-columns: 240px minmax(0, 1fr); }
 .scene-media { display: flex; flex-direction: column; gap: 6px; }
 .frame { position: relative; background: var(--frame); border-radius: var(--r-sm); overflow: hidden; aspect-ratio: 9/16; width: 100%; }
 .frame.h { aspect-ratio: 16/9; }
@@ -344,8 +347,10 @@ details.meta-d[open] summary { margin-bottom: 6px; }
   .picker > button { min-width: 130px; }
   .menu, .jobs-panel { position: fixed; left: 16px; right: 16px; top: 128px; width: auto; }
   .compile-grid { grid-template-columns: minmax(0, 1fr); }
-  .scene, .scene.wide { grid-template-columns: 110px minmax(0, 1fr); gap: 12px; }
+  .scene { grid-template-columns: minmax(0, 1fr) 110px; gap: 12px; }
   .scene.wide { grid-template-columns: minmax(0, 1fr); }
+  .scene.anim { grid-template-columns: 110px minmax(0, 1fr); }
+  .scene.anim.wide { grid-template-columns: minmax(0, 1fr); }
   .line, .line.char { grid-template-columns: 22px minmax(0, 1fr) 30px; }
   .line .secs { display: none; }
   .line.char select { grid-column: 2 / 4; }
@@ -675,31 +680,45 @@ const PACING = {
 const SHOTS = ['wide establishing shot', 'close-up detail', 'medium shot from a new angle', 'macro texture shot', 'over-the-shoulder view', 'top-down view'];
 const DEFAULT_PACING = { mode: 'moderate', compact_every: 3 };
 const paceEvery = pc => pc.mode === 'compact' ? (pc.compact_every || 3) : PACING[pc.mode].every;
-// Simple groups short lines into one longer scene; Moderate and Compact split long lines into several shots.
+// Sentences are grouped until a scene reaches the pacing length; a sentence much longer than that is split into several shots.
+const fallbackVisual = t => 'scene showing: ' + words(t).slice(0, 10).join(' ').replace(/[.,!?]+$/, '');
 function scenePlan(p, pc) {
   pc = pc || p.format.pacing || DEFAULT_PACING;
-  const every = paceEvery(pc); const lines = (p.script && p.script.lines) || []; const out = [];
-  if (pc.mode === 'simple') {
-    let group = [], t = 0;
-    lines.forEach((l, i) => {
-      group.push(l); t += lineSecs(p, l);
-      if (t >= every * 0.8 || i === lines.length - 1) {
-        if (t < every * 0.4 && out.length) out[out.length - 1].line_ids.push(...group.map(g => g.id));
-        else out.push({ line_ids: group.map(g => g.id), split: null, description: group[0].visual || 'balcony garden scene' });
-        group = []; t = 0;
-      }
-    });
-  } else {
-    lines.forEach(l => {
-      const n = Math.max(1, Math.round(lineSecs(p, l) / every));
-      for (let k = 0; k < n; k++) out.push({ line_ids: [l.id], split: n > 1 ? { index: k, of: n } : null, description: (l.visual || 'balcony garden scene') + (n > 1 ? ', ' + SHOTS[k % SHOTS.length] : '') });
-    });
-  }
+  const every = paceEvery(pc); const out = []; let group = [], t = 0;
+  const flush = () => {
+    if (!group.length) return; const last = out[out.length - 1];
+    if (t < every * 0.4 && last && !last.split) last.line_ids.push(...group.map(g => g.id));
+    else out.push({ line_ids: group.map(g => g.id), split: null, base: group[0].visual || fallbackVisual(group[0].text) });
+    group = []; t = 0;
+  };
+  linesOf(p).forEach(l => {
+    const secs = lineSecs(p, l); const n = Math.round(secs / every);
+    if (n >= 2) { flush(); for (let k = 0; k < n; k++) out.push({ line_ids: [l.id], split: { index: k, of: n }, base: l.visual || fallbackVisual(l.text) }); return; }
+    group.push(l); t += secs; if (t >= every * 0.8) flush();
+  });
+  flush();
+  let prev = null, k = 0;
+  out.forEach(sp => { k = sp.base === prev ? k + 1 : 0; sp.description = sp.base + (k ? ', ' + SHOTS[k % SHOTS.length] : (sp.split ? ', ' + SHOTS[0] : '')); prev = sp.base; });
   return out;
 }
-const planSig = p => JSON.stringify([p.format.pacing || DEFAULT_PACING, p.script.lines.map(l => l.id + l.text)]);
-function planSecs(p, sp) { const t = sp.line_ids.reduce((n, id) => { const l = p.script.lines.find(x => x.id === id); return n + (l ? lineSecs(p, l) : 0); }, 0); return sp.split ? t / sp.split.of : t; }
-const scriptSecs = p => (p.script && p.script.lines ? p.script.lines.reduce((n, l) => n + lineSecs(p, l), 0) : 0);
+const planSig = p => JSON.stringify([p.format.pacing || DEFAULT_PACING, linesOf(p).map(l => l.id + l.text)]);
+function planSecs(p, sp) { const ls = linesOf(p); const t = sp.line_ids.reduce((n, id) => { const l = ls.find(x => x.id === id); return n + (l ? lineSecs(p, l) : 0); }, 0); return sp.split ? t / sp.split.of : t; }
+const scriptSecs = p => linesOf(p).reduce((n, l) => n + lineSecs(p, l), 0);
+const norm = t => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+function splitSentences(text) { return ((text || '').replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) || []).map(t => t.trim()).filter(Boolean); }
+// The script is one story. It is split into sentences, the units that scenes and narration are built from.
+function storyLines(p) {
+  const sc = p.script; if (!sc || !sc.story) return [];
+  const isChar = p.video_type === 'character'; const out = [];
+  sc.story.split(/\n+/).forEach(par => {
+    let speaker = null, text = par.trim(); if (!text) return;
+    if (isChar) { const m = text.match(/^([^:]{1,24}):\s*(.*)$/); const ch = m && p.characters.find(c => c.name.toLowerCase() === m[1].trim().toLowerCase()); if (ch) { speaker = ch.id; text = m[2]; } }
+    splitSentences(text).forEach(t => out.push({ id: 'tmp' + out.length, text: t, speaker, visual: VISUAL_HINTS[norm(t)] || '' }));
+  });
+  return out;
+}
+// Approved scripts keep their sentence list (with audio); drafts are split on the fly.
+const linesOf = p => (p.script && p.script.lines) || storyLines(p);
 const needsAnimate = p => p.scenes.length ? p.scenes.some(s => s.animate) : p.format.animated;
 
 // SCR-6: share of the script's three-word phrases that also appear in the source transcript
@@ -709,7 +728,7 @@ function overlap(a, b) {
 }
 
 function estimate(p) {
-  const lines = (p.script && p.script.lines) || [];
+  const lines = linesOf(p);
   const chars = lines.reduce((n, l) => n + l.text.length, 0);
   const nScenes = p.scenes.length || (lines.length ? scenePlan(p).length : 0);
   const animSecs = p.scenes.length ? p.scenes.filter(s => s.animate).reduce((n, s) => n + sceneSecs(p, s), 0) : (p.format.animated ? scriptSecs(p) : 0);
@@ -723,7 +742,7 @@ function estimate(p) {
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v5';
+const KEY = 'angle-studio-demo-v6';
 const listeners = new Set();
 const DEFAULT_MODELS = { writer: 'claude-opus-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
@@ -736,7 +755,7 @@ function newProject(title) {
     format: { aspect_ratio: '9:16', target_seconds: 60, animated: false, pacing: { ...DEFAULT_PACING } },
     scenes: [], audio: { voice_id: 'v-aoede', music_path: 'm-soil', music_volume: 0.25, duck: true, caption_style: 'bold', consent: false },
     render: { draft_path: null, final_path: null, cost_estimate: 0, cost_actual: 0 },
-    checkpoints: { angles: false, script: false, plan: false, style: false, voice: false, format: false, scenes: false, clips: false },
+    checkpoints: { angles: false, script: false, style: false, scenes: false, voice: false, format: false, clips: false },
     step: 'ingest',
   };
 }
@@ -805,20 +824,30 @@ const addCost = (p, n) => { p.render.cost_actual = Math.round((p.render.cost_act
 function buildScript(p) {
   const chosen = p.selected_angle_ids.map(id => p.angles.find(a => a.id === id)).filter(Boolean);
   const first = chosen[0];
-  const target = p.format.target_seconds;
-  const count = Math.max(3, Math.round(target / 6.5) - 1);
+  const count = Math.max(3, Math.round(p.format.target_seconds / 6.5) - 1);
   let beats = [];
   if (chosen.length > 1) { const a = chosen[0].beats, b = chosen[1].beats; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) beats.push(a[i]); if (b[i]) beats.push(b[i]); } }
   else beats = first.beats.slice();
   beats = beats.slice(0, count);
   FILLERS.slice(Math.max(0, FILLERS.length - (count - beats.length))).forEach(f => beats.push(f));
-  const chars = p.characters;
-  const all = [{ t: first.hooks[0], v: first.hook_visual }, ...beats];
-  const lines = all.map((b, i) => ({ id: uid('ln'), text: b.t, visual: b.v, speaker: p.video_type === 'character' && chars.length ? chars[i % chars.length].id : null, audio_status: 'pending', duration: null }));
   const hooks = first.hooks.slice(0, 3);
   if (chosen.length > 1) hooks[2] = chosen[1].hooks[0];
-  return { hook_options: hooks, chosen_hook: 0, lines, target_seconds: target, written_with: chosen.map(a => a.id), direction: p.user_direction };
+  let story;
+  if (p.video_type === 'character' && p.characters.length) {
+    story = [hooks[0], ...beats.map(b => b.t)].map((t, i) => p.characters[i % p.characters.length].name + ': ' + t).join('\n');
+  } else {
+    const paras = []; for (let i = 0; i < beats.length; i += 3) paras.push(beats.slice(i, i + 3).map(b => b.t).join(' '));
+    story = [hooks[0], ...paras].join('\n\n');
+  }
+  return { hook_options: hooks, chosen_hook: 0, story, lines: null, target_seconds: p.format.target_seconds, written_with: chosen.map(a => a.id), direction: p.user_direction };
 }
+// Demo only: the real writer returns a picture idea for each sentence; here they come from the sample beats.
+const VISUAL_HINTS = (() => {
+  const m = {}; const add = (t, v) => splitSentences(t).forEach(x => { m[norm(x)] = v; });
+  SAMPLE.angles.forEach(a => { a.hooks.forEach(h => add(h, a.hook_visual)); a.beats.forEach(b => add(b.t, b.v)); });
+  FILLERS.forEach(f => add(f.t, f.v));
+  return m;
+})();
 
 const api = {
   async ingest(pid, url, manualTranscript) {
@@ -848,8 +877,8 @@ const api = {
   async writeScript(pid) {
     updateP(pid, p => { p.script = { generating: true }; });
     const wr = modelOf(STATE.projects[pid], 'writer').name;
-    await runJob(pid, 'Writing script', [wr + ' is reading the chosen angles', wr + ' is drafting 3 hooks', wr + ' is writing lines to target length', 'Checking originality'], 550);
-    updateP(pid, p => { p.script = buildScript(p); p.script.written_by = wr; p.scenes = []; addCost(p, modelOf(p, 'writer').perVideo * 0.3); });
+    await runJob(pid, 'Writing script', [wr + ' is reading the chosen angles', wr + ' is drafting 3 hooks', wr + ' is writing the story to target length', 'Checking originality'], 550);
+    updateP(pid, p => { p.script = buildScript(p); p.script.written_by = wr; p.scenes = []; p.plan_sig = null; addCost(p, modelOf(p, 'writer').perVideo * 0.3); });
   },
   async generateAudio(pid, lineIds) {
     const p0 = STATE.projects[pid];
@@ -924,10 +953,9 @@ const api = {
    ====================================================================== */
 const STEPS = [
   { id: 'ingest', label: 'Paste link' }, { id: 'angles', label: 'Pick angle', cp: 'angles' },
-  { id: 'script', label: 'Script', cp: 'script' }, { id: 'plan', label: 'Scene plan', cp: 'plan' },
-  { id: 'style', label: 'Visual style', cp: 'style' },
-  { id: 'voice', label: 'Voice', cp: 'voice' }, { id: 'format', label: 'Format', cp: 'format' },
-  { id: 'scenes', label: 'Scenes', cp: 'scenes' }, { id: 'animate', label: 'Animate', cp: 'clips' },
+  { id: 'script', label: 'Script', cp: 'script' }, { id: 'style', label: 'Visual style', cp: 'style' },
+  { id: 'scenes', label: 'Scenes & images', cp: 'scenes' }, { id: 'voice', label: 'Voice', cp: 'voice' },
+  { id: 'format', label: 'Format', cp: 'format' }, { id: 'animate', label: 'Animate', cp: 'clips' },
   { id: 'compile', label: 'Compile' }, { id: 'export', label: 'Export' },
 ];
 function isSkipped(p, id) { return id === 'animate' && p.checkpoints.format && !needsAnimate(p); }
@@ -1266,6 +1294,7 @@ function AnglesScreen({ p, s }) {
               ${chosen.length ? html`<div style=${{ fontWeight: 600 }}>${chosen.map(a => a.title).join('  +  ')}</div>${chosen.length === 2 ? html`<p className="note">Two angles will be merged into one script.</p>` : null}` : html`<p className="note">Select an angle card to continue. Select a second to merge them.</p>`}</div>
             <div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${p.video_type} onChange=${v => !locked && updateP(p.id, q => { q.video_type = v; })} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>
             <p className="note">${p.video_type === 'voiceover' ? 'Narrated, with images that stay still or get animated.' : 'Characters with their own voices, scenes animated from images.'}</p>
+            <div className="row"><span className="note">Frame</span><${Seg} label="Frame" value=${p.format.aspect_ratio} onChange=${v => !locked && updateP(p.id, q => { q.format.aspect_ratio = v; })} options=${[{ value: '9:16', label: '9:16 vertical' }, { value: '16:9', label: '16:9 horizontal' }]} /></div>
             <div className="row"><span className="note">Video length</span>
               <${Seg} label="Video length" value=${[30, 60, 90].includes(p.format.target_seconds) ? p.format.target_seconds : 'c'} onChange=${v => !locked && updateP(p.id, q => { q.format.target_seconds = v === 'c' ? 45 : v; })} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
               ${![30, 60, 90].includes(p.format.target_seconds) ? html`<input id="angle-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${p.format.target_seconds} onChange=${e => updateP(p.id, q => { q.format.target_seconds = Math.max(15, Math.min(600, +e.target.value || 60)); })} aria-label="Custom length in seconds" />` : null}
@@ -1277,7 +1306,7 @@ function AnglesScreen({ p, s }) {
         </section>
       </div>
     </div>
-    <${ApproveBar} p=${p} step="angles" ready=${chosen.length > 0} hint="Select at least one angle." label=${'Approve and write ' + p.format.target_seconds + 's script'} onApprove=${onApprove} />
+    <${ApproveBar} p=${p} step="angles" ready=${chosen.length > 0} hint="Select at least one angle." label=${'Approve and write ' + p.format.target_seconds + 's story'} onApprove=${onApprove} />
   </${Fragment}>`;
 }
 
@@ -1287,50 +1316,60 @@ function AnglesScreen({ p, s }) {
 function ScriptScreen({ p, s }) {
   const sc = p.script; const locked = p.checkpoints.script;
   const [custom, setCustom] = useState(![30, 60, 90].includes(p.format.target_seconds));
-  if (!sc || sc.generating) return html`<${Fragment}><${StepHead} title="Writing the script" sub="Drafting three hook options and the lines to fit your target length." /><div className="panel stack">${[90, 70, 85, 60, 75].map((w, i) => html`<div key=${i} className="skeleton" style=${{ width: w + '%' }}></div>`)}</div></${Fragment}>`;
-  const total = scriptSecs(p); const target = p.format.target_seconds;
-  const fullText = sc.lines.map(l => l.text).join(' ');
-  const ov = overlap(fullText, p.source.transcript); const ovPct = Math.round(ov * 100);
+  if (!sc || sc.generating) return html`<${Fragment}><${StepHead} title="Writing the story" sub="Drafting three hook options and a story that fits your target length." /><div className="panel stack">${[90, 70, 85, 60, 75].map((w, i) => html`<div key=${i} className="skeleton" style=${{ width: w + '%' }}></div>`)}</div></${Fragment}>`;
   const isChar = p.video_type === 'character';
-  const setLine = (id, patch) => updateP(p.id, q => { const l = q.script.lines.find(l => l.id === id); Object.assign(l, patch, patch.text !== undefined ? { audio_status: 'pending', duration: null } : {}); });
-  const pickHook = i => updateP(p.id, q => { q.script.chosen_hook = i; q.script.lines[0].text = q.script.hook_options[i]; q.script.lines[0].audio_status = 'pending'; q.script.lines[0].duration = null; });
-  const tpl = s.templates[0];
+  const lines = linesOf(p); const total = lines.reduce((n, l) => n + lineSecs(p, l), 0); const target = p.format.target_seconds;
+  const ovPct = Math.round(overlap(sc.story, p.source.transcript) * 100);
+  const sep = isChar ? '\n' : '\n\n';
   const setTarget = v => updateP(p.id, q => { q.format.target_seconds = v; });
+  const pickHook = i => updateP(p.id, q => {
+    const parts = q.script.story.split(sep); const m = isChar && parts[0].match(/^([^:]{1,24}:\s*)/);
+    parts[0] = (m ? m[1] : '') + q.script.hook_options[i]; q.script.story = parts.join(sep); q.script.chosen_hook = i;
+  });
+  const onApprove = () => {
+    updateP(p.id, q => {
+      const old = q.script.lines || []; const used = new Set();
+      q.script.lines = storyLines(q).map(l => {
+        const o = old.find(x => !used.has(x.id) && x.text === l.text && x.speaker === l.speaker);
+        if (o) { used.add(o.id); return { ...o, visual: l.visual || o.visual }; }
+        return { ...l, id: uid('ln'), audio_status: 'pending', duration: null };
+      });
+    });
+    approve(p.id, 'script');
+  };
+  const tpl = s.templates[0];
   return html`<${Fragment}>
-    <${StepHead} title="Script" sub=${(isChar ? 'Dialogue lines tagged with the speaking character.' : 'Narration lines, one per future scene.') + ' Written by ' + (sc.written_by || modelOf(p, 'writer').name) + '. Edit anything.'}>
-      <div className="row"><span className="note">Target</span>
-        <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
-        ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
+    <${StepHead} title="Story script" sub=${'One story, written by ' + (sc.written_by || modelOf(p, 'writer').name) + '. Edit it freely. Next it is split into scenes and each scene gets an image.'}>
+      <div className="row"><span className="note">Length</span>
+        <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (locked) return; if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
+        ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
       </div>
       <button type="button" className="btn" disabled=${locked} onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Rewrite to ${target}s</button>
     </${StepHead}>
     <div className="script-grid">
       <div className="stack">
         <section className="panel stack">
-          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Opening hook</h2><span className="note">Pick one of three</span></div>
+          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Opening hook</h2><span className="note">Pick one of three. It becomes the first ${isChar ? 'line' : 'paragraph'}.</span></div>
           <div className="hooks">${sc.hook_options.map((h, i) => html`<button key=${i} type="button" className="hookopt" aria-pressed=${sc.chosen_hook === i} disabled=${locked} onClick=${() => pickHook(i)}><span className="radio"></span><span>${h}</span></button>`)}</div>
         </section>
         <section className="panel stack">
-          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${isChar ? 'Dialogue' : 'Narration'}</h2><span className="note mono">${sc.lines.length} lines · ${fmtT(total)} of ${fmtT(target)}</span></div>
+          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>The story</h2><span className="note mono">${words(sc.story).length} words · about ${fmtT(total)} of ${fmtT(target)}</span></div>
           <div className=${'meter' + (Math.abs(total - target) > target * 0.25 ? ' warn' : '')} aria-hidden="true"><i style=${{ width: Math.min(100, total / target * 100) + '%' }}></i></div>
-          <div className="lines">
-            ${sc.lines.map((l, i) => html`<div key=${l.id} className=${'line' + (isChar ? ' char' : '')}>
-              <span className="idx">${i + 1}</span>
-              ${isChar ? html`<select className="select" aria-label="Speaker" disabled=${locked} value=${l.speaker || ''} onChange=${e => setLine(l.id, { speaker: e.target.value })}>${p.characters.map(c => html`<option key=${c.id} value=${c.id}>${c.name}</option>`)}</select>` : null}
-              <textarea className="textarea" rows="2" aria-label=${'Line ' + (i + 1)} disabled=${locked} value=${l.text} onChange=${e => setLine(l.id, { text: e.target.value })}></textarea>
-              <span className="secs">${lineSecs(p, l).toFixed(1)}s</span>
-              <button type="button" className="btn ghost sm" aria-label="Delete line" disabled=${locked || sc.lines.length < 2} onClick=${() => updateP(p.id, q => { q.script.lines = q.script.lines.filter(x => x.id !== l.id); })}><${Icon} n="trash" /></button>
-            </div>`)}
-          </div>
-          <div><button type="button" className="btn sm" disabled=${locked} onClick=${() => updateP(p.id, q => { q.script.lines.push({ id: uid('ln'), text: '', visual: 'balcony garden detail', speaker: isChar ? q.characters[0] && q.characters[0].id : null, audio_status: 'pending' }); })}><${Icon} n="plus" />Add line</button></div>
+          <label htmlFor="story" className="note">${isChar ? 'One line per speaker, written as Name: what they say. Characters: ' + p.characters.map(c => c.name).join(', ') + '.' : 'Write it the way it will be narrated, as one continuous story.'}</label>
+          <textarea id="story" className="textarea story" rows="16" disabled=${locked} value=${sc.story} onChange=${e => updateP(p.id, q => { q.script.story = e.target.value; })}></textarea>
+          ${Math.abs(total - target) > target * 0.25 ? html`<p className="warnbox">The story runs about ${fmtT(total)} against a ${fmtT(target)} target. Rewrite it, or trim or add to it by hand.</p>` : null}
         </section>
       </div>
       <div className="stack">
         <section className="panel stack">
           <h3>Originality check</h3>
           <div className=${'meter ' + (ovPct > 25 ? 'bad' : ovPct > 10 ? 'warn' : '')}><i style=${{ width: Math.max(3, Math.min(100, ovPct * 2)) + '%' }}></i></div>
-          ${ovPct > 25 ? html`<div className="warnbox">${ovPct}% of phrases match the source transcript. Reword the flagged lines so the script is your own.</div>` : html`<div className="okbox">${ovPct}% phrase overlap with the source. Wording is original.</div>`}
-          <p className="note">Compares three-word phrases against the reference transcript. Try pasting “fourteen point six kilos of food from a four square metre balcony” into a line.</p>
+          ${ovPct > 25 ? html`<div className="warnbox">${ovPct}% of phrases match the source transcript. Reword those parts so the story is your own.</div>` : html`<div className="okbox">${ovPct}% phrase overlap with the source. Wording is original.</div>`}
+          <p className="note">Compares three-word phrases against the reference transcript.</p>
+        </section>
+        <section className="panel stack">
+          <h3>Story at a glance</h3>
+          <dl className="kv" style=${{ gridTemplateColumns: '1fr auto' }}><dt>Words</dt><dd className="mono">${words(sc.story).length}</dd><dt>Sentences</dt><dd className="mono">${lines.length}</dd><dt>Spoken length</dt><dd className="mono">${fmtT(total)}</dd><dt>Frame</dt><dd className="mono">${p.format.aspect_ratio}</dd></dl>
         </section>
         <section className="panel stack">
           <h3>Style guide applied</h3>
@@ -1340,7 +1379,7 @@ function ScriptScreen({ p, s }) {
         <section className="panel stack"><h3>Written from</h3>${sc.written_with.map(id => { const a = p.angles.find(x => x.id === id); return a ? html`<div key=${id} style=${{ fontSize: 13 }}><span className="eyebrow">${a.type}</span><div>${a.title}</div></div>` : null; })}</section>
       </div>
     </div>
-    <${ApproveBar} p=${p} step="script" ready=${sc.lines.every(l => l.text.trim())} hint="Fill or delete empty lines." label="Approve script" onApprove=${() => approve(p.id, 'script')} />
+    <${ApproveBar} p=${p} step="script" ready=${lines.length > 0} hint="Write the story first." label="Approve story" onApprove=${onApprove} />
   </${Fragment}>`;
 }
 
@@ -1445,8 +1484,8 @@ function FormatScreen({ p, s }) {
     <${StepHead} title="Video format" sub="Choose the frame, whether scenes move, and how captions and music sound. The cost estimate updates as you choose." />
     <div className="fmt-grid">
       <section className="panel stack"><h3>Aspect ratio</h3>
-        <div className="aspects">${[['9:16', 'Shorts, vertical', 22, 38], ['16:9', 'Standard, horizontal', 48, 27]].map(([v, d, w, h]) => html`<button key=${v} type="button" className="aspect" aria-pressed=${p.format.aspect_ratio === v} disabled=${locked} onClick=${() => set(q => { q.format.aspect_ratio = v; })}><i style=${{ width: w, height: h }}></i><strong className="mono">${v}</strong><span className="note">${d}</span></button>`)}</div>
-        <p className="note">Exports at 1080p MP4. Length target: <span className="mono">${p.format.target_seconds}s</span>, script runs <span className="mono">${fmtT(scriptSecs(p))}</span>.</p>
+        <div className="aspects">${[['9:16', 'Shorts, vertical', 22, 38], ['16:9', 'Standard, horizontal', 48, 27]].map(([v, d, w, h]) => html`<button key=${v} type="button" className="aspect" aria-pressed=${p.format.aspect_ratio === v} disabled=${true} title="Set on the Pick angle step" onClick=${() => {}}><i style=${{ width: w, height: h }}></i><strong className="mono">${v}</strong><span className="note">${d}</span></button>`)}</div>
+        <p className="note">Set on the Pick angle step so images match the frame. Exports at 1080p MP4. Length target: <span className="mono">${p.format.target_seconds}s</span>, script runs <span className="mono">${fmtT(scriptSecs(p))}</span>.</p>
       </section>
       <section className="panel stack"><h3>Scenes</h3>
         <${Seg} label="Scene motion" value=${p.format.animated ? 'a' : 's'} onChange=${v => set(q => { q.format.animated = v === 'a'; q.scenes.forEach(sc => { sc.animate = v === 'a'; }); })} options=${[{ value: 's', label: 'Static: zoom and pan' }, { value: 'a', label: 'Animated clips' }]} />
@@ -1496,106 +1535,82 @@ function SceneImage({ p, sc, small }) {
     ${sc.image_status === 'pending' && !v ? html`<div className="overlay">Not generated</div>` : null}
   </div>`;
 }
-function PaceOptions({ p, locked }) {
-  const im = modelOf(p, 'image'); const pc = p.format.pacing || DEFAULT_PACING;
-  const choose = next => !locked && updateP(p.id, q => { q.format.pacing = next; });
+function PaceOptions({ p, locked, current, onChoose }) {
+  const im = modelOf(p, 'image'); const pc = current || p.format.pacing || DEFAULT_PACING;
   const opts = ['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: pc.compact_every || 3 }; const plan = scenePlan(p, cfg); return { m, cfg, plan, n: plan.length, every: paceEvery(cfg) }; });
   return html`<${Fragment}>
-    <div className="paces">${opts.map(o => html`<button key=${o.m} type="button" className="pace" aria-pressed=${pc.mode === o.m} disabled=${locked} onClick=${() => choose(o.cfg)}>
+    <div className="paces">${opts.map(o => html`<button key=${o.m} type="button" className="pace" aria-pressed=${pc.mode === o.m} disabled=${locked} onClick=${() => onChoose(o.cfg)}>
       <span className="row" style=${{ justifyContent: 'space-between' }}><strong>${PACING[o.m].label}</strong><span className="mono note">1 every ~${o.every} s</span></span>
-      <span className="pace-n"><b>${o.n}</b> scenes \u00b7 <b>${o.n}</b> images</span>
+      <span className="pace-n"><b>${o.n}</b> scenes · <b>${o.n}</b> images</span>
       <span className="strip" aria-hidden="true">${o.plan.map((sp, k) => html`<i key=${k} style=${{ flex: planSecs(p, sp) }} />`)}</span>
       <span className="note">${PACING[o.m].note}</span>
       <span className="mono note">est. ${fmt$(o.n * im.cost)} with ${im.name}</span>
     </button>`)}</div>
-    ${pc.mode === 'compact' ? html`<div className="row"><span className="note">Compact: one image every</span><${Seg} label="Compact interval" value=${pc.compact_every || 3} onChange=${v => choose({ mode: 'compact', compact_every: v })} options=${[{ value: 2, label: '2 s' }, { value: 3, label: '3 s' }]} /></div>` : null}
+    ${pc.mode === 'compact' ? html`<div className="row"><span className="note">Compact: one image every</span><${Seg} label="Compact interval" value=${pc.compact_every || 3} onChange=${v => onChoose({ mode: 'compact', compact_every: v })} options=${[{ value: 2, label: '2 s' }, { value: 3, label: '3 s' }]} /></div>` : null}
   </${Fragment}>`;
-}
-function PlanScreen({ p, s }) {
-  const locked = p.checkpoints.plan; const total = scriptSecs(p); const target = p.format.target_seconds;
-  const plan = scenePlan(p);
-  const stale = p.scenes.length && p.plan_sig !== planSig(p);
-  const hadImages = stale && p.scenes.some(sc => sc.image_versions.length);
-  const onApprove = () => { if (!p.scenes.length || stale) api.planScenes(p.id); approve(p.id, 'plan'); };
-  return html`<${Fragment}>
-    <${StepHead} title="Scene plan" sub=${'Choose how many scenes and images your ' + target + '-second video gets. The script runs ' + fmtT(total) + '. Nothing is generated yet, so this step is free.'} />
-    <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Image pacing</h2><span className="note mono">${target}s target \u00b7 ${fmtT(total)} script \u00b7 ${p.script.lines.length} lines</span></div>
-      <p className="note">How often the picture changes. Each scene gets one image.</p>
-      <${PaceOptions} p=${p} locked=${locked} />
-    </section>
-    <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${plan.length} scenes, ${plan.length} images</h2><span className="note">You can edit each scene\u2019s description and prompt in the Scenes step.</span></div>
-      <ol className="planlist">${plan.map((sp, i) => html`<li key=${i}>
-        <span className="mono muted">${i + 1}</span><span className="mono muted">${planSecs(p, sp).toFixed(1)}s</span>
-        <span style=${{ minWidth: 0 }}>${sp.split ? html`<span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sp.split.index + 1} of ${sp.split.of} \u00b7 </span>` : null}${sceneText(p, sp)}<br /><span className="note">${sp.description}</span></span>
-      </li>`)}</ol>
-    </section>
-    ${hadImages && !locked ? html`<div className="warnbox">Approving this new plan replaces the current scenes. Images already generated for them are discarded.</div>` : null}
-    <${ApproveBar} p=${p} step="plan" ready=${plan.length > 0} label=${'Approve plan: ' + plan.length + ' scenes'} onApprove=${onApprove} />
-  </${Fragment}>`;
-}
-function ImagesPanel({ p }) {
-  const im = modelOf(p, 'image'); const pc = p.format.pacing || DEFAULT_PACING;
-  const todo = p.scenes.filter(sc => sc.image_status === 'pending' || sc.image_status === 'failed');
-  return html`<section className="panel row" style=${{ justifyContent: 'space-between' }}>
-    <div style=${{ minWidth: 0 }}><strong>${p.scenes.length} scenes, ${p.scenes.length} images</strong> <span className="note">\u00b7 ${PACING[pc.mode].label} pacing, one image every ~${paceEvery(pc)} s \u00b7 set in Scene plan</span></div>
-    ${todo.length && !p.checkpoints.scenes ? html`<${CostGate} p=${p} label=${'Generate ' + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => api.generateImages(p.id, todo.map(sc => sc.id))} />` : null}
-  </section>`;
 }
 function ScenesScreen({ p, s }) {
   const locked = p.checkpoints.scenes; const isChar = p.video_type === 'character'; const h = p.format.aspect_ratio === '16:9';
-  const im = modelOf(p, 'image');
+  const im = modelOf(p, 'image'); const pc = p.format.pacing || DEFAULT_PACING; const target = p.format.target_seconds;
+  const hasImages = p.scenes.some(sc => sc.image_versions.length || sc.image_status === 'generating');
+  const stale = !p.scenes.length || p.plan_sig !== planSig(p);
+  const [pending, setPending] = useState(null);
+  // Plans as soon as the page opens, and re-plans for free until the first image exists.
+  useEffect(() => { if (!locked && stale && !hasImages) api.planScenes(p.id); }, [stale, hasImages, locked]);
+  const choose = next => {
+    if (locked) return;
+    if (hasImages) { setPending(next); return; }
+    updateP(p.id, q => { q.format.pacing = next; }); api.planScenes(p.id);
+  };
+  const replan = () => { const next = pending; setPending(null); updateP(p.id, q => { if (next) q.format.pacing = next; }); api.planScenes(p.id); toast('Scenes re-planned. Generate the images again to continue.'); };
   const ready = p.scenes.filter(x => x.image_status === 'ready').length;
   const total = p.scenes.reduce((n, sc) => n + sceneSecs(p, sc), 0);
+  const todo = p.scenes.filter(sc => sc.image_status === 'pending' || sc.image_status === 'failed');
+  const busy = p.scenes.some(sc => sc.image_status === 'generating');
+  const nImages = p.scenes.filter(sc => sc.image_versions.length).length;
   const setS = (id, fn) => !locked && updateP(p.id, q => { const sc = q.scenes.find(x => x.id === id); fn(sc, q); });
-  const move = (i, d) => !locked && updateP(p.id, q => { const j = i + d; if (j < 0 || j >= q.scenes.length) return; const t = q.scenes[i]; q.scenes[i] = q.scenes[j]; q.scenes[j] = t; q.scenes.forEach((sc, k) => { sc.order = k; }); });
   const merge = i => !locked && updateP(p.id, q => { const a = q.scenes[i], b = q.scenes[i + 1]; if (!b) return; a.line_ids = a.line_ids.concat(b.line_ids); a.description = a.description + '; ' + b.description; a.character_ids = Array.from(new Set(a.character_ids.concat(b.character_ids))); q.scenes.splice(i + 1, 1); });
   const split = i => !locked && updateP(p.id, q => { const a = q.scenes[i]; if (a.line_ids.length < 2) return; const b = clone(a); b.id = uid('sc'); const half = Math.ceil(a.line_ids.length / 2); b.line_ids = a.line_ids.slice(half); a.line_ids = a.line_ids.slice(0, half); b.image_versions = []; b.image_index = -1; b.image_status = 'pending'; b.clip_versions = []; b.clip_index = -1; b.clip_status = 'pending'; q.scenes.splice(i + 1, 0, b); });
-  const del = i => !locked && updateP(p.id, q => { q.scenes.splice(i, 1); });
-  const add = () => !locked && updateP(p.id, q => { const l = { id: uid('ln'), text: 'New line for this scene.', visual: '', speaker: isChar && q.characters[0] ? q.characters[0].id : null, audio_status: 'pending' }; q.script.lines.push(l); q.scenes.push({ id: uid('sc'), order: q.scenes.length, description: 'New scene', line_ids: [l.id], character_ids: [], image_prompt: '', image_versions: [], image_index: -1, image_status: 'pending', animate: q.format.animated, motion_prompt: 'slow push in', clip_versions: [], clip_index: -1, clip_status: 'pending', caption_style: q.audio.caption_style }); q.checkpoints.voice = q.checkpoints.voice; });
   const upload = async (id, file) => { if (!file) return; try { const data = await readImage(file); setS(id, sc => { sc.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); sc.image_index = sc.image_versions.length - 1; sc.image_status = 'ready'; }); toast('Your image was placed in the scene.'); } catch (e) { toast('That file could not be read as an image. Try a JPG or PNG.'); } };
-  const unvoiced = p.scenes.some(sc => sceneLines(p, sc).some(l => l.audio_status !== 'ready'));
-  const allReady = p.scenes.length > 0 && ready === p.scenes.length;
+  const gate = todo.length && !locked && !busy ? html`<${CostGate} p=${p} label=${(todo.length === p.scenes.length ? 'Generate all ' : 'Generate ') + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Style', styleById(p.style).name], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => api.generateImages(p.id, todo.map(sc => sc.id))} />` : null;
   return html`<${Fragment}>
-    <${StepHead} title="Scenes" sub=${'Generate one image per scene with ' + im.name + ' and the ' + styleById(p.style).name.toLowerCase() + ' style prefix. Edit any description or prompt and regenerate just that scene. Earlier versions are kept.'}>
+    <${StepHead} title="Scenes and images" sub=${'The story is split into scenes at the pacing you choose. Check the scenes on the left, then generate every image at once. Images appear on the right, made with ' + im.name + ' in the ' + styleById(p.style).name.toLowerCase() + ' style.'}>
       <span className="note mono">${p.scenes.length} scenes · ${fmtT(total)} · ${ready}/${p.scenes.length} images</span>
     </${StepHead}>
-    <${ImagesPanel} p=${p} />
-    ${unvoiced ? html`<div className="warnbox">Some scenes have lines without audio. Generate them in the Voice step so scene lengths match the narration.</div>` : null}
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>How many scenes?</h2><span className="note mono">${target}s target · ${fmtT(scriptSecs(p))} story · ${p.format.aspect_ratio}</span></div>
+      <p className="note">How often the picture changes. Each scene gets one image. ${hasImages ? '' : 'Free to change until you generate images.'}</p>
+      <${PaceOptions} p=${p} locked=${locked} current=${pending || pc} onChoose=${choose} />
+      ${pending ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Switching to ${PACING[pending.mode].label} re-plans every scene and discards the ${nImages} images already made.</span><span className="row"><button type="button" className="btn sm" onClick=${replan}>Re-plan scenes</button><button type="button" className="btn sm ghost" onClick=${() => setPending(null)}>Cancel</button></span></div>` : null}
+      ${!pending && stale && hasImages && !locked ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>The story changed since these scenes were planned.</span><button type="button" className="btn sm" onClick=${replan}>Re-plan scenes (discards ${nImages} images)</button></div>` : null}
+      <div className="row">${gate}${busy ? html`<span className="row note"><span className="spinner" style=${{ color: 'var(--rec)' }}></span> Generating ${p.scenes.filter(sc => sc.image_status === 'generating').length} images with ${im.name}</span>` : null}</div>
+    </section>
     <div className="scenes">${p.scenes.map((sc, i) => { const ls = sceneLines(p, sc); return html`<section key=${sc.id} className=${'panel scene' + (h ? ' wide' : '')}>
-      <div className="scene-media">
-        <${SceneImage} p=${p} sc=${sc} />
-        ${sc.image_versions.length > 1 ? html`<div className="versions" aria-label="Versions">${sc.image_versions.map((v, k) => html`<button key=${k} type="button" aria-pressed=${k === sc.image_index} title=${'Version ' + (k + 1) + ' · ' + (v.model === 'upload' ? 'Your upload' : (MODELS.image.find(m => m.id === v.model) || {}).name)} onClick=${() => setS(sc.id, x => { x.image_index = k; })}><${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} /></button>`)}</div>` : null}
-        <div className="row" style=${{ gap: 4 }}>
-          <button type="button" className="btn sm" disabled=${locked || sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Regenerate' : 'Generate'}</button>
-          <label className="btn sm ghost" title="Upload your own image"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden disabled=${locked} onChange=${e => upload(sc.id, e.target.files[0])} /></label>
-        </div>
-      </div>
       <div className="scene-body">
         <div className="row" style=${{ justifyContent: 'space-between' }}>
           <div className="row"><strong>Scene ${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span><${Pill} status=${sc.image_status} /></div>
           <div className="row" style=${{ gap: 2 }}>
-            <button type="button" className="btn ghost sm" aria-label="Move up" title="Move up" disabled=${locked || i === 0} onClick=${() => move(i, -1)}><${Icon} n="up" /></button>
-            <button type="button" className="btn ghost sm" aria-label="Move down" title="Move down" disabled=${locked || i === p.scenes.length - 1} onClick=${() => move(i, 1)}><${Icon} n="down" /></button>
-            <button type="button" className="btn ghost sm" aria-label="Merge with next" title="Merge with next scene" disabled=${locked || i === p.scenes.length - 1 || !!sc.split || !!(p.scenes[i + 1] && p.scenes[i + 1].split)} onClick=${() => merge(i)}><${Icon} n="merge" /></button>
+            <button type="button" className="btn ghost sm" aria-label="Merge with next" title="Merge with the next scene" disabled=${locked || i === p.scenes.length - 1 || !!sc.split || !!(p.scenes[i + 1] && p.scenes[i + 1].split)} onClick=${() => merge(i)}><${Icon} n="merge" /></button>
             <button type="button" className="btn ghost sm" aria-label="Split scene" title="Split into two scenes" disabled=${locked || sc.line_ids.length < 2 || !!sc.split} onClick=${() => split(i)}><${Icon} n="split" /></button>
-            <button type="button" className="btn ghost sm danger" aria-label="Delete scene" title="Delete scene" disabled=${locked || p.scenes.length < 2} onClick=${() => del(i)}><${Icon} n="trash" /></button>
           </div>
         </div>
-        <div className="scene-lines">${sc.split ? html`<div><span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sc.split.index + 1} of ${sc.split.of} \u00b7 </span>${isChar && ls[0] && p.characters.find(c => c.id === ls[0].speaker) ? html`<b>${p.characters.find(c => c.id === ls[0].speaker).name}: </b>` : null}${sceneText(p, sc)}</div>` : ls.map(l => { const ch = isChar && p.characters.find(c => c.id === l.speaker); return html`<div key=${l.id}>${ch ? html`<b>${ch.name}: </b>` : null}${l.text}</div>`; })}</div>
+        <div className="scene-lines">${sc.split ? html`<span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sc.split.index + 1} of ${sc.split.of} · </span>` : null}${isChar && ls[0] && p.characters.find(c => c.id === ls[0].speaker) ? html`<b>${p.characters.find(c => c.id === ls[0].speaker).name}: </b>` : null}${sceneText(p, sc)}</div>
         ${sc.error && sc.image_status === 'failed' ? html`<div className="warnbox">${sc.error}</div>` : null}
-        <label className="field">Scene description<textarea className="textarea" rows="2" disabled=${locked} value=${sc.description} onChange=${e => setS(sc.id, x => { x.description = e.target.value; })}></textarea></label>
+        <label className="field">What the image shows<textarea className="textarea" rows="2" disabled=${locked} value=${sc.description} onChange=${e => setS(sc.id, x => { x.description = e.target.value; })}></textarea></label>
         <label className="field">Image prompt<span className="prefix-chip">${styleById(p.style).prefix},</span><textarea className="textarea prompt" rows="2" disabled=${locked} value=${sc.image_prompt} onChange=${e => setS(sc.id, x => { x.image_prompt = e.target.value; })}></textarea></label>
-        <div className="row" style=${{ justifyContent: 'space-between' }}>
-          ${isChar ? html`<div className="row"><span className="note">In scene</span>${p.characters.map(c => html`<button key=${c.id} type="button" className="chip btnchip" aria-pressed=${sc.character_ids.includes(c.id)} disabled=${locked} onClick=${() => setS(sc.id, x => { x.character_ids = x.character_ids.includes(c.id) ? x.character_ids.filter(y => y !== c.id) : x.character_ids.concat(c.id); })}>${c.name}</button>`)}</div>` : html`<span></span>`}
-          <${Seg} label="Scene motion" value=${sc.animate ? 'a' : 's'} onChange=${v => setS(sc.id, x => { x.animate = v === 'a'; })} options=${[{ value: 's', label: 'Static' }, { value: 'a', label: 'Animated' }]} />
+        ${isChar ? html`<div className="row"><span className="note">In scene</span>${p.characters.map(c => html`<button key=${c.id} type="button" className="chip btnchip" aria-pressed=${sc.character_ids.includes(c.id)} disabled=${locked} onClick=${() => setS(sc.id, x => { x.character_ids = x.character_ids.includes(c.id) ? x.character_ids.filter(y => y !== c.id) : x.character_ids.concat(c.id); })}>${c.name}</button>`)}</div>` : null}
+      </div>
+      <div className="scene-media">
+        <${SceneImage} p=${p} sc=${sc} />
+        ${sc.image_versions.length > 1 ? html`<div className="versions" aria-label="Versions">${sc.image_versions.map((v, k) => html`<button key=${k} type="button" aria-pressed=${k === sc.image_index} title=${'Version ' + (k + 1) + ' · ' + (v.model === 'upload' ? 'Your upload' : (MODELS.image.find(m => m.id === v.model) || {}).name)} onClick=${() => setS(sc.id, x => { x.image_index = k; })}><${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} /></button>`)}</div>` : null}
+        <div className="row" style=${{ gap: 4 }}>
+          <button type="button" className="btn sm" disabled=${locked || sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Redo' : 'Generate'}</button>
+          <label className="btn sm ghost" title="Upload your own image"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden disabled=${locked} onChange=${e => upload(sc.id, e.target.files[0])} /></label>
         </div>
-        ${isChar && sc.character_ids.length ? html`<p className="note">Reference images for ${sc.character_ids.map(id => (p.characters.find(c => c.id === id) || {}).name).join(' and ')} are sent with this prompt.</p>` : null}
       </div>
     </section>`; })}</div>
-    <div><button type="button" className="btn" disabled=${locked} onClick=${add}><${Icon} n="plus" />Add scene</button></div>
-    <${ApproveBar} p=${p} step="scenes" ready=${allReady} hint=${p.scenes.some(x => x.image_status === 'generating') ? 'Images are still generating.' : 'Every scene needs an image.'} label=${needsAnimate(p) ? 'Approve scenes' : 'Approve scenes (skip Animate)'} onApprove=${() => approve(p.id, 'scenes')} />
+    ${p.scenes.length > 3 && gate ? html`<div className="row">${gate}</div>` : null}
+    <${ApproveBar} p=${p} step="scenes" ready=${p.scenes.length > 0 && ready === p.scenes.length} hint=${busy ? 'Images are still generating.' : 'Generate every image to continue.'} label="Approve scenes and images" onApprove=${() => approve(p.id, 'scenes')} />
   </${Fragment}>`;
 }
 
@@ -1627,7 +1642,7 @@ function AnimateScreen({ p, s }) {
     <${StepHead} title="Animate" sub=${'Turn ' + anim.length + ' of ' + p.scenes.length + ' scenes into clips with ' + vm.name + '. Each clip is trimmed or extended to match its scene’s audio. Static scenes get zoom and pan instead.'}>
       ${todo.length && !locked ? html`<${CostGate} p=${p} label=${'Animate ' + todo.length + ' scene' + (todo.length > 1 ? 's' : '')} cost=${cost} rows=${[[vm.name, fmt$(vm.cost) + ' per second'], ['Seconds to generate', todo.reduce((n, sc) => n + genSecs(sc), 0)], ['Max clip length', vm.maxClip + ' s']]} onGo=${() => api.animate(p.id, todo.map(sc => sc.id))} />` : null}
     </${StepHead}>
-    <div className="scenes">${anim.map(sc => { const i = p.scenes.indexOf(sc); const c = sc.clip_versions[sc.clip_index]; return html`<section key=${sc.id} className=${'panel scene' + (h ? ' wide' : '')}>
+    <div className="scenes">${anim.map(sc => { const i = p.scenes.indexOf(sc); const c = sc.clip_versions[sc.clip_index]; return html`<section key=${sc.id} className=${'panel scene anim' + (h ? ' wide' : '')}>
       <div className="scene-media"><${ClipPreview} p=${p} sc=${sc} />
         ${sc.clip_versions.length > 1 ? html`<div className="row" style=${{ gap: 4 }}>${sc.clip_versions.map((v, k) => html`<button key=${k} type="button" className="chip btnchip" aria-pressed=${k === sc.clip_index} onClick=${() => setS(sc.id, x => { x.clip_index = k; })}>Take ${k + 1}</button>`)}</div>` : null}
       </div>
@@ -1867,7 +1882,7 @@ function Toasts({ s }) { return html`<div className="toasts" aria-live="polite">
 function Flow({ p, s }) {
   let step = p.step;
   if (!isUnlocked(p, step) || isSkipped(p, step)) step = STEPS.slice().reverse().find(st => isUnlocked(p, st.id) && !isSkipped(p, st.id)).id;
-  const Screen = { ingest: IngestScreen, angles: AnglesScreen, script: ScriptScreen, plan: PlanScreen, style: StyleScreen, voice: VoiceScreen, format: FormatScreen, scenes: ScenesScreen, animate: AnimateScreen, compile: CompileScreen, export: ExportScreen }[step];
+  const Screen = { ingest: IngestScreen, angles: AnglesScreen, script: ScriptScreen, style: StyleScreen, voice: VoiceScreen, format: FormatScreen, scenes: ScenesScreen, animate: AnimateScreen, compile: CompileScreen, export: ExportScreen }[step];
   return html`<${Screen} p=${p} s=${s} />`;
 }
 function App() {

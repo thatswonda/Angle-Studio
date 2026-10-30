@@ -1,5 +1,4 @@
 """Walks the whole pipeline against the mock adapters: link to rendered video."""
-import os
 import time
 
 import pytest
@@ -27,6 +26,21 @@ def wait(c, job):
     raise AssertionError("job did not finish")
 
 
+def approve(c, pid, *names):
+    for name in names:
+        r = c.post(f"/api/projects/{pid}/checkpoints/{name}")
+        assert r.status_code == 200, (name, r.json())
+
+
+def to_story(c, pid, angle="a1", seconds=60):
+    wait(c, c.post(f"/api/projects/{pid}/ingest", json={"url": "https://www.youtube.com/watch?v=x"}).json())
+    # Length and frame are chosen with the angle, before the story is written.
+    c.patch(f"/api/projects/{pid}", json={"format": {"target_seconds": seconds, "aspect_ratio": "9:16"}, "selected_angle_ids": [angle],
+                                          "style": {"template_id": "botanical", "image_prefix": "soft window light"}})
+    approve(c, pid, "angles")
+    wait(c, c.post(f"/api/projects/{pid}/script").json())
+
+
 def test_link_to_rendered_video(client):
     c = client
     pid = c.post("/api/projects", json={"title": "Balcony follow-up"}).json()["id"]
@@ -42,44 +56,47 @@ def test_link_to_rendered_video(client):
     # Downstream stages refuse to run before their checkpoint (PRJ-2).
     assert c.post(f"/api/projects/{pid}/script").status_code == 409
 
-    # Length is chosen with the angle, before the script is written.
-    c.patch(f"/api/projects/{pid}", json={"format": {"target_seconds": 90}, "selected_angle_ids": ["a1"], "style": {"template_id": "botanical", "image_prefix": "soft window light"}})
-    c.post(f"/api/projects/{pid}/checkpoints/angles")
-    wait(c, c.post(f"/api/projects/{pid}/script").json())
+    to_story(c, pid, seconds=90)
     p = c.get(f"/api/projects/{pid}").json()
-    assert len(p["script"]["hook_options"]) == 3 and p["script"]["written_by"] == "Claude Opus 5.5"
+    sc = p["script"]
+    assert len(sc["hook_options"]) == 3 and sc["written_by"] == "Claude Opus 5.5"
+    assert sc["story"].startswith(sc["hook_options"][0]) and "\n\n" in sc["story"] and sc["lines"] == []
     assert c.get(f"/api/projects/{pid}/originality").json()["too_close"] is False
 
-    assert c.post(f"/api/projects/{pid}/checkpoints/script").status_code == 200
+    # Approving the story splits it into sentences.
+    approve(c, pid, "script")
+    p = c.get(f"/api/projects/{pid}").json()
+    assert len(p["script"]["lines"]) > 8 and all(l["text"].rstrip()[-1] in ".!?" for l in p["script"]["lines"])
 
-    # Right after the script: choose how many scenes and images. Counts rise from simple to compact.
+    # Scenes and images come after the style, before the voice.
+    assert c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "moderate"}).status_code == 409
+    approve(c, pid, "style")
     opts = c.get(f"/api/projects/{pid}/pacing").json()
     counts = [o["images"] for o in opts]
     assert counts[0] < counts[1] < counts[2]  # simple < moderate < compact (2 s)
     p = c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "compact", "compact_every": 2}).json()
     assert len(p["scenes"]) == counts[2] and all(s["image_status"] == "pending" for s in p["scenes"])
     assert any(s["split_of"] for s in p["scenes"])
+    p = c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "simple"}).json()
+    assert len(p["scenes"]) == counts[0] and any(len(s["line_ids"]) > 1 for s in p["scenes"])
     p = c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "moderate"}).json()
     assert len(p["scenes"]) == counts[1]
-    for cp in ("plan", "style"):
-        assert c.post(f"/api/projects/{pid}/checkpoints/{cp}").status_code == 200
+    assert c.post(f"/api/projects/{pid}/checkpoints/scenes").status_code == 409  # no images yet
+
+    wait(c, c.post(f"/api/projects/{pid}/scenes/images", json={}).json())
+    p = c.get(f"/api/projects/{pid}").json()
+    assert all(s["image_status"] == "ready" for s in p["scenes"])
+    sid = p["scenes"][0]["id"]
+    wait(c, c.post(f"/api/projects/{pid}/scenes/{sid}/image", json={}).json())  # redo keeps the earlier version (VIS-3)
+    assert len(c.get(f"/api/projects/{pid}").json()["scenes"][0]["image_versions"]) == 2
+    approve(c, pid, "scenes")
     assert c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "simple"}).status_code == 409  # locked once approved
+
     wait(c, c.post(f"/api/projects/{pid}/audio", json={}).json())
     p = c.get(f"/api/projects/{pid}").json()
     assert all(l["audio_status"] == "ready" and l["duration"] for l in p["script"]["lines"])
 
-    for cp in ("voice", "format"):
-        c.post(f"/api/projects/{pid}/checkpoints/{cp}")
-    wait(c, c.post(f"/api/projects/{pid}/scenes/images", json={}).json())
-    p = c.get(f"/api/projects/{pid}").json()
-    assert p["scenes"] and all(s["image_status"] == "ready" for s in p["scenes"])
-
-    # Regenerating one scene keeps the earlier version (VIS-3).
-    sid = p["scenes"][0]["id"]
-    wait(c, c.post(f"/api/projects/{pid}/scenes/{sid}/image", json={}).json())
-    assert len(c.get(f"/api/projects/{pid}").json()["scenes"][0]["image_versions"]) == 2
-
-    c.post(f"/api/projects/{pid}/checkpoints/scenes")
+    approve(c, pid, "voice", "format")
     wait(c, c.post(f"/api/projects/{pid}/render", json={"final": False}).json())
     wait(c, c.post(f"/api/projects/{pid}/render", json={"final": True}).json())
     p = c.get(f"/api/projects/{pid}").json()
@@ -87,22 +104,30 @@ def test_link_to_rendered_video(client):
     assert p["render"]["cost_actual"] > 0
 
 
+def test_character_story_assigns_speakers(client):
+    c = client
+    pid = c.post("/api/projects", json={}).json()["id"]
+    wait(c, c.post(f"/api/projects/{pid}/ingest", json={"url": "https://example.com/c"}).json())
+    c.patch(f"/api/projects/{pid}", json={"video_type": "character"})
+    to_story(c, pid, angle="a4")
+    p = c.get(f"/api/projects/{pid}").json()
+    assert p["script"]["story"].startswith("Tomi: ")
+    approve(c, pid, "script")
+    p = c.get(f"/api/projects/{pid}").json()
+    speakers = {l["speaker"] for l in p["script"]["lines"]}
+    assert speakers == {c_["id"] for c_ in p["characters"]}
+
+
 def test_cost_limit_needs_confirmation(client, monkeypatch):
     c = client
     monkeypatch.setenv("ANGLE_STUDIO_COST_LIMIT", "0.01")
     pid = c.post("/api/projects", json={}).json()["id"]
-    wait(c, c.post(f"/api/projects/{pid}/ingest", json={"url": "https://example.com/v"}).json())
-    c.patch(f"/api/projects/{pid}", json={"selected_angle_ids": ["a2"], "style": {"template_id": "infographic", "image_prefix": "flat vector"}})
-    for cp in ("angles",):
-        c.post(f"/api/projects/{pid}/checkpoints/{cp}")
-    wait(c, c.post(f"/api/projects/{pid}/script").json())
-    c.post(f"/api/projects/{pid}/checkpoints/script")
+    to_story(c, pid, angle="a2")
+    approve(c, pid, "script", "style")
     c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "moderate"})
-    for cp in ("plan", "style"):
-        c.post(f"/api/projects/{pid}/checkpoints/{cp}")
-    r = c.post(f"/api/projects/{pid}/audio", json={})
+    r = c.post(f"/api/projects/{pid}/scenes/images", json={})
     assert r.status_code == 402 and r.json()["error"] == "cost_limit"
-    assert c.post(f"/api/projects/{pid}/audio", json={"confirm_over_limit": True}).status_code == 202
+    assert c.post(f"/api/projects/{pid}/scenes/images", json={"confirm_over_limit": True}).status_code == 202
 
 
 def test_models_and_cache(client):

@@ -63,7 +63,7 @@ def line_voice(p: Project, line: ScriptLine) -> str:
 
 def line_seconds(p: Project, line_id: str) -> float:
     line = p.line(line_id)
-    return line.duration or len(line.text.split()) / 2.6 + 0.5
+    return line.duration or len(line.text.split()) / 2.6 + 0.5  # real audio length once the voice exists
 
 
 def scene_seconds(p: Project, s: Scene) -> float:
@@ -73,33 +73,87 @@ def scene_seconds(p: Project, s: Scene) -> float:
 SHOTS = ["wide establishing shot", "close-up detail", "medium shot from a new angle", "macro texture shot", "over-the-shoulder view", "top-down view"]
 
 
+def split_sentences(text: str) -> list[str]:
+    return [t.strip() for t in re.findall(r"[^.!?]+[.!?]+[\"\u201d\u2019)]*|[^.!?]+$", re.sub(r"\s+", " ", text or "")) if t.strip()]
+
+
+def _norm(t: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", "", t.lower())).strip()
+
+
+def story_lines(p: Project) -> list[ScriptLine]:
+    """Split the story into sentences. Character stories use one 'Name: what they say' line per speaker."""
+    names = {c.name.lower(): c.id for c in p.characters}
+    hints = {_norm(k): v for k, v in p.script.visual_hints.items()}
+    out = []
+    for par in p.script.story.split("\n"):
+        text, speaker = par.strip(), None
+        if not text:
+            continue
+        if p.video_type == "character" and (m := re.match(r"^([^:]{1,24}):\s*(.*)$", text)) and m[1].strip().lower() in names:
+            speaker, text = names[m[1].strip().lower()], m[2]
+        out += [ScriptLine(text=t, speaker=speaker, visual=hints.get(_norm(t), "")) for t in split_sentences(text)]
+    return out
+
+
+def approve_story(p: Project) -> None:
+    """On approval, split the story into lines, keeping the audio of sentences that did not change."""
+    old, fresh = list(p.script.lines), []
+    for line in story_lines(p):
+        match = next((o for o in old if o.text == line.text and o.speaker == line.speaker), None)
+        if match:
+            old.remove(match)
+            fresh.append(match)
+        else:
+            fresh.append(line)
+    p.script.lines = fresh
+
+
 def scene_plan(p: Project, pacing: Pacing | None = None) -> list[dict]:
-    """Simple groups short lines into one longer scene; moderate and compact split long lines into several shots."""
+    """Sentences are grouped until a scene reaches the pacing length; a much longer sentence becomes several shots."""
     pacing = pacing or p.format.pacing
-    every, lines, out = pacing.every, p.script.lines if p.script else [], []
-    if pacing.mode == "simple":
+    every = pacing.every
+    lines = p.script.lines if (p.script and p.script.lines) else (story_lines(p) if p.script else [])
+    secs = {l.id: l.duration or len(l.text.split()) / 2.6 + 0.5 for l in lines}
+    out: list[dict] = []
+    group: list[ScriptLine] = []
+    t = 0.0
+
+    def fallback(text: str) -> str:
+        return "scene showing: " + " ".join(text.split()[:10]).rstrip(".,!?")
+
+    def flush() -> None:
+        nonlocal group, t
+        if not group:
+            return
+        if t < every * 0.4 and out and not out[-1].get("split_of"):
+            out[-1]["line_ids"] += [g.id for g in group]
+        else:
+            out.append({"line_ids": [g.id for g in group], "base": group[0].visual or fallback(group[0].text)})
         group, t = [], 0.0
-        for i, l in enumerate(lines):
-            group.append(l)
-            t += line_seconds(p, l.id)
-            if t >= every * 0.8 or i == len(lines) - 1:
-                if t < every * 0.4 and out:
-                    out[-1]["line_ids"] += [g.id for g in group]
-                else:
-                    out.append({"line_ids": [g.id for g in group], "description": group[0].visual})
-                group, t = [], 0.0
-    else:
-        for l in lines:
-            n = max(1, round(line_seconds(p, l.id) / every))
-            for k in range(n):
-                out.append({"line_ids": [l.id], "split_index": k if n > 1 else None, "split_of": n if n > 1 else None,
-                            "description": l.visual + (f", {SHOTS[k % len(SHOTS)]}" if n > 1 else "")})
+
+    for l in lines:
+        n = round(secs[l.id] / every)
+        if n >= 2:
+            flush()
+            out += [{"line_ids": [l.id], "split_index": k, "split_of": n, "base": l.visual or fallback(l.text)} for k in range(n)]
+            continue
+        group.append(l)
+        t += secs[l.id]
+        if t >= every * 0.8:
+            flush()
+    flush()
+    prev, k = None, 0
+    for sp in out:
+        k = k + 1 if sp["base"] == prev else 0
+        sp["description"] = sp["base"] + (f", {SHOTS[k % len(SHOTS)]}" if k else (f", {SHOTS[0]}" if sp.get("split_of") else ""))
+        prev = sp["base"]
     return out
 
 
 def pacing_options(p: Project) -> list[dict]:
     """Scene and image counts for each pacing at the script's current length, shown before generating."""
-    total = sum(line_seconds(p, l.id) for l in p.script.lines) if p.script else 0
+    total = sum(l.duration or len(l.text.split()) / 2.6 + 0.5 for l in (p.script.lines or story_lines(p))) if p.script else 0
     cost = registry.model("image", p.models.image)["cost"]
     opts = []
     for mode, every in (("simple", None), ("moderate", None), ("compact", 2), ("compact", 3)):
@@ -185,24 +239,26 @@ async def write_script(pid: str, progress: Callable[[str], None]) -> None:
     p = storage.load(pid)
     require(p, "angles")
     writer_m = registry.model("writer", p.models.writer)
-    progress(f"{writer_m['name']} is drafting hooks and lines")
+    progress(f"{writer_m['name']} is writing the story")
     chosen = [a.model_dump() for a in p.angles if a.id in p.selected_angle_ids]
-    prompt = (f"angles={','.join(p.selected_angle_ids)} seconds={p.format.target_seconds}\n{PROMPTS['script']}\n"
+    prompt = (f"angles={','.join(p.selected_angle_ids)} seconds={p.format.target_seconds} type={p.video_type}\n{PROMPTS['script']}\n"
               f"Direction: {p.user_direction}\nAngles: {json.dumps(chosen)}\nReference breakdown: {p.analysis.model_dump_json()}")
+    if p.video_type == "character" and not p.characters:
+        p.characters = [Character(**c) for c in sample.DEFAULT_CHARACTERS]
+    prompt += f"\nCharacters: {', '.join(c.name for c in p.characters)}" if p.video_type == "character" else ""
     raw, cost = await registry.writer(p.models.writer).complete_json(PROMPTS["system"], prompt, {"title": "Script"})
-    async with editing(pid) as p:
-        p.render.cost_actual += cost
-        if p.video_type == "character" and not p.characters:
-            p.characters = [Character(**c) for c in sample.DEFAULT_CHARACTERS]
-        speakers = [c.id for c in p.characters] if p.video_type == "character" else [None]
-        p.script = Script(written_by=writer_m["name"], hook_options=raw["hook_options"],
-                          lines=[ScriptLine(text=l["text"], visual=l.get("visual", ""), speaker=speakers[i % len(speakers)]) for i, l in enumerate(raw["lines"])])
-        p.scenes = []
+    async with editing(pid) as q:
+        q.render.cost_actual += cost
+        if q.video_type == "character" and not q.characters:
+            q.characters = p.characters
+        q.script = Script(written_by=writer_m["name"], hook_options=raw["hook_options"], story=raw["story"],
+                          visual_hints=raw.get("visual_hints", {}))
+        q.scenes = []
 
 
 async def generate_audio(pid: str, line_ids: list[str] | None, progress: Callable[[str], None]) -> None:
     p = storage.load(pid)
-    require(p, "script", "style")
+    require(p, "scenes")
     tts = registry.tts(p.models.voice)
     ids = line_ids or [l.id for l in p.script.lines]
     for n, lid in enumerate(ids, 1):
@@ -225,9 +281,9 @@ async def generate_audio(pid: str, line_ids: list[str] | None, progress: Callabl
 
 
 def plan_scenes(pid: str, pacing: Pacing | None = None) -> Project:
-    """VIS-1: split the approved script into scenes at the chosen image pacing. Free; no images yet."""
+    """VIS-1: split the approved story into scenes at the chosen image pacing. Free; no images yet."""
     p = storage.load(pid)
-    require(p, "script")
+    require(p, "script", "style")
     if pacing:
         p.format.pacing = pacing
     p.scenes = []
@@ -309,5 +365,7 @@ PROMPTS = {
              "and audience requests from the comments provided).",
     "angles": "You are given a report on a reference video written by a model that watched it. Propose 8 to 12 original angles a viewer of the reference video would click next. For each give a relatedness score "
               "from topic, audience, format and keyword overlap, and a one-line reason. Titles and tags must honestly describe the new video.",
-    "script": "Write a script for the chosen angle(s) at the target length. Give 3 hook options. One line per future scene, each with a visual.",
+    "script": "Write one continuous story for the chosen angle(s) that fits the target length when narrated, opening with the "
+              "first of 3 hook options. For character videos write one 'Name: what they say' line per speaker. Also return "
+              "visual_hints: for each sentence, a short description of a picture that fits it.",
 }

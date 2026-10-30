@@ -95,14 +95,17 @@ class ScriptLine(BaseModel):
 
 
 class Script(BaseModel):
+    """One continuous story. On approval it is split into sentences (lines), the units scenes and narration use."""
     written_by: str = ""
     hook_options: list[str]
     chosen_hook: int = 0
-    lines: list[ScriptLine]
+    story: str
+    visual_hints: dict[str, str] = {}  # sentence -> picture idea, returned by the writer with the story
+    lines: list[ScriptLine] = []
 
     @property
     def full_text(self) -> str:
-        return " ".join(line.text for line in self.lines)
+        return self.story
 
 
 class Style(BaseModel):
@@ -186,11 +189,10 @@ class Render(BaseModel):
 class Checkpoints(BaseModel):
     angles: bool = False
     script: bool = False
-    plan: bool = False  # scene plan: how many scenes and images, chosen right after the script
     style: bool = False
+    scenes: bool = False  # scene plan and all scene images, on one page
     voice: bool = False
     format: bool = False
-    scenes: bool = False
     clips: bool = False
 
 
