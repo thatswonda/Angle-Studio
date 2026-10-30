@@ -18,7 +18,9 @@ CAPTION_STYLES = {
 
 
 def plan(p: Project, height: int, polish: bool) -> dict:
-    w, h = (round(height * 9 / 16 / 2) * 2, height) if p.format.aspect_ratio == "9:16" else (round(height * 16 / 9 / 2) * 2, height)
+    # "1080p" means the short side: 9:16 -> 1080x1920, 16:9 -> 1920x1080, 1:1 -> 1080x1080, 4:5 -> 1080x1350.
+    a, b = (int(x) for x in p.format.aspect_ratio.split(":"))
+    w, h = (round(height * a / b / 2) * 2, height) if a >= b else (height, round(height * b / a / 2) * 2)
     scenes = []
     for s in sorted(p.scenes, key=lambda s: s.order):
         dur = s.duration or 3

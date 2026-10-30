@@ -135,7 +135,7 @@ class Pacing(BaseModel):
 
 
 class Format(BaseModel):
-    aspect_ratio: Literal["9:16", "16:9"] = "9:16"
+    aspect_ratio: Literal["9:16", "16:9", "1:1", "4:5"] = "9:16"  # chosen on the Visual style step
     target_seconds: int = 60
     animated: bool = False
     pacing: Pacing = Field(default_factory=Pacing)

@@ -97,6 +97,8 @@ def test_link_to_rendered_video(client):
     assert all(l["audio_status"] == "ready" and l["duration"] for l in p["script"]["lines"])
 
     approve(c, pid, "voice", "format")
+    from app import assembly, storage
+    assert assembly.plan(storage.load(pid), 1080, polish=True)["size"] == [1080, 1920]  # vertical 1080p
     wait(c, c.post(f"/api/projects/{pid}/render", json={"final": False}).json())
     wait(c, c.post(f"/api/projects/{pid}/render", json={"final": True}).json())
     p = c.get(f"/api/projects/{pid}").json()
@@ -140,3 +142,12 @@ def test_models_and_cache(client):
     wait(c, c.post(f"/api/projects/{a}/ingest", json={"url": "https://example.com/same"}).json())
     j = wait(c, c.post(f"/api/projects/{b}/ingest", json={"url": "https://example.com/same"}).json())
     assert j["stage"] == "Loaded from cache"  # ING-6
+
+
+def test_frame_sizes(client):
+    from app import assembly
+    from app.models import Project
+    p = Project()
+    for ratio, size in {"9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080], "4:5": [1080, 1350]}.items():
+        p.format.aspect_ratio = ratio
+        assert assembly.plan(p, 1080, polish=False)["size"] == size

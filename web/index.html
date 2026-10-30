@@ -267,7 +267,9 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .scene.anim.wide { grid-template-columns: 240px minmax(0, 1fr); }
 .scene-media { display: flex; flex-direction: column; gap: 6px; }
 .frame { position: relative; background: var(--frame); border-radius: var(--r-sm); overflow: hidden; aspect-ratio: 9/16; width: 100%; }
-.frame.h { aspect-ratio: 16/9; }
+.frame.r16x9 { aspect-ratio: 16/9; }
+.frame.r1x1 { aspect-ratio: 1; }
+.frame.r4x5 { aspect-ratio: 4/5; }
 .frame .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10,13,18,0.55); color: #fff; font-size: 12px; text-align: center; padding: 8px; gap: 6px; align-content: center; }
 .frame .badge { position: absolute; left: 6px; top: 6px; font-family: var(--f-mono); font-size: 10px; color: #fff; background: rgba(0,0,0,0.55); padding: 1px 6px; border-radius: 4px; }
 .versions { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -282,7 +284,13 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 
 /* Player */
 .player { display: flex; flex-direction: column; gap: 8px; width: min(100%, 300px); }
-.player.h { width: min(100%, 560px); }
+.player.r16x9 { width: min(100%, 560px); }
+.player.r1x1 { width: min(100%, 400px); }
+.player.r4x5 { width: min(100%, 360px); }
+.frames { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.frames .aspect { text-align: center; }
+.aspect .note { font-size: 12px; }
+@media (max-width: 860px) { .frames { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stage-wrap { position: absolute; inset: -8%; will-change: transform; }
 .caption { position: absolute; left: 6%; right: 6%; bottom: 16%; text-align: center; color: #fff; pointer-events: none; }
 .caption.bold span { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: clamp(16px, 7cqw, 26px); line-height: 1.05; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0,0,0,0.8); -webkit-text-stroke: 1px #000; margin: 0 0.12em; display: inline-block; }
@@ -445,6 +453,14 @@ const CAPTIONS = [
   { id: 'clean', name: 'Clean bar' },
   { id: 'karaoke', name: 'Karaoke' },
 ];
+// Frame shapes. Chosen on the Visual style step, before any image is made.
+const FRAMES = [
+  { v: '9:16', name: 'Vertical', use: 'YouTube Shorts, TikTok, Reels', w: 24, h: 42 },
+  { v: '16:9', name: 'Horizontal', use: 'Standard YouTube video', w: 50, h: 28 },
+  { v: '1:1', name: 'Square', use: 'Instagram and Facebook feed', w: 36, h: 36 },
+  { v: '4:5', name: 'Portrait', use: 'Instagram feed, tall post', w: 32, h: 40 },
+];
+const frameCls = p => ' r' + p.format.aspect_ratio.replace(':', 'x');
 const ANGLE_TYPES = ['Deep dive', 'Continuation', 'Different storyline', 'Perspective flip', 'Different niche', 'Different topic', 'Different visuals'];
 
 /* ======================================================================
@@ -1294,7 +1310,6 @@ function AnglesScreen({ p, s }) {
               ${chosen.length ? html`<div style=${{ fontWeight: 600 }}>${chosen.map(a => a.title).join('  +  ')}</div>${chosen.length === 2 ? html`<p className="note">Two angles will be merged into one script.</p>` : null}` : html`<p className="note">Select an angle card to continue. Select a second to merge them.</p>`}</div>
             <div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${p.video_type} onChange=${v => !locked && updateP(p.id, q => { q.video_type = v; })} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>
             <p className="note">${p.video_type === 'voiceover' ? 'Narrated, with images that stay still or get animated.' : 'Characters with their own voices, scenes animated from images.'}</p>
-            <div className="row"><span className="note">Frame</span><${Seg} label="Frame" value=${p.format.aspect_ratio} onChange=${v => !locked && updateP(p.id, q => { q.format.aspect_ratio = v; })} options=${[{ value: '9:16', label: '9:16 vertical' }, { value: '16:9', label: '16:9 horizontal' }]} /></div>
             <div className="row"><span className="note">Video length</span>
               <${Seg} label="Video length" value=${[30, 60, 90].includes(p.format.target_seconds) ? p.format.target_seconds : 'c'} onChange=${v => !locked && updateP(p.id, q => { q.format.target_seconds = v === 'c' ? 45 : v; })} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
               ${![30, 60, 90].includes(p.format.target_seconds) ? html`<input id="angle-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${p.format.target_seconds} onChange=${e => updateP(p.id, q => { q.format.target_seconds = Math.max(15, Math.min(600, +e.target.value || 60)); })} aria-label="Custom length in seconds" />` : null}
@@ -1369,7 +1384,7 @@ function ScriptScreen({ p, s }) {
         </section>
         <section className="panel stack">
           <h3>Story at a glance</h3>
-          <dl className="kv" style=${{ gridTemplateColumns: '1fr auto' }}><dt>Words</dt><dd className="mono">${words(sc.story).length}</dd><dt>Sentences</dt><dd className="mono">${lines.length}</dd><dt>Spoken length</dt><dd className="mono">${fmtT(total)}</dd><dt>Frame</dt><dd className="mono">${p.format.aspect_ratio}</dd></dl>
+          <dl className="kv" style=${{ gridTemplateColumns: '1fr auto' }}><dt>Words</dt><dd className="mono">${words(sc.story).length}</dd><dt>Sentences</dt><dd className="mono">${lines.length}</dd><dt>Spoken length</dt><dd className="mono">${fmtT(total)}</dd></dl>
         </section>
         <section className="panel stack">
           <h3>Style guide applied</h3>
@@ -1390,7 +1405,14 @@ function StyleScreen({ p, s }) {
   const locked = p.checkpoints.style; const suggested = (p.angles.find(a => a.id === p.selected_angle_ids[0]) || {}).style;
   const cur = p.style || suggested;
   return html`<${Fragment}>
-    <${StepHead} title="Visual style" sub="Keep the style the angle suggested, or pick another. The style prefix is added to every image prompt so scenes stay consistent." />
+    <${StepHead} title="Visual style" sub="Choose the frame and the look. Both are used for every scene image, so they are set here, before any image is made." />
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Frame</h2><span className="note">Where the video will be posted</span></div>
+      <div className="frames" role="radiogroup" aria-label="Frame">${FRAMES.map(f => html`<button key=${f.v} type="button" className="aspect" role="radio" aria-checked=${p.format.aspect_ratio === f.v} aria-pressed=${p.format.aspect_ratio === f.v} disabled=${locked} onClick=${() => updateP(p.id, q => { q.format.aspect_ratio = f.v; })}>
+        <i style=${{ width: f.w, height: f.h }}></i><strong className="mono">${f.v}</strong><span>${f.name}</span><span className="note">${f.use}</span>
+      </button>`)}</div>
+    </section>
+    <h2>Look</h2>
     <div className="styles">${STYLES.map(st => html`<button key=${st.id} type="button" className="scard" aria-pressed=${cur === st.id} disabled=${locked} onClick=${() => updateP(p.id, q => { q.style = st.id; })}>
       <div className="art"><${Art} seed=${hashSeed(st.id)} styleId=${st.id} title=${st.name + ' example'} /></div>
       <div className="sbody"><div className="row" style=${{ justifyContent: 'space-between' }}><strong>${st.name}</strong>${st.id === suggested ? html`<span className="chip">Suggested</span>` : null}</div>
@@ -1483,9 +1505,10 @@ function FormatScreen({ p, s }) {
   return html`<${Fragment}>
     <${StepHead} title="Video format" sub="Choose the frame, whether scenes move, and how captions and music sound. The cost estimate updates as you choose." />
     <div className="fmt-grid">
-      <section className="panel stack"><h3>Aspect ratio</h3>
-        <div className="aspects">${[['9:16', 'Shorts, vertical', 22, 38], ['16:9', 'Standard, horizontal', 48, 27]].map(([v, d, w, h]) => html`<button key=${v} type="button" className="aspect" aria-pressed=${p.format.aspect_ratio === v} disabled=${true} title="Set on the Pick angle step" onClick=${() => {}}><i style=${{ width: w, height: h }}></i><strong className="mono">${v}</strong><span className="note">${d}</span></button>`)}</div>
-        <p className="note">Set on the Pick angle step so images match the frame. Exports at 1080p MP4. Length target: <span className="mono">${p.format.target_seconds}s</span>, script runs <span className="mono">${fmtT(scriptSecs(p))}</span>.</p>
+      <section className="panel stack"><h3>Frame</h3>
+        <div className="row"><span className="chip mono">${p.format.aspect_ratio}</span><strong>${(FRAMES.find(f => f.v === p.format.aspect_ratio) || FRAMES[0]).name}</strong><span className="note">${(FRAMES.find(f => f.v === p.format.aspect_ratio) || FRAMES[0]).use}</span></div>
+        <p className="note">Chosen on the Visual style step so the images match it. Exports at 1080p MP4. Length target: <span className="mono">${p.format.target_seconds}s</span>, story runs <span className="mono">${fmtT(scriptSecs(p))}</span>.</p>
+        <div><button type="button" className="btn sm" onClick=${() => goStep('style')}>Change on Visual style</button></div>
       </section>
       <section className="panel stack"><h3>Scenes</h3>
         <${Seg} label="Scene motion" value=${p.format.animated ? 'a' : 's'} onChange=${v => set(q => { q.format.animated = v === 'a'; q.scenes.forEach(sc => { sc.animate = v === 'a'; }); })} options=${[{ value: 's', label: 'Static: zoom and pan' }, { value: 'a', label: 'Animated clips' }]} />
@@ -1528,7 +1551,7 @@ function readImage(file) {
 function SceneImage({ p, sc, small }) {
   const v = sc.image_versions[sc.image_index];
   const h = p.format.aspect_ratio === '16:9';
-  return html`<div className=${'frame' + (h ? ' h' : '')}>
+  return html`<div className=${'frame' + frameCls(p)}>
     ${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} title=${sc.description} />` : null}
     ${sc.image_status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>${small ? '' : 'Generating'}</div>` : null}
     ${sc.image_status === 'failed' ? html`<div className="overlay"><span>Failed</span><button type="button" className="btn sm" onClick=${() => api.generateImage(p.id, sc.id, true)}>Retry</button></div>` : null}
@@ -1622,7 +1645,7 @@ function ClipPreview({ p, sc }) {
   const [t, setT] = useState(0);
   useEffect(() => { if (!c) return; let raf, st = performance.now(); const f = now => { setT(((now - st) / 1000) % 4); raf = requestAnimationFrame(f); }; raf = requestAnimationFrame(f); return () => cancelAnimationFrame(raf); }, [c && c.seed]);
   const k = t / 4; const tr = c ? 'scale(' + (1.08 + 0.08 * k) + ') translate(' + (Math.sin(k * 6.28) * 2) + '%, ' + (Math.cos(k * 6.28) * 1.5) + '%) rotate(' + Math.sin(k * 6.28) * 0.8 + 'deg)' : 'none';
-  return html`<div className=${'frame' + (p.format.aspect_ratio === '16:9' ? ' h' : '')}>
+  return html`<div className=${'frame' + frameCls(p)}>
     <div className="stage-wrap" style=${{ transform: tr }}>${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} />` : null}</div>
     ${c ? html`<span className="badge">Take ${sc.clip_index + 1}</span>` : null}
     ${sc.clip_status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>Animating</div>` : null}
@@ -1688,8 +1711,8 @@ function Player({ p, mode }) {
   else if (cap === 'clean') caption = html`<div className="caption clean">${text}</div>`;
   else caption = html`<div className="caption karaoke">${ws.map((w, k) => html`<span key=${k} className=${k <= wi ? 'past' : ''}>${w + ' '}</span>`)}</div>`;
   const music = MUSIC.find(m => m.id === p.audio.music_path);
-  return html`<div className=${'player' + (h ? ' h' : '')}>
-    <div className=${'frame' + (h ? ' h' : '')} style=${{ borderRadius: 14 }}>
+  return html`<div className=${'player' + frameCls(p)}>
+    <div className=${'frame' + frameCls(p)} style=${{ borderRadius: 14 }}>
       <div className="stage-wrap" style=${{ transform: tr }}>${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload} />` : null}</div>
       ${t > 0 || playing ? caption : null}
       ${speaker ? html`<span className="speaker">${speaker.name}</span>` : null}
