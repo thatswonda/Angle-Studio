@@ -661,7 +661,7 @@ function estimate(p) {
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v2';
+const KEY = 'angle-studio-demo-v3';
 const listeners = new Set();
 const DEFAULT_MODELS = { writer: 'claude-opus-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
@@ -683,7 +683,7 @@ function STATE_DEFAULT_MODELS() { try { return STATE.settings.defaults; } catch 
 function seed() {
   const s = {
     version: 1, view: 'flow', projects: {}, currentId: null, ideaBank: [], cache: {}, jobs: [], toasts: [], intro: true,
-    settings: { costLimit: 3, analyst: 'gemini-pro', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, anthropic: true, higgsfield: true, elevenlabs: false } },
+    settings: { costLimit: 3, analyst: 'gemini-pro', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, anthropic: true, higgsfield: false, elevenlabs: false } },
     templates: [{ id: 'tpl-look', name: 'My channel look', style: 'botanical', voice_id: 'v-aoede', caption_style: 'bold', music: 'm-soil', aspect: '9:16', tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }],
   };
   const p = newProject('Balcony garden follow-up');
