@@ -186,6 +186,7 @@ class Render(BaseModel):
 class Checkpoints(BaseModel):
     angles: bool = False
     script: bool = False
+    plan: bool = False  # scene plan: how many scenes and images, chosen right after the script
     style: bool = False
     voice: bool = False
     format: bool = False

@@ -42,22 +42,17 @@ def test_link_to_rendered_video(client):
     # Downstream stages refuse to run before their checkpoint (PRJ-2).
     assert c.post(f"/api/projects/{pid}/script").status_code == 409
 
-    c.patch(f"/api/projects/{pid}", json={"selected_angle_ids": ["a1"], "style": {"template_id": "botanical", "image_prefix": "soft window light"}})
+    # Length is chosen with the angle, before the script is written.
+    c.patch(f"/api/projects/{pid}", json={"format": {"target_seconds": 90}, "selected_angle_ids": ["a1"], "style": {"template_id": "botanical", "image_prefix": "soft window light"}})
     c.post(f"/api/projects/{pid}/checkpoints/angles")
     wait(c, c.post(f"/api/projects/{pid}/script").json())
     p = c.get(f"/api/projects/{pid}").json()
     assert len(p["script"]["hook_options"]) == 3 and p["script"]["written_by"] == "Claude Opus 5.5"
     assert c.get(f"/api/projects/{pid}/originality").json()["too_close"] is False
 
-    for cp in ("script", "style"):
-        assert c.post(f"/api/projects/{pid}/checkpoints/{cp}").status_code == 200
-    wait(c, c.post(f"/api/projects/{pid}/audio", json={}).json())
-    p = c.get(f"/api/projects/{pid}").json()
-    assert all(l["audio_status"] == "ready" and l["duration"] for l in p["script"]["lines"])
+    assert c.post(f"/api/projects/{pid}/checkpoints/script").status_code == 200
 
-    for cp in ("voice", "format"):
-        c.post(f"/api/projects/{pid}/checkpoints/{cp}")
-    # Image pacing is chosen before any image is generated; counts rise from simple to compact.
+    # Right after the script: choose how many scenes and images. Counts rise from simple to compact.
     opts = c.get(f"/api/projects/{pid}/pacing").json()
     counts = [o["images"] for o in opts]
     assert counts[0] < counts[1] < counts[2]  # simple < moderate < compact (2 s)
@@ -66,6 +61,15 @@ def test_link_to_rendered_video(client):
     assert any(s["split_of"] for s in p["scenes"])
     p = c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "moderate"}).json()
     assert len(p["scenes"]) == counts[1]
+    for cp in ("plan", "style"):
+        assert c.post(f"/api/projects/{pid}/checkpoints/{cp}").status_code == 200
+    assert c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "simple"}).status_code == 409  # locked once approved
+    wait(c, c.post(f"/api/projects/{pid}/audio", json={}).json())
+    p = c.get(f"/api/projects/{pid}").json()
+    assert all(l["audio_status"] == "ready" and l["duration"] for l in p["script"]["lines"])
+
+    for cp in ("voice", "format"):
+        c.post(f"/api/projects/{pid}/checkpoints/{cp}")
     wait(c, c.post(f"/api/projects/{pid}/scenes/images", json={}).json())
     p = c.get(f"/api/projects/{pid}").json()
     assert p["scenes"] and all(s["image_status"] == "ready" for s in p["scenes"])
@@ -92,7 +96,9 @@ def test_cost_limit_needs_confirmation(client, monkeypatch):
     for cp in ("angles",):
         c.post(f"/api/projects/{pid}/checkpoints/{cp}")
     wait(c, c.post(f"/api/projects/{pid}/script").json())
-    for cp in ("script", "style"):
+    c.post(f"/api/projects/{pid}/checkpoints/script")
+    c.post(f"/api/projects/{pid}/scenes/plan", json={"mode": "moderate"})
+    for cp in ("plan", "style"):
         c.post(f"/api/projects/{pid}/checkpoints/{cp}")
     r = c.post(f"/api/projects/{pid}/audio", json={})
     assert r.status_code == 402 and r.json()["error"] == "cost_limit"

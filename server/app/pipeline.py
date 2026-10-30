@@ -227,7 +227,7 @@ async def generate_audio(pid: str, line_ids: list[str] | None, progress: Callabl
 def plan_scenes(pid: str, pacing: Pacing | None = None) -> Project:
     """VIS-1: split the approved script into scenes at the chosen image pacing. Free; no images yet."""
     p = storage.load(pid)
-    require(p, "format")
+    require(p, "script")
     if pacing:
         p.format.pacing = pacing
     p.scenes = []

@@ -1,6 +1,6 @@
 # Angle Studio
 
-A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You paste a link to a video that already performs, pick one of 8 to 12 original angles, and take it through script, style, voice, format, scenes, animation and compile to a finished MP4.
+A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You paste a link to a video that already performs, pick one of 8 to 12 original angles, and take it through script, scene plan, style, voice, format, scenes, animation and compile to a finished MP4.
 
 **Status:** UI and backend skeleton are done.
 

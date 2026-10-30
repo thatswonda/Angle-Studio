@@ -792,5 +792,47 @@
    "voice_id": "v-charon",
    "seed": 733
   }
+ ],
+ "FILLERS": [
+  {
+   "t": "Here is the part most people skip: what it looked like in week three.",
+   "v": "side-by-side of week one and week three planters"
+  },
+  {
+   "t": "The cheapest fix made the biggest difference, and it cost under five dollars.",
+   "v": "hands holding a cheap garden tool with a small price tag"
+  },
+  {
+   "t": "I tracked every harvest in a notebook, so these numbers are real.",
+   "v": "open notebook with handwritten harvest weights"
+  },
+  {
+   "t": "One mistake cost me a whole month. Do not repeat it.",
+   "v": "wilted seedlings next to a crossed-out calendar week"
+  },
+  {
+   "t": "By the halfway point the balcony looked completely different.",
+   "v": "wide shot of a fuller balcony garden at midday"
+  },
+  {
+   "t": "This is what a single harvest actually looks like on a small balcony.",
+   "v": "overhead shot of one harvest laid out on a wooden table"
+  },
+  {
+   "t": "If I started again tomorrow, this is the first thing I would plant.",
+   "v": "single seed packet held up in front of empty planters"
+  },
+  {
+   "t": "The full list of what I grew, and what I would skip, is in the description.",
+   "v": "clean checklist graphic of crops with ticks and crosses"
+  },
+  {
+   "t": "Follow for part two. The results surprised me.",
+   "v": "close-up of a fresh harvest with soft background"
+  },
+  {
+   "t": "Tell me in the comments what you want tested next.",
+   "v": "balcony at golden hour with planters in silhouette"
+  }
  ]
 }

@@ -248,6 +248,9 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 
 /* Scenes */
 .scenes { display: flex; flex-direction: column; gap: 12px; }
+.planlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.planlist li { display: grid; grid-template-columns: 26px 46px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.planlist li:last-child { border-bottom: 0; }
 .paces { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .pace { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .pace[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -623,7 +626,16 @@ const DEFAULT_CHARS = [
   { id: 'ch-tomi', name: 'Tomi', description: 'A cheerful cartoon tomato plant with a small round face and leaf arms', notes: 'Proud, a little dramatic', voice_id: 'v-puck', seed: 501 },
   { id: 'ch-gus', name: 'Gus', description: 'A scheming grey city pigeon with an iridescent green neck', notes: 'Deadpan, always hungry', voice_id: 'v-charon', seed: 733 },
 ];
+// Demo only: extra lines so a simulated script reaches the chosen length. The real writer writes to length.
 const FILLERS = [
+  { t: 'Here is the part most people skip: what it looked like in week three.', v: 'side-by-side of week one and week three planters' },
+  { t: 'The cheapest fix made the biggest difference, and it cost under five dollars.', v: 'hands holding a cheap garden tool with a small price tag' },
+  { t: 'I tracked every harvest in a notebook, so these numbers are real.', v: 'open notebook with handwritten harvest weights' },
+  { t: 'One mistake cost me a whole month. Do not repeat it.', v: 'wilted seedlings next to a crossed-out calendar week' },
+  { t: 'By the halfway point the balcony looked completely different.', v: 'wide shot of a fuller balcony garden at midday' },
+  { t: 'This is what a single harvest actually looks like on a small balcony.', v: 'overhead shot of one harvest laid out on a wooden table' },
+  { t: 'If I started again tomorrow, this is the first thing I would plant.', v: 'single seed packet held up in front of empty planters' },
+  { t: 'The full list of what I grew, and what I would skip, is in the description.', v: 'clean checklist graphic of crops with ticks and crosses' },
   { t: 'Follow for part two. The results surprised me.', v: 'close-up of a fresh harvest with soft background' },
   { t: 'Tell me in the comments what you want tested next.', v: 'balcony at golden hour with planters in silhouette' },
 ];
@@ -685,6 +697,7 @@ function scenePlan(p, pc) {
   }
   return out;
 }
+const planSig = p => JSON.stringify([p.format.pacing || DEFAULT_PACING, p.script.lines.map(l => l.id + l.text)]);
 function planSecs(p, sp) { const t = sp.line_ids.reduce((n, id) => { const l = p.script.lines.find(x => x.id === id); return n + (l ? lineSecs(p, l) : 0); }, 0); return sp.split ? t / sp.split.of : t; }
 const scriptSecs = p => (p.script && p.script.lines ? p.script.lines.reduce((n, l) => n + lineSecs(p, l), 0) : 0);
 const needsAnimate = p => p.scenes.length ? p.scenes.some(s => s.animate) : p.format.animated;
@@ -710,7 +723,7 @@ function estimate(p) {
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v4';
+const KEY = 'angle-studio-demo-v5';
 const listeners = new Set();
 const DEFAULT_MODELS = { writer: 'claude-opus-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
@@ -723,7 +736,7 @@ function newProject(title) {
     format: { aspect_ratio: '9:16', target_seconds: 60, animated: false, pacing: { ...DEFAULT_PACING } },
     scenes: [], audio: { voice_id: 'v-aoede', music_path: 'm-soil', music_volume: 0.25, duck: true, caption_style: 'bold', consent: false },
     render: { draft_path: null, final_path: null, cost_estimate: 0, cost_actual: 0 },
-    checkpoints: { angles: false, script: false, style: false, voice: false, format: false, scenes: false, clips: false },
+    checkpoints: { angles: false, script: false, plan: false, style: false, voice: false, format: false, scenes: false, clips: false },
     step: 'ingest',
   };
 }
@@ -798,7 +811,7 @@ function buildScript(p) {
   if (chosen.length > 1) { const a = chosen[0].beats, b = chosen[1].beats; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) beats.push(a[i]); if (b[i]) beats.push(b[i]); } }
   else beats = first.beats.slice();
   beats = beats.slice(0, count);
-  FILLERS.slice(0, count - beats.length).forEach(f => beats.push(f));
+  FILLERS.slice(Math.max(0, FILLERS.length - (count - beats.length))).forEach(f => beats.push(f));
   const chars = p.characters;
   const all = [{ t: first.hooks[0], v: first.hook_visual }, ...beats];
   const lines = all.map((b, i) => ({ id: uid('ln'), text: b.t, visual: b.v, speaker: p.video_type === 'character' && chars.length ? chars[i % chars.length].id : null, audio_status: 'pending', duration: null }));
@@ -864,6 +877,7 @@ const api = {
         animate: p.format.animated, motion_prompt: i === 0 ? 'slow push in, light flickers across the frame' : 'gentle parallax, leaves sway in a light breeze',
         clip_versions: [], clip_index: -1, clip_status: 'pending', caption_style: p.audio.caption_style, style_prefix: st.prefix,
       }));
+      p.plan_sig = planSig(p);
     });
   },
   async generateImages(pid, ids) {
@@ -910,7 +924,8 @@ const api = {
    ====================================================================== */
 const STEPS = [
   { id: 'ingest', label: 'Paste link' }, { id: 'angles', label: 'Pick angle', cp: 'angles' },
-  { id: 'script', label: 'Script', cp: 'script' }, { id: 'style', label: 'Visual style', cp: 'style' },
+  { id: 'script', label: 'Script', cp: 'script' }, { id: 'plan', label: 'Scene plan', cp: 'plan' },
+  { id: 'style', label: 'Visual style', cp: 'style' },
   { id: 'voice', label: 'Voice', cp: 'voice' }, { id: 'format', label: 'Format', cp: 'format' },
   { id: 'scenes', label: 'Scenes', cp: 'scenes' }, { id: 'animate', label: 'Animate', cp: 'clips' },
   { id: 'compile', label: 'Compile' }, { id: 'export', label: 'Export' },
@@ -1251,6 +1266,10 @@ function AnglesScreen({ p, s }) {
               ${chosen.length ? html`<div style=${{ fontWeight: 600 }}>${chosen.map(a => a.title).join('  +  ')}</div>${chosen.length === 2 ? html`<p className="note">Two angles will be merged into one script.</p>` : null}` : html`<p className="note">Select an angle card to continue. Select a second to merge them.</p>`}</div>
             <div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${p.video_type} onChange=${v => !locked && updateP(p.id, q => { q.video_type = v; })} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>
             <p className="note">${p.video_type === 'voiceover' ? 'Narrated, with images that stay still or get animated.' : 'Characters with their own voices, scenes animated from images.'}</p>
+            <div className="row"><span className="note">Video length</span>
+              <${Seg} label="Video length" value=${[30, 60, 90].includes(p.format.target_seconds) ? p.format.target_seconds : 'c'} onChange=${v => !locked && updateP(p.id, q => { q.format.target_seconds = v === 'c' ? 45 : v; })} options=${[{ value: 30, label: '30s' }, { value: 60, label: '60s' }, { value: 90, label: '90s' }, { value: 'c', label: 'Custom' }]} />
+              ${![30, 60, 90].includes(p.format.target_seconds) ? html`<input id="angle-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${p.format.target_seconds} onChange=${e => updateP(p.id, q => { q.format.target_seconds = Math.max(15, Math.min(600, +e.target.value || 60)); })} aria-label="Custom length in seconds" />` : null}
+            </div>
           </div>
           <label className="field" htmlFor="direction">Your direction (optional)
             <textarea id="direction" className="textarea" rows="3" disabled=${locked} placeholder="e.g. Keep it under a minute, end on the cheapest crop, talk to renters" value=${p.user_direction} onChange=${e => updateP(p.id, q => { q.user_direction = e.target.value; })}></textarea>
@@ -1258,7 +1277,7 @@ function AnglesScreen({ p, s }) {
         </section>
       </div>
     </div>
-    <${ApproveBar} p=${p} step="angles" ready=${chosen.length > 0} hint="Select at least one angle." label=${'Approve and write script'} onApprove=${onApprove} />
+    <${ApproveBar} p=${p} step="angles" ready=${chosen.length > 0} hint="Select at least one angle." label=${'Approve and write ' + p.format.target_seconds + 's script'} onApprove=${onApprove} />
   </${Fragment}>`;
 }
 
@@ -1421,8 +1440,7 @@ function FormatScreen({ p, s }) {
   const locked = p.checkpoints.format; const est = estimate(p); const im = modelOf(p, 'image'); const vm = modelOf(p, 'video');
   const nScenes = p.script.lines.length; const imgCost = nScenes * im.cost;
   const set = fn => !locked && updateP(p.id, fn);
-  const go = () => { const fresh = !p.scenes.length; approve(p.id, 'format'); if (fresh) api.planScenes(p.id); };
-  const hasScenes = p.scenes.length > 0;
+  const go = () => approve(p.id, 'format');
   return html`<${Fragment}>
     <${StepHead} title="Video format" sub="Choose the frame, whether scenes move, and how captions and music sound. The cost estimate updates as you choose." />
     <div className="fmt-grid">
@@ -1442,10 +1460,6 @@ function FormatScreen({ p, s }) {
         <label className="field" htmlFor="vol">Volume under voice <span className="mono muted">${Math.round(p.audio.music_volume * 100)}%</span><input id="vol" type="range" min="0" max="0.6" step="0.05" disabled=${locked || p.audio.music_path === 'none'} value=${p.audio.music_volume} onChange=${e => set(q => { q.audio.music_volume = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
         <label className="switch"><input id="duck" type="checkbox" checked=${p.audio.duck} disabled=${locked} onChange=${e => set(q => { q.audio.duck = e.target.checked; })} />Duck music while someone speaks</label>
       </section>
-      <section className="panel stack"><h3>Image pacing</h3>
-        <p className="note">You pick this in the next step, before any image is generated. For ${fmtT(scriptSecs(p))} of narration:</p>
-        <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>${['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: (p.format.pacing || DEFAULT_PACING).compact_every || 3 }; return html`<${Fragment} key=${m}><dt>${PACING[m].label} (1 every ~${paceEvery(cfg)} s)</dt><dd>${scenePlan(p, cfg).length} images</dd></${Fragment}>`; })}</dl>
-      </section>
       <section className="panel stack"><h3>Estimated cost for this video</h3>
         <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>
           <dt>Analysis + writing (${analystOf().name}, ${modelOf(p, 'writer').name})</dt><dd>${fmt$(est.writing)}</dd>
@@ -1458,7 +1472,7 @@ function FormatScreen({ p, s }) {
         <p className="note">Your per-project limit is ${fmt$(s.settings.costLimit)}. Steps that go over it ask for confirmation.</p>
       </section>
     </div>
-    <${ApproveBar} p=${p} step="format" ready=${true} label=${hasScenes ? 'Approve format (keep current scenes)' : 'Approve format and plan scenes'} onApprove=${go} />
+    <${ApproveBar} p=${p} step="format" ready=${true} label="Approve format" onApprove=${go} />
   </${Fragment}>`;
 }
 
@@ -1482,26 +1496,11 @@ function SceneImage({ p, sc, small }) {
     ${sc.image_status === 'pending' && !v ? html`<div className="overlay">Not generated</div>` : null}
   </div>`;
 }
-function PacingPanel({ p }) {
-  const locked = p.checkpoints.scenes; const im = modelOf(p, 'image');
-  const started = p.scenes.some(sc => sc.image_versions.length || sc.image_status === 'generating');
-  const [open, setOpen] = useState(!started);
-  const pc = p.format.pacing || DEFAULT_PACING; const total = scriptSecs(p);
-  const todo = p.scenes.filter(sc => sc.image_status === 'pending' || sc.image_status === 'failed');
-  const choose = next => {
-    if (locked) return;
-    updateP(p.id, q => { q.format.pacing = next; }); api.planScenes(p.id);
-    if (started) toast('Scenes re-planned. Generate images to continue.');
-  };
-  if (!open) return html`<section className="panel row" style=${{ justifyContent: 'space-between' }}>
-    <div style=${{ minWidth: 0 }}><strong>Image pacing: ${PACING[pc.mode].label}</strong> <span className="note">\u00b7 one image every ~${paceEvery(pc)} s \u00b7 ${p.scenes.length} scenes, ${p.scenes.length} images for ${fmtT(total)}</span></div>
-    <button type="button" className="btn sm" disabled=${locked} onClick=${() => setOpen(true)}>Change pacing</button>
-  </section>`;
+function PaceOptions({ p, locked }) {
+  const im = modelOf(p, 'image'); const pc = p.format.pacing || DEFAULT_PACING;
+  const choose = next => !locked && updateP(p.id, q => { q.format.pacing = next; });
   const opts = ['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: pc.compact_every || 3 }; const plan = scenePlan(p, cfg); return { m, cfg, plan, n: plan.length, every: paceEvery(cfg) }; });
-  return html`<section className="panel stack">
-    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Image pacing</h2><span className="note mono">${fmtT(total)} of narration \u00b7 ${p.script.lines.length} lines</span></div>
-    <p className="note">How often the picture changes. Pick one before generating images. The scene list below updates to match.</p>
-    ${started ? html`<div className="warnbox">Changing pacing re-plans every scene. Images already generated are discarded.</div>` : null}
+  return html`<${Fragment}>
     <div className="paces">${opts.map(o => html`<button key=${o.m} type="button" className="pace" aria-pressed=${pc.mode === o.m} disabled=${locked} onClick=${() => choose(o.cfg)}>
       <span className="row" style=${{ justifyContent: 'space-between' }}><strong>${PACING[o.m].label}</strong><span className="mono note">1 every ~${o.every} s</span></span>
       <span className="pace-n"><b>${o.n}</b> scenes \u00b7 <b>${o.n}</b> images</span>
@@ -1510,10 +1509,38 @@ function PacingPanel({ p }) {
       <span className="mono note">est. ${fmt$(o.n * im.cost)} with ${im.name}</span>
     </button>`)}</div>
     ${pc.mode === 'compact' ? html`<div className="row"><span className="note">Compact: one image every</span><${Seg} label="Compact interval" value=${pc.compact_every || 3} onChange=${v => choose({ mode: 'compact', compact_every: v })} options=${[{ value: 2, label: '2 s' }, { value: 3, label: '3 s' }]} /></div>` : null}
-    <div className="row">
-      ${todo.length ? html`<${CostGate} p=${p} label=${'Generate ' + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => { setOpen(false); api.generateImages(p.id, todo.map(sc => sc.id)); }} />` : null}
-      ${started ? html`<button type="button" className="btn ghost" onClick=${() => setOpen(false)}>Keep current scenes</button>` : null}
-    </div>
+  </${Fragment}>`;
+}
+function PlanScreen({ p, s }) {
+  const locked = p.checkpoints.plan; const total = scriptSecs(p); const target = p.format.target_seconds;
+  const plan = scenePlan(p);
+  const stale = p.scenes.length && p.plan_sig !== planSig(p);
+  const hadImages = stale && p.scenes.some(sc => sc.image_versions.length);
+  const onApprove = () => { if (!p.scenes.length || stale) api.planScenes(p.id); approve(p.id, 'plan'); };
+  return html`<${Fragment}>
+    <${StepHead} title="Scene plan" sub=${'Choose how many scenes and images your ' + target + '-second video gets. The script runs ' + fmtT(total) + '. Nothing is generated yet, so this step is free.'} />
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Image pacing</h2><span className="note mono">${target}s target \u00b7 ${fmtT(total)} script \u00b7 ${p.script.lines.length} lines</span></div>
+      <p className="note">How often the picture changes. Each scene gets one image.</p>
+      <${PaceOptions} p=${p} locked=${locked} />
+    </section>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${plan.length} scenes, ${plan.length} images</h2><span className="note">You can edit each scene\u2019s description and prompt in the Scenes step.</span></div>
+      <ol className="planlist">${plan.map((sp, i) => html`<li key=${i}>
+        <span className="mono muted">${i + 1}</span><span className="mono muted">${planSecs(p, sp).toFixed(1)}s</span>
+        <span style=${{ minWidth: 0 }}>${sp.split ? html`<span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sp.split.index + 1} of ${sp.split.of} \u00b7 </span>` : null}${sceneText(p, sp)}<br /><span className="note">${sp.description}</span></span>
+      </li>`)}</ol>
+    </section>
+    ${hadImages && !locked ? html`<div className="warnbox">Approving this new plan replaces the current scenes. Images already generated for them are discarded.</div>` : null}
+    <${ApproveBar} p=${p} step="plan" ready=${plan.length > 0} label=${'Approve plan: ' + plan.length + ' scenes'} onApprove=${onApprove} />
+  </${Fragment}>`;
+}
+function ImagesPanel({ p }) {
+  const im = modelOf(p, 'image'); const pc = p.format.pacing || DEFAULT_PACING;
+  const todo = p.scenes.filter(sc => sc.image_status === 'pending' || sc.image_status === 'failed');
+  return html`<section className="panel row" style=${{ justifyContent: 'space-between' }}>
+    <div style=${{ minWidth: 0 }}><strong>${p.scenes.length} scenes, ${p.scenes.length} images</strong> <span className="note">\u00b7 ${PACING[pc.mode].label} pacing, one image every ~${paceEvery(pc)} s \u00b7 set in Scene plan</span></div>
+    ${todo.length && !p.checkpoints.scenes ? html`<${CostGate} p=${p} label=${'Generate ' + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => api.generateImages(p.id, todo.map(sc => sc.id))} />` : null}
   </section>`;
 }
 function ScenesScreen({ p, s }) {
@@ -1531,11 +1558,10 @@ function ScenesScreen({ p, s }) {
   const unvoiced = p.scenes.some(sc => sceneLines(p, sc).some(l => l.audio_status !== 'ready'));
   const allReady = p.scenes.length > 0 && ready === p.scenes.length;
   return html`<${Fragment}>
-    <${StepHead} title="Scenes" sub=${'Choose how often the picture changes, then generate one image per scene with ' + im.name + ' and the ' + styleById(p.style).name.toLowerCase() + ' style prefix. Edit any description or prompt and regenerate just that scene. Earlier versions are kept.'}>
+    <${StepHead} title="Scenes" sub=${'Generate one image per scene with ' + im.name + ' and the ' + styleById(p.style).name.toLowerCase() + ' style prefix. Edit any description or prompt and regenerate just that scene. Earlier versions are kept.'}>
       <span className="note mono">${p.scenes.length} scenes · ${fmtT(total)} · ${ready}/${p.scenes.length} images</span>
-      <button type="button" className="btn" disabled=${locked} onClick=${() => { api.planScenes(p.id); toast('Scenes re-planned from the script. Generate images to continue.'); }}><${Icon} n="redo" />Re-plan from script</button>
     </${StepHead}>
-    <${PacingPanel} p=${p} key=${'pace' + p.id} />
+    <${ImagesPanel} p=${p} />
     ${unvoiced ? html`<div className="warnbox">Some scenes have lines without audio. Generate them in the Voice step so scene lengths match the narration.</div>` : null}
     <div className="scenes">${p.scenes.map((sc, i) => { const ls = sceneLines(p, sc); return html`<section key=${sc.id} className=${'panel scene' + (h ? ' wide' : '')}>
       <div className="scene-media">
@@ -1841,7 +1867,7 @@ function Toasts({ s }) { return html`<div className="toasts" aria-live="polite">
 function Flow({ p, s }) {
   let step = p.step;
   if (!isUnlocked(p, step) || isSkipped(p, step)) step = STEPS.slice().reverse().find(st => isUnlocked(p, st.id) && !isSkipped(p, st.id)).id;
-  const Screen = { ingest: IngestScreen, angles: AnglesScreen, script: ScriptScreen, style: StyleScreen, voice: VoiceScreen, format: FormatScreen, scenes: ScenesScreen, animate: AnimateScreen, compile: CompileScreen, export: ExportScreen }[step];
+  const Screen = { ingest: IngestScreen, angles: AnglesScreen, script: ScriptScreen, plan: PlanScreen, style: StyleScreen, voice: VoiceScreen, format: FormatScreen, scenes: ScenesScreen, animate: AnimateScreen, compile: CompileScreen, export: ExportScreen }[step];
   return html`<${Screen} p=${p} s=${s} />`;
 }
 function App() {

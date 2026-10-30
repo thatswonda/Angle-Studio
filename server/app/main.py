@@ -14,7 +14,7 @@ from .providers import registry, sample
 
 app = FastAPI(title="Angle Studio API", version="0.1.0")
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
-CHECKPOINT_ORDER = ["angles", "script", "style", "voice", "format", "scenes", "clips"]
+CHECKPOINT_ORDER = ["angles", "script", "plan", "style", "voice", "format", "scenes", "clips"]
 
 
 @app.exception_handler(pipeline.CheckpointError)
@@ -189,16 +189,18 @@ def pacing(pid: str):
 
 @app.post("/api/projects/{pid}/scenes/plan")
 def plan_scenes(pid: str, body: Optional[Pacing] = None):
-    """Free: splits the script into scenes at the chosen pacing. Re-planning discards existing scene images."""
-    pipeline.require(_project(pid), "voice", "format")
+    """Free, right after the script: splits it into scenes at the chosen pacing. Re-planning discards scene images."""
+    p = _project(pid)
+    pipeline.require(p, "script")
+    if p.checkpoints.plan:
+        raise HTTPException(409, "The scene plan is approved. Reopen it to change the pacing.")
     return pipeline.plan_scenes(pid, body)
 
 
 @app.post("/api/projects/{pid}/scenes/images", status_code=202)
 async def scene_images(pid: str, body: Paid):
     p = _project(pid)
-    if not p.scenes:
-        raise HTTPException(409, "Plan the scenes first.")
+    pipeline.require(p, "plan", "voice", "format")
     pipeline.guard_cost(p, pipeline.estimate(p)["images"], body.confirm_over_limit)
     ids = [s.id for s in p.scenes if s.image_status in ("pending", "failed")]
     return jobs.submit(pid, f"Generating {len(ids)} images", lambda prog: pipeline.generate_images(pid, ids, prog))

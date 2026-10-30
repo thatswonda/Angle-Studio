@@ -46,8 +46,12 @@ def script_for(prompt: str) -> dict:
             beats += ([a[i]] if i < len(a) else []) + ([b[i]] if i < len(b) else [])
     else:
         beats = list(_RAW[ids[0]]["beats"])
+    beats = beats[:count]
+    missing = count - len(beats)  # demo only: pad so the simulated script reaches the chosen length
+    if missing > 0:
+        beats += _D["FILLERS"][-missing:]
     first = _RAW[ids[0]]
-    lines = [{"text": first["hooks"][0], "visual": first["hook_visual"]}] + [{"text": b["t"], "visual": b["v"]} for b in beats[:count]]
+    lines = [{"text": first["hooks"][0], "visual": first["hook_visual"]}] + [{"text": b["t"], "visual": b["v"]} for b in beats]
     hooks = list(first["hooks"][:3])
     if len(ids) > 1:
         hooks[2] = _RAW[ids[1]]["hooks"][0]
