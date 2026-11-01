@@ -40,7 +40,7 @@ class OpenAIWriter:
             except httpx.HTTPError as e:
                 if attempt == 3:
                     raise ProviderError(f"Could not reach the OpenAI API: {e}. If this server blocks api.openai.com, "
-                                        "pick Gemini Pro in the Writing selector.") from e
+                                        "pick Gemini Flash in the Writing selector.") from e
                 await asyncio.sleep(2 ** attempt * 2)
                 continue
             if r.status_code in (429, 500, 502, 503) and attempt < 3:

@@ -804,7 +804,7 @@ function STATE_DEFAULT_MODELS() { try { return STATE.settings.defaults; } catch 
 function seed() {
   const s = {
     version: 1, view: 'flow', projects: {}, currentId: null, ideaBank: [], cache: {}, jobs: [], toasts: [], intro: true,
-    settings: { costLimit: 10, analyst: 'gemini-pro', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, openai: true, anthropic: false, higgsfield: false, elevenlabs: false } },
+    settings: { costLimit: 10, analyst: 'gemini-flash', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, openai: true, anthropic: false, higgsfield: false, elevenlabs: false } },
     templates: [{ id: 'tpl-look', name: 'My channel look', style: 'botanical', voice_id: 'v-aoede', caption_style: 'bold', music: 'm-soil', aspect: '9:16', tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }],
   };
   const p = newProject('Balcony garden follow-up');
@@ -875,7 +875,7 @@ async function detectLive() {
       const pj = newProject(); pj.audio.music_path = 'none';
       fresh.projects = { [pj.id]: pj }; fresh.currentId = pj.id;
     }
-    update(s => { s.settings.keys = { ...s.settings.keys, ...d.providers }; });
+    update(s => { s.settings.keys = { ...s.settings.keys, ...d.providers }; if (!s.analyst_v2) { s.settings.analyst = 'gemini-flash'; s.analyst_v2 = true; } });
   } catch (e) { /* not served by the Angle Studio server: demo mode */ }
 }
 function playLine(l, v) { if (l.audio_url) { try { new Audio(l.audio_url).play(); } catch (e) {} } else speak(l.text, v); }
@@ -1009,6 +1009,7 @@ const api = {
             written_with: chosen.map(a => a.id), direction: p.user_direction, written_by: r.written_by };
           p.scenes = []; p.plan_sig = null; addCost(p, r.cost || 0);
         });
+        if (r.warning) toast(r.warning);
       } catch (e) { updateP(pid, p => { p.script = { error: e.message }; }); toast(e.message); }
       return;
     }

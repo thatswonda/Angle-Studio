@@ -44,6 +44,23 @@ def writer_for(model_id: str):
     raise ProviderError("Claude is not connected yet. Add ANTHROPIC_API_KEY and a Claude writer adapter, or pick GPT-5.5 or Gemini Pro.")
 
 
+FALLBACK_WRITER = "gemini-flash-writer"
+
+
+async def write_json(writer_id: str, progress, prompt: str) -> tuple[dict, float, str, Optional[str]]:
+    """Writes with the chosen model; if it fails (no key, no credit, unreachable, free tier), Gemini Flash writes instead."""
+    name = WRITER_NAMES.get(writer_id, writer_id)
+    try:
+        data, cost = await writer_for(writer_id).complete_json(SYSTEM, prompt)
+        return data, cost, name, None
+    except ProviderError as e:
+        if writer_id == FALLBACK_WRITER:
+            raise
+        progress(f"{name} could not write; Gemini Flash is writing instead")
+        data, cost = await GeminiWriter(FALLBACK_WRITER).complete_json(SYSTEM, prompt)
+        return data, cost, "Gemini Flash", f"{name} could not write ({e}) Gemini Flash wrote this instead."
+
+
 def media_url(p: Path) -> str:
     return "/media/" + p.resolve().relative_to(MEDIA.resolve()).as_posix()
 
@@ -114,14 +131,23 @@ async def ingest(body: IngestBody):
             ' "gaps": [{"kind": "Unanswered question | Unfinished thread | Audience request | Skipped perspective | Unexplored visual",'
             ' "text": "the gap", "from_comment": "comment id or null"}] (4 to 8)}'
         )
-        report, cost = await google.generate_json(body.analyst, [google.youtube_part(body.url), {"text": prompt}], low_media=True)
+        parts = [google.youtube_part(body.url), {"text": prompt}]
+        try:
+            report, cost = await google.generate_json(body.analyst, parts, low_media=True)
+        except ProviderError as e:
+            if body.analyst == "gemini-flash":
+                raise
+            progress(f"{an} is not available on this key; Gemini Flash is watching instead")
+            report, cost = await google.generate_json("gemini-flash", parts, low_media=True)
+            warning = " ".join(x for x in (warning, f"{an} could not watch the video ({e}) Gemini Flash watched it instead.") if x)
+            an = "Gemini Flash"
         if isinstance(report, list):  # some models wrap the object in a list
             report = report[0] if report and isinstance(report[0], dict) else {}
         wn = WRITER_NAMES.get(body.writer, body.writer)
         progress(f"Handing the report to {wn}")
         progress(f"{wn} is writing angle cards")
         handoff = {"video": {k: info[k] for k in ("title", "channel", "duration", "views")}, "report": report, "comments": comments}
-        angles_raw, wcost = await writer_for(body.writer).complete_json(SYSTEM, (
+        angles_raw, wcost, wn, wwarn = await write_json(body.writer, progress, (
             "A model watched a reference video and wrote this report. Propose 10 original angles for a new video that a viewer "
             "of the reference video would want to watch next, so the new video can be recommended beside it. Mix the angle types "
             f"{ANGLE_TYPES}. Score relatedness 0-100 from topic, audience, format and keyword overlap.\n"
@@ -132,6 +158,7 @@ async def ingest(body: IngestBody):
             ' "origin": comment id it answers or null, "character": true if it suits a video with voiced characters,'
             ' "hooks": [three opening lines], "suggested_title": honest title using the reference video\'s key terms,'
             ' "tags": [5 tags]}]}'))
+        warning = " ".join(x for x in (warning, wwarn) if x) or None
         angles = []
         ids = {c["id"] for c in comments}
         raw_list = angles_raw if isinstance(angles_raw, list) else (angles_raw.get("angles") or [])
@@ -197,7 +224,7 @@ async def story(body: StoryBody):
         fmt = (f"Write it as dialogue, one line per speaker in the form 'Name: what they say', using only these characters: "
                f"{', '.join(c.get('name', '') + ' (' + c.get('description', '') + ')' for c in body.characters)}."
                if char else "Write it as narration in short paragraphs separated by a blank line.")
-        data, cost = await writer_for(body.writer).complete_json(SYSTEM, (
+        data, cost, wn, warning = await write_json(body.writer, progress, (
             f"Write one continuous, original story for a {body.target_seconds}-second video (about {words} spoken words; stay within 10%).\n"
             f"Angle(s): {json.dumps([{k: a.get(k) for k in ('title', 'pitch', 'reason', 'hooks', 'type')} for a in body.angles])}\n"
             f"Reference video it should sit next to: {body.source_title}. What that video did: {json.dumps(body.analysis)[:6000]}\n"
@@ -215,7 +242,7 @@ async def story(body: StoryBody):
         while len(hooks) < 3:
             hooks.append(story_text.split(".")[0] + ".")
         visuals = [v for v in (data.get("visuals") or []) if isinstance(v, dict) and v.get("sentence")]
-        return {"hook_options": hooks, "story": story_text, "visuals": visuals, "written_by": wn, "cost": round(cost, 4)}
+        return {"hook_options": hooks, "story": story_text, "visuals": visuals, "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
     return _job("Writing the story", work)
 
