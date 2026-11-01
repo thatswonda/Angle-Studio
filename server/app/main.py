@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from . import jobs, pipeline, storage
 from .models import Pacing, Project, new_id
@@ -86,7 +86,10 @@ def get_project(pid: str):
 def patch_project(pid: str, patch: dict[str, Any]):
     """Edits from the UI: script lines, scene prompts, chosen models (MDL-2), format and so on."""
     p = _project(pid)
-    merged = Project.model_validate(_deep_merge(p.model_dump(), patch))
+    try:
+        merged = Project.model_validate(_deep_merge(p.model_dump(), patch))
+    except ValidationError as e:
+        raise HTTPException(422, [{"field": ".".join(map(str, err["loc"])), "message": err["msg"]} for err in e.errors()])
     storage.save(merged)
     return merged
 

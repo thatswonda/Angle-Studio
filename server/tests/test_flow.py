@@ -50,7 +50,7 @@ def test_link_to_rendered_video(client):
     assert 8 <= len(p["angles"]) <= 12
     assert all(a["relatedness_reason"] for a in p["angles"])
     # Gemini watched the video; Claude wrote the angles from its report.
-    assert p["analysis"]["analyzed_by"] == "Gemini Pro" and p["angles_written_by"] == "Claude Opus 5.5"
+    assert p["analysis"]["analyzed_by"] == "Gemini Pro" and p["angles_written_by"] == "GPT-5.5"
     assert p["source"]["key_frames"] and p["source"]["transcript"]
 
     # Downstream stages refuse to run before their checkpoint (PRJ-2).
@@ -59,7 +59,7 @@ def test_link_to_rendered_video(client):
     to_story(c, pid, seconds=90)
     p = c.get(f"/api/projects/{pid}").json()
     sc = p["script"]
-    assert len(sc["hook_options"]) == 3 and sc["written_by"] == "Claude Opus 5.5"
+    assert len(sc["hook_options"]) == 3 and sc["written_by"] == "GPT-5.5"
     assert sc["story"].startswith(sc["hook_options"][0]) and "\n\n" in sc["story"] and sc["lines"] == []
     assert c.get(f"/api/projects/{pid}/originality").json()["too_close"] is False
 
@@ -151,3 +151,22 @@ def test_frame_sizes(client):
     for ratio, size in {"9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080], "4:5": [1080, 1350]}.items():
         p.format.aspect_ratio = ratio
         assert assembly.plan(p, 1080, polish=False)["size"] == size
+
+
+def test_ten_minute_story_and_writer_switch(client, monkeypatch):
+    c = client
+    pid = c.post("/api/projects", json={}).json()["id"]
+    assert c.patch(f"/api/projects/{pid}", json={"format": {"target_seconds": 700}}).status_code == 422  # over 10 minutes
+    to_story(c, pid, seconds=600)
+    approve(c, pid, "script")
+    p = c.get(f"/api/projects/{pid}").json()
+    spoken = sum(len(l["text"].split()) / 2.6 + 0.5 for l in p["script"]["lines"])
+    assert 480 < spoken <= 660  # roughly ten minutes
+
+    # Switching the writer to Claude later is one setting; nothing else changes.
+    monkeypatch.setenv("ANGLE_STUDIO_WRITER", "claude-opus-5-5")
+    pid2 = c.post("/api/projects", json={}).json()["id"]
+    assert c.get(f"/api/projects/{pid2}").json()["models"]["writer"] == "claude-opus-5-5"
+    to_story(c, pid2)
+    p = c.get(f"/api/projects/{pid2}").json()
+    assert p["angles_written_by"] == "Claude Opus 5.5" and p["script"]["written_by"] == "Claude Opus 5.5"

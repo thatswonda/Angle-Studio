@@ -38,7 +38,7 @@ def script_for(prompt: str) -> dict:
     """The script prompt names the angle ids and target length on its first line: 'angles=a1,a4 seconds=60'."""
     head = dict(kv.split("=", 1) for kv in prompt.splitlines()[0].split())
     ids = head["angles"].split(",")
-    count = max(3, round(int(head["seconds"]) / 6.5) - 1)
+    count = max(3, round(int(head["seconds"]) / 5.2) - 1)
     beats: list[dict] = []
     if len(ids) > 1:
         a, b = _RAW[ids[0]]["beats"], _RAW[ids[1]]["beats"]
@@ -47,9 +47,13 @@ def script_for(prompt: str) -> dict:
     else:
         beats = list(_RAW[ids[0]]["beats"])
     beats = beats[:count]
-    missing = count - len(beats)  # demo only: pad so the simulated script reaches the chosen length
-    if missing > 0:
-        beats += _D["FILLERS"][-missing:]
+    # Demo only: pad so the simulated story reaches the chosen length; long stories borrow other sample lines.
+    missing, fillers = count - len(beats), _D["FILLERS"]
+    if missing > len(fillers):
+        others = [b for aid, a in sorted(_RAW.items(), key=lambda kv: -kv[1]["score"]) if aid not in ids for b in a["beats"]]
+        beats += [others[k % len(others)] for k in range(missing - len(fillers))] + fillers
+    elif missing > 0:
+        beats += fillers[-missing:]
     first = _RAW[ids[0]]
     hooks = list(first["hooks"][:3])
     if len(ids) > 1:

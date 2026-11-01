@@ -10,12 +10,12 @@ A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You 
 |---|---|---|
 | Video stats and comments | YouTube Data API | - |
 | Watch the video: transcript, scene-by-scene description, breakdown, gaps | Google Gemini API | Gemini Pro (or Flash) |
-| Angle cards, scripts, hooks, scene prompts, title, description, tags | Anthropic Claude API | Claude Opus 5.5 (or Sonnet 5.5, or Gemini Pro) |
+| Angle cards, the story script, hooks, scene prompts, title, description, tags | OpenAI ChatGPT API (swappable to Anthropic Claude) | GPT-5.5 (or GPT-5; Claude Opus 5.5 / Sonnet 5.5 later) |
 | Voiceover | Google Gemini API | Gemini TTS Flash (ElevenLabs only for cloning your own voice) |
 | Scene images | Google Gemini API | Nano Banana 2 (or Imagen 4) |
 | Animated clips | Google Gemini API / Higgsfield API | Veo 3.1 Fast, or Seedance 2.0 / Kling 3.0 via Higgsfield |
 
-Claude never sees the video itself, only the report Gemini writes about it. Prices in the app are estimates from public write-ups (October 2026) and should be confirmed on each provider's pricing page. Every AI provider is a mock adapter, so the whole flow runs with no API keys or cost. Connecting real APIs comes last.
+The writing model never sees the video itself, only the report Gemini writes about it. Videos run up to 10 minutes. Prices in the app are estimates from public write-ups (October 2026) and should be confirmed on each provider's pricing page. Every AI provider is a mock adapter, so the whole flow runs with no API keys or cost. Connecting real APIs comes last.
 
 ## Layout
 
@@ -64,9 +64,16 @@ cd server && python -m pytest -q tests
 | Top-bar model selectors, only configured providers, cost and limits (MDL-1..5) | Top bar, Settings |
 | Checkpoints, resume after closing, job queue, cost limit (PRJ-1..3) | Everywhere |
 
+## Switching the writer from ChatGPT to Claude
+
+The writer sits behind one interface (`Writer` in `server/app/providers/base.py`), so switching is a setting, not a code change:
+
+1. Add `ANTHROPIC_API_KEY` to `.env`.
+2. Set `ANGLE_STUDIO_WRITER=claude-opus-5-5` (or `claude-sonnet-5-5`) for new projects, or pick Claude in the Writing selector in the top bar for one project.
+
 ## Connecting real APIs (next)
 
-1. Write one adapter per provider in `server/app/providers/` that implements its interface from `base.py`: `VideoSource` (YouTube Data API), `VideoAnalyst` (Gemini, takes the YouTube URL), `Writer` (Claude), `TextToSpeech`, `ImageGenerator`, `ImageToVideo`.
+1. Write one adapter per provider in `server/app/providers/` that implements its interface from `base.py`: `VideoSource` (YouTube Data API), `VideoAnalyst` (Gemini, takes the YouTube URL), `Writer` (ChatGPT now, Claude later), `TextToSpeech`, `ImageGenerator`, `ImageToVideo`.
 2. Register it in `registry.REAL`, put the keys in `.env` (see `.env.example`) and set `ANGLE_STUDIO_MOCK=0`.
 3. Point the `api` object in `web/index.html` at the server routes with `fetch()`. Its methods already match the route names.
 4. Finish the real FFmpeg render in `assembly.render` (the plan is already built).

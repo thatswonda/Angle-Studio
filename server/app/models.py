@@ -5,6 +5,7 @@ and writes. That is what makes each stage independently re-runnable.
 """
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from typing import Literal, Optional
@@ -21,7 +22,8 @@ def new_id(prefix: str) -> str:
 
 class Models(BaseModel):
     analyst: str = "gemini-pro"        # watches the reference video
-    writer: str = "claude-opus-5-5"    # writes angles, scripts, prompts, metadata
+    # Writes angles, the story, prompts and metadata. Switch providers with ANGLE_STUDIO_WRITER, e.g. claude-opus-5-5.
+    writer: str = Field(default_factory=lambda: os.getenv("ANGLE_STUDIO_WRITER", "gpt-5-5"))
     voice: str = "gemini-tts-flash"
     image: str = "nano-banana-2"
     video: str = "veo-31-fast"
@@ -136,7 +138,7 @@ class Pacing(BaseModel):
 
 class Format(BaseModel):
     aspect_ratio: Literal["9:16", "16:9", "1:1", "4:5"] = "9:16"  # chosen on the Visual style step
-    target_seconds: int = 60
+    target_seconds: int = Field(default=60, ge=15, le=600)  # up to 10 minutes
     animated: bool = False
     pacing: Pacing = Field(default_factory=Pacing)
 

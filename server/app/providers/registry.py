@@ -15,6 +15,7 @@ from .base import ImageGenerator, ImageToVideo, TextToSpeech, VideoAnalyst, Vide
 PROVIDER_ENV = {
     "google": "GEMINI_API_KEY",
     "youtube": "YOUTUBE_API_KEY",
+    "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "higgsfield": "HIGGSFIELD_API_KEY",
     "elevenlabs": "ELEVENLABS_API_KEY",
@@ -25,10 +26,14 @@ CATALOG = {
         {"id": "gemini-pro", "name": "Gemini Pro", "provider": "google", "per_video": 0.06, "limits": {"input": "YouTube URL", "public_videos_only": True}},
         {"id": "gemini-flash", "name": "Gemini Flash", "provider": "google", "per_video": 0.02, "limits": {"input": "YouTube URL", "public_videos_only": True}},
     ],
+    # The writer is swappable: ChatGPT (OpenAI) by default, Claude (Anthropic) once its key is added.
+    # per_video covers the angles and a short script; per_min adds the longer story of a longer video.
     "writer": [
-        {"id": "claude-opus-5-5", "name": "Claude Opus 5.5", "provider": "anthropic", "per_video": 0.40, "price": {"input_per_mtok": 4.0, "output_per_mtok": 20.0}},
-        {"id": "claude-sonnet-5-5", "name": "Claude Sonnet 5.5", "provider": "anthropic", "per_video": 0.20, "price": {"input_per_mtok": 2.0, "output_per_mtok": 10.0}},
-        {"id": "gemini-pro-writer", "name": "Gemini Pro", "provider": "google", "per_video": 0.10},
+        {"id": "gpt-5-5", "name": "GPT-5.5", "provider": "openai", "per_video": 0.30, "per_min": 0.03, "price": {"input_per_mtok": 5.0, "output_per_mtok": 30.0}},
+        {"id": "gpt-5", "name": "GPT-5", "provider": "openai", "per_video": 0.10, "per_min": 0.01, "price": {"input_per_mtok": 1.25, "output_per_mtok": 10.0}},
+        {"id": "claude-opus-5-5", "name": "Claude Opus 5.5", "provider": "anthropic", "per_video": 0.40, "per_min": 0.04, "price": {"input_per_mtok": 4.0, "output_per_mtok": 20.0}},
+        {"id": "claude-sonnet-5-5", "name": "Claude Sonnet 5.5", "provider": "anthropic", "per_video": 0.20, "per_min": 0.02, "price": {"input_per_mtok": 2.0, "output_per_mtok": 10.0}},
+        {"id": "gemini-pro-writer", "name": "Gemini Pro", "provider": "google", "per_video": 0.10, "per_min": 0.01},
     ],
     "voice": [
         {"id": "gemini-tts-flash", "name": "Gemini TTS Flash", "provider": "google", "cost": 0.01, "unit": "per 1k chars", "limits": {"cloning": False}},
@@ -49,7 +54,8 @@ CATALOG = {
     ],
 }
 
-# Real adapters register here as they are written, e.g. REAL["writer"]["claude-opus-5-5"] = ClaudeWriter
+# Real adapters register here as they are written, e.g. REAL["writer"]["gpt-5-5"] = OpenAIWriter and
+# REAL["writer"]["claude-opus-5-5"] = ClaudeWriter. Both implement base.Writer, so the rest of the app is unchanged.
 REAL: dict[str, dict[str, type]] = {kind: {} for kind in CATALOG}
 
 

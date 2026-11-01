@@ -39,7 +39,7 @@ class CostLimitError(Exception):
 
 
 def cost_limit() -> float:
-    return float(os.getenv("ANGLE_STUDIO_COST_LIMIT", "3.00"))
+    return float(os.getenv("ANGLE_STUDIO_COST_LIMIT", "10.00"))
 
 
 def require(p: Project, *checkpoints: str) -> None:
@@ -163,6 +163,11 @@ def pacing_options(p: Project) -> list[dict]:
     return opts
 
 
+def _writing_cost(p: Project) -> float:
+    w = registry.model("writer", p.models.writer)
+    return w["per_video"] + w.get("per_min", 0) * p.format.target_seconds / 60
+
+
 def estimate(p: Project) -> dict:
     lines = p.script.lines if p.script else []
     chars = sum(len(l.text) for l in lines if l.audio_status != "ready")
@@ -171,7 +176,7 @@ def estimate(p: Project) -> dict:
     vm = registry.model("video", p.models.video)
     anim_secs = sum(min(vm["limits"]["max_clip"], max(5, -(-scene_seconds(p, s) // 5) * 5)) for s in anim)
     out = {
-        "analysis_and_writing": 0.0 if p.analysis else registry.model("analyst", p.models.analyst)["per_video"] + registry.model("writer", p.models.writer)["per_video"],
+        "analysis_and_writing": 0.0 if p.analysis else registry.model("analyst", p.models.analyst)["per_video"] + _writing_cost(p),
         "voice": chars / 1000 * registry.model("voice", p.models.voice)["cost"],
         "images": n_img * registry.model("image", p.models.image)["cost"],
         "video": anim_secs * vm["cost"],
@@ -197,7 +202,9 @@ def overlap(script_text: str, transcript: str) -> float:
 
 async def ingest(pid: str, url: str, manual_transcript: str | None, progress: Callable[[str], None]) -> None:
     """Gemini watches the video and writes a report; the writer turns the report into angle cards."""
-    cached = storage.kv_get("ingest_cache", url) if not manual_transcript else None  # ING-6
+    p = storage.load(pid)
+    cache_key = f"{url}|{p.models.analyst}|{p.models.writer}"  # angles depend on who watched and who wrote
+    cached = storage.kv_get("ingest_cache", cache_key) if not manual_transcript else None  # ING-6
     if cached:
         progress("Loaded from cache")
         async with editing(pid) as p:
@@ -231,7 +238,7 @@ async def ingest(pid: str, url: str, manual_transcript: str | None, progress: Ca
     async with editing(pid) as p:
         p.source, p.analysis, p.angles, p.angles_written_by = source, analysis, angles, writer_m["name"]
         p.render.cost_actual += report.cost + writer_cost
-    storage.kv_put("ingest_cache", url, {"source": source.model_dump(), "analysis": analysis.model_dump(),
+    storage.kv_put("ingest_cache", cache_key, {"source": source.model_dump(), "analysis": analysis.model_dump(),
                                          "angles": [a.model_dump() for a in angles], "written_by": writer_m["name"]})
 
 
