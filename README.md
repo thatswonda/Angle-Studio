@@ -53,6 +53,17 @@ Tests (no API calls, no cost):
 cd server && python -m pytest -q tests
 ```
 
+## Put it online (Render)
+
+Vercel cannot run this app: it needs a server that stays on, FFmpeg, background jobs and a disk. Render runs it from this repo with the included `Dockerfile` and `render.yaml`.
+
+1. Sign in at render.com with GitHub and allow access to this repository.
+2. New > Blueprint, pick this repository. Render reads `render.yaml`.
+3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `YOUTUBE_API_KEY`.
+4. Deploy. The first build takes a few minutes. Open the `onrender.com` link, type any user name and your `APP_PASSWORD`.
+
+The blueprint uses the Starter plan (always on, about $7 a month). On the free plan the app sleeps when idle and loses rendered videos on restart, so download each video when it is done.
+
 ## What is live
 
 | Step | Real service | Notes |

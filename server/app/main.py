@@ -1,11 +1,15 @@
 """Angle Studio API. Run with: uvicorn app.main:app --reload (from server/)."""
 from __future__ import annotations
 
+import base64
+import hmac
+import os
+
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
@@ -15,6 +19,32 @@ from .models import Pacing, Project, new_id
 from .providers import registry, sample
 
 app = FastAPI(title="Angle Studio API", version="0.2.0")
+
+
+@app.middleware("http")
+async def require_password(request: Request, call_next):
+    """When APP_PASSWORD is set (always, once hosted), every page, API call and media file needs it.
+    The browser asks once and remembers it; any user name works."""
+    password = os.getenv("APP_PASSWORD")
+    if password and request.url.path != "/healthz":
+        ok = False
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("basic "):
+            try:
+                ok = hmac.compare_digest(base64.b64decode(auth[6:]).decode().split(":", 1)[1], password)
+            except Exception:
+                ok = False
+        if not ok:
+            return Response("Angle Studio needs its password.", status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="Angle Studio", charset="UTF-8"'})
+    return await call_next(request)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
+
 app.include_router(live.router)
 live.MEDIA.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=live.MEDIA), name="media")

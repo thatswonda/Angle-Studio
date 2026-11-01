@@ -44,3 +44,15 @@ def test_render_makes_a_video(tmp_path):
     assert out.exists() and out.stat().st_size > 1000
     with pytest.raises(ProviderError):  # a missing voice clip is reported, not crashed on
         render.render({"scenes": [{"image": "data:image/png;base64," + png, "duration": 1, "text": "x"}], "lines": [{"audio": ""}]}, media, lambda _: None)
+
+
+def test_password_protects_everything(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_PASSWORD", "s3cret")
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    assert c.get("/").status_code == 401 and "WWW-Authenticate" in c.get("/").headers
+    assert c.get("/api/live/status").status_code == 401
+    assert c.get("/healthz").status_code == 200
+    assert c.get("/api/live/status", auth=("me", "wrong")).status_code == 401
+    assert c.get("/api/live/status", auth=("me", "s3cret")).status_code == 200

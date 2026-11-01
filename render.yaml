@@ -1,0 +1,20 @@
+# Render blueprint: New > Blueprint, pick this repo, then fill in the secret values when asked.
+services:
+  - type: web
+    name: angle-studio
+    runtime: docker
+    plan: starter            # always on; the free plan sleeps and loses rendered files on restart
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_PASSWORD    # the password the browser asks for; keeps strangers off your API keys
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: ANGLE_STUDIO_WRITER
+        value: gpt-5-5
+      - key: ANGLE_STUDIO_MOCK
+        value: "0"
