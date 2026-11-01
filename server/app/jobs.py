@@ -11,7 +11,7 @@ import time
 import traceback
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 
 @dataclass
@@ -22,6 +22,7 @@ class Job:
     status: str = "queued"  # queued | running | done | failed
     stage: str = ""
     error: Optional[str] = None
+    result: Any = None
     created_at: float = field(default_factory=time.time)
     finished_at: Optional[float] = None
 
@@ -41,7 +42,7 @@ def submit(project_id: str, label: str, work: Work) -> Job:
     async def run() -> None:
         job.status = "running"
         try:
-            await work(progress)
+            job.result = await work(progress)
             job.status = "done"
         except Exception as e:  # surfaced to the UI as a clear error
             job.status, job.error = "failed", f"{type(e).__name__}: {e}"

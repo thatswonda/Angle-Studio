@@ -2,7 +2,7 @@
 
 A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You paste a link to a video that already performs, pick one of 8 to 12 original angles, and take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
 
-**Status:** UI and backend skeleton are done.
+**Status:** working. Opened from the server it runs in **live mode** with real APIs; the claude.ai preview is a demo with simulated AI.
 
 ## Who does what
 
@@ -15,7 +15,7 @@ A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You 
 | Scene images | Google Gemini API | Nano Banana 2 (or Imagen 4) |
 | Animated clips | Google Gemini API / Higgsfield API | Veo 3.1 Fast, or Seedance 2.0 / Kling 3.0 via Higgsfield |
 
-The writing model never sees the video itself, only the report Gemini writes about it. Videos run up to 10 minutes. Prices in the app are estimates from public write-ups (October 2026) and should be confirmed on each provider's pricing page. Every AI provider is a mock adapter, so the whole flow runs with no API keys or cost. Connecting real APIs comes last.
+The writing model never sees the video itself, only the report Gemini writes about it. Videos run up to 10 minutes. Prices in the app are estimates from public write-ups (October 2026) and should be confirmed on each provider's pricing page. The demo simulates every AI call; live mode calls the real APIs below.
 
 ## Layout
 
@@ -31,21 +31,42 @@ server/app/providers/     One interface per capability (base.py), mock adapters,
 server/tests/             End-to-end test: link to rendered video, cost limit, cache
 ```
 
-## Run it
+## Run it (live mode)
+
+1. Install Python 3.11+ and FFmpeg (macOS: `brew install ffmpeg`; Windows: `winget install ffmpeg`).
+2. Put your keys in `server/.env` (copy `server/.env.example`). Keys stay on the server and never reach the browser.
+3. Install and start:
 
 ```bash
 cd server && pip install -r requirements.txt
 ```
 
 ```bash
-cd server && uvicorn app.main:app --reload
+cd server && uvicorn app.main:app
 ```
 
-Open http://localhost:8000 for the app or http://localhost:8000/docs for the API.
+4. Open http://localhost:8000. The top bar shows **Live**. Rendered videos are saved in `server/data/media/renders`.
+
+Tests (no API calls, no cost):
 
 ```bash
 cd server && python -m pytest -q tests
 ```
+
+## What is live
+
+| Step | Real service | Notes |
+|---|---|---|
+| Stats and comments | YouTube Data API | Questions and requests are picked out of the top 100 comments |
+| Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
+| Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
+| Voice | Gemini TTS | Director's-notes prompt keeps the delivery consistent without reading it aloud |
+| Images | Nano Banana 2 / Pro / 2 Lite | Needs billing on the Gemini key (the free tier has no image models) |
+| Render | FFmpeg on your machine | Zoom and pan per scene, narration, burned-in captions, loudness normalization |
+| Animated clips | Not yet | The Gemini key has no Veo models, so scenes use zoom and pan |
+| Music | Not yet | Narration only |
+
+**Gemini free tier:** watching the video (Flash), writing (Flash) and voice work, but voice is limited to a handful of requests a day, Pro models are not included, and images are not included. Turn on billing in Google AI Studio for real use.
 
 ## What the prototype covers
 
@@ -71,11 +92,9 @@ The writer sits behind one interface (`Writer` in `server/app/providers/base.py`
 1. Add `ANTHROPIC_API_KEY` to `.env`.
 2. Set `ANGLE_STUDIO_WRITER=claude-opus-5-5` (or `claude-sonnet-5-5`) for new projects, or pick Claude in the Writing selector in the top bar for one project.
 
-## Connecting real APIs (next)
+## Still to do
 
-1. Write one adapter per provider in `server/app/providers/` that implements its interface from `base.py`: `VideoSource` (YouTube Data API), `VideoAnalyst` (Gemini, takes the YouTube URL), `Writer` (ChatGPT now, Claude later), `TextToSpeech`, `ImageGenerator`, `ImageToVideo`.
-2. Register it in `registry.REAL`, put the keys in `.env` (see `.env.example`) and set `ANGLE_STUDIO_MOCK=0`.
-3. Point the `api` object in `web/index.html` at the server routes with `fetch()`. Its methods already match the route names.
-4. Finish the real FFmpeg render in `assembly.render` (the plan is already built).
-
-Open questions from PRD section 13 still apply: which providers you already have accounts with, which languages v1 needs, and whether it runs locally or hosted (hosted needs a login).
+- Animated clips, once the Gemini key has Veo (or via Higgsfield).
+- Background music from a royalty-free library.
+- A Claude writer adapter (the Writing selector and `ANGLE_STUDIO_WRITER` are ready for it).
+- Hosting with a login, to use the app from a phone.

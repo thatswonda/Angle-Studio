@@ -5,14 +5,19 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from . import jobs, pipeline, storage
+from . import config  # noqa: F401  (loads server/.env before anything reads a key)
+from . import jobs, live, pipeline, storage
 from .models import Pacing, Project, new_id
 from .providers import registry, sample
 
-app = FastAPI(title="Angle Studio API", version="0.1.0")
+app = FastAPI(title="Angle Studio API", version="0.2.0")
+app.include_router(live.router)
+live.MEDIA.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=live.MEDIA), name="media")
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
 CHECKPOINT_ORDER = ["angles", "script", "style", "scenes", "voice", "format", "clips"]
 
@@ -285,4 +290,10 @@ def save_template(body: dict[str, Any]):
 
 @app.get("/")
 def index():
-    return FileResponse(WEB)
+    """Serves the web app. The page file has no document skeleton (claude.ai adds one when publishing), so add it here."""
+    page = WEB.read_text()
+    if not page.lstrip().lower().startswith("<!doctype"):
+        page = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></head><body>'
+                + page + "</body></html>")
+    return HTMLResponse(page)
