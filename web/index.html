@@ -965,7 +965,7 @@ const api = {
           p.ingesting = false; p.step = 'angles'; addCost(p, r.cost || 0);
           if (p.title === 'Untitled project') p.title = r.source.title.slice(0, 60);
         });
-        toast(r.angles.length + ' angles are ready.');
+        toast(r.warning ? r.angles.length + ' angles are ready. ' + r.warning : r.angles.length + ' angles are ready.');
       } catch (e) { updateP(pid, p => { p.ingesting = false; p.ingest_error = e.message; }); toast(e.message); }
       return;
     }

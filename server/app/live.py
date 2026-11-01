@@ -87,7 +87,16 @@ async def ingest(body: IngestBody):
 
     async def work(progress):
         progress("YouTube Data API: title, stats and comments")
-        info = await youtube.fetch(body.url)
+        warning = None
+        try:
+            info = await youtube.fetch(body.url)
+        except ProviderError as e:
+            if "no public video" in str(e) or "doesn't look like" in str(e):
+                raise
+            # Keep going without comments: Gemini can still watch the video from its link.
+            info = await youtube.basic_info(body.url)
+            warning = f"Comments were skipped. {e}"
+            progress("Comments skipped: the YouTube Data API refused the key")
         comments = info["comments"]
         an = ANALYST_NAMES.get(body.analyst, body.analyst)
         progress(f"{an} is watching the video")
@@ -155,7 +164,7 @@ async def ingest(body: IngestBody):
                          "gaps": [{"kind": g.get("kind", "Gap"), "text": g.get("text", ""), "from": g.get("from_comment") if g.get("from_comment") in ids else None}
                                   for g in (report.get("gaps") or []) if isinstance(g, dict)],
                          "analyzed_by": an},
-            "angles": angles, "written_by": wn, "cost": round(cost + wcost, 4),
+            "angles": angles, "written_by": wn, "cost": round(cost + wcost, 4), "warning": warning,
         }
 
     return _job("Analyzing reference video", work)

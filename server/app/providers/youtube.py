@@ -32,6 +32,23 @@ def _views(n: int) -> str:
     return f"{n / 1e6:.1f}M views" if n >= 1e6 else f"{n / 1e3:.0f}K views" if n >= 1e3 else f"{n} views"
 
 
+async def basic_info(url: str) -> dict:
+    """Title, channel and thumbnail from YouTube's public oEmbed page info, which needs no key.
+    Used when the Data API refuses, so the analysis can still run (without comments or view counts)."""
+    vid = video_id(url)
+    d = {}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            r = await c.get("https://www.youtube.com/oembed", params={"url": f"https://www.youtube.com/watch?v={vid}", "format": "json"})
+        if r.status_code in (401, 403, 404):
+            raise ProviderError("YouTube found no public video at that link.")
+        d = r.json() if r.status_code == 200 else {}
+    except httpx.HTTPError:
+        pass  # no page info either; Gemini still reads the title from the video itself
+    return {"title": d.get("title", "Reference video"), "channel": d.get("author_name", ""), "duration": 0, "published": "",
+            "views": "", "thumb": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg", "comments_scanned": 0, "comment_count": 0, "comments": []}
+
+
 async def fetch(url: str) -> dict:
     key = os.getenv("YOUTUBE_API_KEY")
     if not key:
@@ -40,7 +57,11 @@ async def fetch(url: str) -> dict:
     async with httpx.AsyncClient(timeout=30.0) as c:
         r = await c.get(f"{API}/videos", params={"part": "snippet,statistics,contentDetails", "id": vid, "key": key})
         if r.status_code != 200:
-            raise ProviderError(f"YouTube Data API error {r.status_code}: {r.json().get('error', {}).get('message', '')}")
+            msg = r.json().get("error", {}).get("message", "")
+            if r.status_code == 403 and "blocked" in msg:
+                msg = ("this API key is not allowed to use the YouTube Data API. In Google Cloud, enable YouTube Data API v3 "
+                       "for the key's project and allow it under the key's API restrictions.")
+            raise ProviderError(f"YouTube Data API error {r.status_code}: {msg}")
         items = r.json().get("items", [])
         if not items:
             raise ProviderError("YouTube found no public video at that link.")
