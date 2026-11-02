@@ -1461,7 +1461,7 @@ function Rail({ s, p }) {
       <nav aria-label="Library">
         <button type="button" className="rail-item" aria-current=${s.view === 'projects'} onClick=${() => setView('projects')}><${Icon} n="folder" /><span>Projects</span><span className="rail-count">${Object.keys(s.projects).length}</span></button>
         <button type="button" className="rail-item" aria-current=${s.view === 'ideas'} onClick=${() => setView('ideas')}><${Icon} n="bulb" /><span>Idea bank</span><span className="rail-count">${s.ideaBank.length}</span></button>
-        <button type="button" className="rail-item" aria-current=${s.view === 'templates'} onClick=${() => setView('templates')}><${Icon} n="layers" /><span>Templates</span><span className="rail-count">${s.templates.length}</span></button>
+        <button type="button" className="rail-item" aria-current=${s.view === 'templates'} onClick=${() => setView('templates')}><${Icon} n="layers" /><span>Templates</span><span className="rail-count">${allStyles().length}</span></button>
         <button type="button" className="rail-item" aria-current=${s.view === 'settings'} onClick=${() => setView('settings')}><${Icon} n="gear" /><span>Settings</span></button>
       </nav>
     </div>
@@ -2309,14 +2309,44 @@ function IdeasView({ s }) {
   </${Fragment}>`;
 }
 function TemplatesView({ s }) {
-  const p = s.projects[s.currentId];
+  const p = s.projects[s.currentId]; const locked = p.checkpoints.style;
+  const [open, setOpen] = useState(p.style || 'photoreal'); const st = styleById(open);
+  const use = id => { if (locked) return; updateP(p.id, q => { q.style = id; }); toast('“' + styleById(id).name + '” is now the look for “' + p.title + '”.'); };
   return html`<${Fragment}>
-    <${StepHead} title="Templates" sub="Your channel look: voice, style, captions, music and aspect ratio, reused across videos." />
-    <div className="list">${s.templates.map(t => html`<div key=${t.id} className="lrow">
-      <div style=${{ width: 64, flex: 'none' }}><div className="thumb" style=${{ aspectRatio: '1' }}><${Art} seed=${hashSeed(t.style)} styleId=${t.style} /></div></div>
-      <div className="grow" style=${{ minWidth: 0 }}><strong>${t.name}</strong><div className="note">${styleById(t.style).name} · voice ${voiceById(t.voice_id).name} · ${CAPTIONS.find(c => c.id === t.caption_style).name} captions · ${MUSIC.find(m => m.id === t.music).name} · ${t.aspect}</div><div className="note">Tone: ${t.tone}. Pacing: ${t.pacing}.</div></div>
-      <button type="button" className="btn" disabled=${p.checkpoints.style} title=${p.checkpoints.style ? 'Reopen the Visual style step to apply a template' : ''} onClick=${() => { applyTemplate(p.id, t); toast('Applied to “' + p.title + '”.'); }}>Apply to current project</button>
-    </div>`)}</div>
+    <${StepHead} title="Templates" sub="Visual templates set the look of every scene image. Channel looks save a whole setup: style, voice, captions, music and frame." />
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Visual templates</h2><span className="note">${allStyles().length} templates, each shown on the same four scenes. Click one to see its recipe.</span></div>
+      <div className="tgal">${allStyles().map(t => html`<button key=${t.id} type="button" className="tcard" aria-pressed=${open === t.id} onClick=${() => setOpen(t.id)}>
+        <div className="tmain">${styleImg(t, 1) ? html`<img src=${styleImg(t, 1)} alt=${t.name + ' example'} loading="lazy" />` : html`<${Art} seed=${hashSeed(t.id)} styleId=${t.id} />`}</div>
+        <div className="tthumbs">${[2, 3, 4].map(n => html`<span key=${n}>${styleImg(t, n) ? html`<img src=${styleImg(t, n)} alt="" loading="lazy" />` : null}</span>`)}</div>
+        <div className="tbody"><div className="row" style=${{ justifyContent: 'space-between', gap: 4 }}><strong>${t.name}</strong>${p.style === t.id ? html`<span className="chip">In use</span>` : t.custom ? html`<span className="chip">Yours</span>` : null}</div>
+          <span className="note">${t.mood}</span><span className="note">Best for: ${t.best}</span></div>
+      </button>`)}</div>
+    </section>
+    <section className="panel stack">
+      <div className="tdetail">
+        ${styleImg(st, 1) ? html`<img src=${styleImg(st, 1)} alt=${st.name} />` : html`<div className="frame r1x1"><${Art} seed=${hashSeed(st.id)} styleId=${st.id} /></div>`}
+        <div className="stack" style=${{ gap: 8, minWidth: 0 }}>
+          <div className="row" style=${{ justifyContent: 'space-between' }}><h2>${st.name}</h2><span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c, width: 16, height: 16 }} />`)}</span></div>
+          <p className="note">${st.mood}. Best for: ${st.best}.</p>
+          <div><div className="eyebrow">Recipe added to every scene image</div><p className="prompt" style=${{ fontSize: 12.5, marginTop: 2 }}>${st.prefix}</p></div>
+          <div><div className="eyebrow">Kept out</div><p className="note">${st.avoid}</p></div>
+          <div className="row">
+            <button type="button" className="btn primary" disabled=${locked || p.style === st.id} onClick=${() => use(st.id)}>${p.style === st.id ? 'In use for “' + p.title + '”' : 'Use for “' + p.title + '”'}</button>
+            ${locked ? html`<span className="note">This project’s style is approved. Reopen its Visual style step to change it.</span>` : null}
+            <button type="button" className="btn ghost" onClick=${() => goStep(isUnlocked(p, 'style') ? 'style' : p.step)}>Create your own on the Visual style step</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Channel looks</h2><span className="note">Save one from the Export step after a video you like</span></div>
+      <div className="list">${s.templates.map(t => html`<div key=${t.id} className="lrow">
+        <div style=${{ width: 64, flex: 'none' }}><div className="thumb" style=${{ aspectRatio: '1' }}>${styleImg(styleById(t.style), 1) ? html`<img src=${styleImg(styleById(t.style), 1)} alt="" style=${{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />` : html`<${Art} seed=${hashSeed(t.style)} styleId=${t.style} />`}</div></div>
+        <div className="grow" style=${{ minWidth: 0 }}><strong>${t.name}</strong><div className="note">${styleById(t.style).name} · voice ${voiceById(t.voice_id).name} · ${CAPTIONS.find(c => c.id === t.caption_style).name} captions · ${MUSIC.find(m => m.id === t.music).name} · ${t.aspect}</div><div className="note">Tone: ${t.tone}. Pacing: ${t.pacing}.</div></div>
+        <button type="button" className="btn" disabled=${locked} title=${locked ? 'Reopen the Visual style step to apply a channel look' : ''} onClick=${() => { applyTemplate(p.id, t); toast('Applied to “' + p.title + '”.'); }}>Apply to current project</button>
+      </div>`)}</div>
+    </section>
   </${Fragment}>`;
 }
 function SettingsView({ s }) {
