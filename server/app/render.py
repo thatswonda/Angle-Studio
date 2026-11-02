@@ -10,7 +10,7 @@ import wave
 from pathlib import Path
 from typing import Callable
 
-from .providers.google import ProviderError
+from .providers.google import ProviderError, clean_pcm, write_wav
 
 FPS = 30
 
@@ -101,6 +101,17 @@ def captions_srt(cues: list[tuple[float, float, list[str]]]) -> str:
     return "".join(f"{n}\n{_srt_ts(a)} --> {_srt_ts(b)}\n{' '.join(ch)}\n\n" for n, (a, b, ch) in enumerate(cues, 1))
 
 
+def _clean_clip(src: Path, dst: Path) -> Path:
+    """Voice clips saved before the fix carry a WAV header and metadata inside their samples; strip them."""
+    with wave.open(str(src)) as w:
+        rate, raw = w.getframerate(), w.readframes(w.getnframes())
+    if raw[:4] != b"RIFF":
+        return src
+    pcm, rate = clean_pcm(raw, rate)
+    write_wav(dst, pcm, rate)
+    return dst
+
+
 def _wav_seconds(p: Path) -> float:
     with wave.open(str(p)) as w:
         return w.getnframes() / w.getframerate()
@@ -156,7 +167,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     progress("Measuring the narration")
     if not lines or any(not l.get("audio") for l in lines):
         raise ProviderError("Every sentence needs its voiceover before rendering. Finish the Voice step first.")
-    clips = [local(l["audio"], f"a{i}") for i, l in enumerate(lines)]
+    clips = [_clean_clip(local(l["audio"], f"a{i}"), work / f"clean{i}.wav") for i, l in enumerate(lines)]
     line_secs = [_wav_seconds(c) for c in clips]
     line_times, t = [], 0.0
     for d in line_secs:

@@ -4,11 +4,13 @@ API keys come from the server environment (GEMINI_API_KEY) and are never sent to
 """
 from __future__ import annotations
 
+import array
 import asyncio
 import base64
 import json
 import os
 import re
+import sys
 import wave
 from pathlib import Path
 
@@ -190,16 +192,49 @@ async def speak(text: str, voice_id: str, model_id: str, out: Path, delivery: st
     inline = next((p["inlineData"] for p in _parts(resp) if "inlineData" in p), None)
     if not inline:
         raise ProviderError("Gemini TTS returned no audio.")
-    pcm = base64.b64decode(inline["data"])
     m = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
-    rate = int(m.group(1)) if m else 24000
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(out), "wb") as w:
+    pcm, rate = clean_pcm(base64.b64decode(inline["data"]), int(m.group(1)) if m else 24000)
+    write_wav(out, pcm, rate)
+    return len(pcm) / 2 / rate, len(text) / 1000 * TTS_PRICES_PER_1K_CHARS.get(model_id, 0.01)
+
+
+def clean_pcm(raw: bytes, rate: int = 24000) -> tuple[bytes, int]:
+    """Returns only the 16-bit mono samples. Some TTS models send a whole WAV file (a RIFF header in front and an
+    AI-provenance metadata block at the end) instead of raw samples; played as sound, those bytes crackle at
+    every sentence boundary. A raw clip passes through unchanged. Both ends get a 5 ms fade so joins never click."""
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE":
+        i = 12
+        found = None
+        while i + 8 <= len(raw):
+            cid, size = raw[i:i + 4], int.from_bytes(raw[i + 4:i + 8], "little")
+            if cid == b"fmt ":
+                rate = int.from_bytes(raw[i + 12:i + 16], "little")
+            if cid == b"data":
+                found = raw[i + 8:i + 8 + size]
+                break
+            i += 8 + size + (size & 1)
+        raw = found if found is not None else raw[44:]
+    raw = raw[: len(raw) // 2 * 2]
+    samples = array.array("h", raw)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    fade = min(len(samples) // 2, rate // 200)  # 5 ms
+    for k in range(fade):
+        g = k / fade
+        samples[k] = int(samples[k] * g)
+        samples[-1 - k] = int(samples[-1 - k] * g)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    return samples.tobytes(), rate
+
+
+def write_wav(path: Path, pcm: bytes, rate: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(rate)
         w.writeframes(pcm)
-    return len(pcm) / 2 / rate, len(text) / 1000 * TTS_PRICES_PER_1K_CHARS.get(model_id, 0.01)
 
 
 STYLE_REF_NOTE = ("Use the reference image(s) only for their visual style: medium, rendering, color palette, lighting and "

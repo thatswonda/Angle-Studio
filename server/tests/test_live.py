@@ -134,3 +134,18 @@ def test_analysis_is_cached(monkeypatch, tmp_path):
     first, second = run(), run()
     assert first["status"] == "done" and second["result"]["cached"] and second["result"]["cost"] == 0
     assert len(watched) == 1  # the video was watched once
+
+
+def test_tts_wav_wrapper_is_stripped():
+    import io
+    from app.providers.google import clean_pcm
+    body = struct.pack("<4h", 1000, 2000, -2000, 1000) * 2000
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(22050), w.writeframes(body)
+    wrapped = buf.getvalue() + b"LIST....c2pa provenance metadata trainedAlgorithmicMedia"
+    pcm, rate = clean_pcm(wrapped)
+    assert rate == 22050 and len(pcm) == len(body) and b"RIFF" not in pcm and b"trained" not in pcm
+    assert pcm[400:600] == body[400:600]  # the middle is untouched; only the 5 ms edges fade
+    raw, _ = clean_pcm(body)  # raw samples pass through
+    assert len(raw) == len(body)
