@@ -215,6 +215,33 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .script-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
 
 /* Style */
+.tgal { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.tcard { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); overflow: hidden; padding: 0; cursor: pointer; text-align: left; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.tcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tcard:disabled { cursor: not-allowed; }
+.tmain { aspect-ratio: 1; overflow: hidden; background: var(--sunk); }
+.tmain img, .tthumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tmain img { transition: transform .35s ease; }
+.tcard:hover .tmain img { transform: scale(1.04); }
+.tthumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--line); }
+.tthumbs span { aspect-ratio: 1; overflow: hidden; background: var(--sunk); display: block; }
+.tbody { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 2px; }
+.tbody .note { font-size: 12px; }
+.tcheck { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.tcheck svg { width: 14px; height: 14px; }
+.tdetail { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; align-items: start; }
+.tdetail img { width: 100%; border-radius: var(--r-sm); display: block; aspect-ratio: 1; object-fit: cover; }
+.upl { display: flex; gap: 8px; flex-wrap: wrap; }
+.upl img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--line); }
+.caplist { display: flex; flex-direction: column; gap: 4px; max-height: 380px; overflow: auto; padding-right: 4px; }
+.capline { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 6px; align-items: start; }
+.capline .textarea { min-height: 34px; padding: 6px 8px; font-size: 13px; }
+.capline .idx { font-family: var(--f-mono); font-size: 12px; color: var(--muted); padding-top: 8px; text-align: right; }
+.kthumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px; }
+.kthumb { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.kthumb[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.kthumb .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 860px) { .tdetail { grid-template-columns: minmax(0, 1fr); } .tdetail img { max-width: 220px; } }
 .styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .scard { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); overflow: hidden; cursor: pointer; text-align: left; padding: 0; display: flex; flex-direction: column; }
 .scard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -242,7 +269,7 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .aspect { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
 .aspect[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .aspect i { display: block; background: var(--sunk); border: 2px solid var(--muted); border-radius: 4px; }
-.capopts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.capopts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .capopt { border: 1px solid var(--line); border-radius: var(--r); background: var(--frame); color: #fff; height: 86px; display: flex; align-items: flex-end; justify-content: center; padding: 8px; cursor: pointer; position: relative; overflow: hidden; }
 .capopt[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--accent); }
 .capopt span.lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: rgba(255,255,255,0.7); }
@@ -381,7 +408,7 @@ details.meta-d[open] summary { margin-bottom: 6px; }
   .line.char .textarea { grid-column: 2; }
   .aline { grid-template-columns: 22px minmax(0, 1fr) auto; }
   .aline .wave, .aline .secs { display: none; }
-  .capopts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .capopts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .paces { grid-template-columns: minmax(0, 1fr); }
   .proj-title { display: none; }
   .kv { grid-template-columns: minmax(0, 1fr); }
@@ -455,12 +482,20 @@ const VOICES = [
   { id: 'v-own', name: 'My voice', desc: 'Your cloned voice · needs consent', pitch: 1.0, rate: 1.0, speed: 1.0, clone: true },
 ];
 
+// Visual templates. Example images live in templates/<id>-<n>.jpg (made with Nano Banana 2 from the same four scenes).
 const STYLES = [
-  { id: 'botanical', name: 'Soft botanical', kind: 'soft', mood: 'Calm, tactile, morning light', prefix: 'soft window light, shallow depth of field, muted greens, 35mm film grain', palette: ['#2E4A3B', '#93BF9A', '#F1E6C8', '#D9895B'] },
-  { id: 'infographic', name: 'Clean infographic', kind: 'flat', mood: 'Clear, explanatory, numbers on screen', prefix: 'flat vector illustration, clean geometric shapes, generous negative space, two-tone', palette: ['#12355B', '#4F8BC9', '#EAF2FA', '#F2B134'] },
-  { id: 'comic', name: 'Cartoon comic', kind: 'comic', mood: 'Playful, punchy, expressive', prefix: 'bold ink outlines, cel shading, saturated colors, expressive cartoon characters', palette: ['#2B2D42', '#EF8354', '#FFF3D6', '#4FB0C6'] },
-  { id: 'watercolor', name: 'Watercolor journal', kind: 'watercolor', mood: 'Gentle, nostalgic, handmade', prefix: 'loose watercolor on cold-press paper, soft bleeding edges, hand-drawn feel', palette: ['#5B7B7A', '#C8D5B9', '#FAF3E3', '#E08D79'] },
-  { id: 'cinematic', name: 'Moody cinematic', kind: 'soft', mood: 'Dramatic, high stakes, night', prefix: 'low-key lighting, teal and amber grade, anamorphic lens, deep shadows', palette: ['#0E1A24', '#1F4E5A', '#E7B15A', '#C2563A'] },
+  { id: "photoreal", name: "Cinematic photoreal", kind: "soft", mood: "True to life, premium, film-like", best: "Stories, explainers, travel, true events", prefix: "cinematic photorealistic film still, shot on a full-frame cinema camera with a 35mm lens, natural motivated lighting, shallow depth of field, rich true-to-life colors, subtle film grain, high dynamic range, crisp fine detail", avoid: "cartoon, illustration, oversaturated colors, plastic-looking skin, distorted hands or faces", palette: ["#1E2A33", "#5E7A8A", "#E9DCC9", "#C9853F"], examples: 4 },
+  { id: "cinematic", name: "Moody cinematic", kind: "soft", mood: "Dark, dramatic, high stakes", best: "Mystery, history, true crime, tension", prefix: "moody cinematic film still, low-key lighting with deep shadows, teal and amber color grade, anamorphic lens with soft flares, atmospheric haze, dramatic composition, rich contrast", avoid: "flat lighting, bright cheerful colors, cartoon look, blown-out highlights", palette: ["#0E1A24", "#1F4E5A", "#E7B15A", "#C2563A"], examples: 4 },
+  { id: "documentary", name: "Documentary", kind: "soft", mood: "Authentic, observed, real", best: "Nature, culture, how-to, field reports", prefix: "documentary photograph for a nature and travel magazine, available light, candid unposed moment, authentic textures, natural colors, sharp focus, environmental storytelling, 50mm lens", avoid: "staged studio look, heavy filters, fantasy elements, cartoon style", palette: ["#2F3B2C", "#7C8B5E", "#E6DFCF", "#B9773C"], examples: 4 },
+  { id: "botanical", name: "Warm lifestyle", kind: "soft", mood: "Calm, cozy, inviting", best: "Home, food, gardening, wellness, routines", prefix: "warm lifestyle photograph, soft window light, airy and bright, gentle warm pastel tones, cozy natural materials like linen and wood, shallow depth of field, inviting and calm atmosphere", avoid: "harsh shadows, neon colors, gloomy mood, cluttered backgrounds", palette: ["#3E4A3B", "#A7C4A0", "#F4ECDD", "#D9895B"], examples: 4 },
+  { id: "animated3d", name: "3D animated film", kind: "flat", mood: "Playful, bright, family friendly", best: "Kids, character stories, fun facts", prefix: "stylized 3D animated film still, soft global illumination, appealing rounded character design with expressive faces, vibrant harmonious colors, subsurface scattering on skin, cinematic depth of field, polished family-film quality", avoid: "photorealism, live action, creepy uncanny faces, copyrighted characters", palette: ["#2B3A67", "#5DA9E9", "#FFF1D0", "#FF8C42"], examples: 4 },
+  { id: "anime", name: "Anime-inspired", kind: "comic", mood: "Vivid, emotional, epic skies", best: "Stories, motivation, adventure, lofi", prefix: "anime-inspired illustration, clean cel shading, crisp confident line art, luminous painted sky, vibrant saturated palette, dramatic rim lighting, richly detailed background art", avoid: "photorealism, 3D render look, muddy colors, copyrighted characters", palette: ["#24305E", "#6C8EEF", "#FDE8E9", "#F76C6C"], examples: 4 },
+  { id: "comic", name: "Graphic novel", kind: "comic", mood: "Bold, punchy, dramatic", best: "Rivalries, history, action, explainers with attitude", prefix: "graphic novel panel, bold ink outlines, halftone shading, dramatic camera angles, limited bold palette with strong blacks and one spot color, dynamic composition, hand-inked texture", avoid: "photorealism, soft gradients, speech bubbles, lettering", palette: ["#1B1B1E", "#D7263D", "#F4E9CD", "#1B998B"], examples: 4 },
+  { id: "watercolor", name: "Watercolor storybook", kind: "watercolor", mood: "Gentle, nostalgic, handmade", best: "Bedtime stories, journaling, travel memories", prefix: "loose watercolor storybook illustration on cold-press paper, soft bleeding edges, granulating pigments, delicate hand-drawn pencil lines, gentle muted palette, white paper showing through", avoid: "photorealism, hard digital edges, neon colors, heavy black outlines", palette: ["#5B7B7A", "#C8D5B9", "#FAF3E3", "#E08D79"], examples: 4 },
+  { id: "infographic", name: "Clean explainer", kind: "flat", mood: "Clear, modern, informative", best: "Finance, science, tech, step-by-step guides", prefix: "clean flat vector illustration for an explainer video, simple geometric shapes, generous negative space, a calm palette of navy, sky blue and off-white with one golden accent, subtle long shadows, modern and tidy", avoid: "photorealism, clutter, tiny details, written labels", palette: ["#12355B", "#4F8BC9", "#EAF2FA", "#F2B134"], examples: 4 },
+  { id: "retro", name: "Retro 80s", kind: "soft", mood: "Neon, nostalgic, energetic", best: "Tech, music, gaming, nostalgia", prefix: "1980s retro aesthetic, VHS camcorder look, neon magenta and cyan lighting, synthwave sunset colors, soft bloom, slight chromatic aberration and scanlines, nostalgic analog grain", avoid: "modern minimal look, muted earthy colors, clean digital sharpness", palette: ["#1A1033", "#7B2CBF", "#FF5D8F", "#2EC4F1"], examples: 4 },
+  { id: "papercut", name: "Paper cut-out", kind: "flat", mood: "Crafty, charming, tactile", best: "Kids, education, light-hearted stories", prefix: "layered paper cut-out diorama, handcrafted colored paper with visible fibers, soft drop shadows between layers, playful stop-motion craft feel, warm cheerful craft palette, shot from the front with gentle studio light", avoid: "photorealistic people, glossy plastic, digital gradients", palette: ["#3D405B", "#81B29A", "#F4F1DE", "#E07A5F"], examples: 4 },
+  { id: "lineart", name: "Minimal line art", kind: "flat", mood: "Elegant, calm, thoughtful", best: "Quotes, philosophy, psychology, mindfulness", prefix: "minimal continuous line art, single-weight black ink lines on a warm off-white background, one muted terracotta accent color, lots of empty space, elegant and simple composition", avoid: "shading, busy backgrounds, many colors, photorealism", palette: ["#222222", "#9A8C7B", "#F7F3EC", "#C98B6B"], examples: 4 },
 ];
 const MUSIC = [
   { id: 'none', name: 'No music', mood: '' },
@@ -472,7 +507,10 @@ const CAPTIONS = [
   { id: 'bold', name: 'Bold pop' },
   { id: 'clean', name: 'Clean bar' },
   { id: 'karaoke', name: 'Karaoke' },
+  { id: 'none', name: 'No captions' },
 ];
+// A scene's caption: your edit if you made one, otherwise its words from the story.
+const captionOf = (p, sc) => sc.caption_text != null ? sc.caption_text : sceneText(p, sc);
 // Frame shapes. Chosen on the Visual style step, before any image is made.
 const FRAMES = [
   { v: '9:16', name: 'Vertical', use: 'YouTube Shorts, TikTok, Reels', w: 24, h: 42 },
@@ -698,7 +736,11 @@ const estSecs = (text, speed = 1) => Math.round((words(text).length / (2.6 * spe
 const randSeed = () => Math.floor(Math.random() * 1e6);
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const voiceById = id => VOICES.find(v => v.id === id) || VOICES[0];
-const styleById = id => STYLES.find(s => s.id === id) || STYLES[0];
+const allStyles = () => { let custom = []; try { custom = STATE.customStyles || []; } catch (e) { /* state not loaded yet */ } return STYLES.concat(custom); };
+const styleById = id => allStyles().find(s => s.id === id) || STYLES[0];
+const styleImg = (st, n) => st.refs ? st.refs[n - 1] : (st.examples ? 'templates/' + st.id + '-' + n + '.jpg' : null);
+// The prompt every scene image is made from: the template's recipe, the scene, and what to keep out.
+const imagePrompt = (st, scene) => st.prefix + '. Scene: ' + scene + (st.avoid ? '. Avoid: ' + st.avoid : '') + '. No words, captions, watermarks or logos in the image.';
 const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || MODELS[kind][0];
 const lineVoice = (p, line) => p.video_type === 'character' ? ((p.characters.find(c => c.id === line.speaker) || {}).voice_id || 'v-aoede') : p.audio.voice_id;
 const lineSecs = (p, line) => line.duration || estSecs(line.text, voiceById(lineVoice(p, line)).speed);
@@ -782,7 +824,7 @@ function estimate(p) {
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v7';
+const KEY = 'angle-studio-demo-v8';
 const listeners = new Set();
 const DEFAULT_MODELS = { writer: 'gpt-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
@@ -939,15 +981,28 @@ const VISUAL_HINTS = (() => {
   return m;
 })();
 
+// The image that locks the look: the earliest scene that already has a generated image.
+function lookAnchor(p, exceptId) {
+  if (p.style_lock === false) return null;
+  for (const sc of p.scenes) {
+    if (sc.id === exceptId) continue;
+    const v = sc.image_status === 'ready' && sc.image_versions[sc.image_index];
+    if (v && v.url) return v.url;
+  }
+  return null;
+}
 async function liveRender(pid, final) {
   const p = STATE.projects[pid];
   updateP(pid, q => { q.rendering = final ? 'final' : 'draft'; q.render_error = null; });
-  const scenes = p.scenes.map(sc => { const v = sc.image_versions[sc.image_index]; return { image: v ? (v.url || v.upload || '') : '', duration: sceneSecs(p, sc), text: sceneText(p, sc) }; });
-  const lines = p.script.lines.map(l => ({ audio: l.audio_url || '' }));
+  // Each scene lists its sentences, so the server can time every image to exactly those sentences' audio.
+  const index = {}; p.script.lines.forEach((l, i) => { index[l.id] = i; });
+  const scenes = p.scenes.map(sc => { const v = sc.image_versions[sc.image_index]; return { image: v ? (v.url || v.upload || '') : '', duration: sceneSecs(p, sc),
+    lines: sc.line_ids.map(id => index[id]).filter(i => i != null), split: sc.split || null, caption: captionOf(p, sc), caption_auto: sc.caption_text == null }; });
+  const lines = p.script.lines.map(l => ({ audio: l.audio_url || '', text: l.text }));
   try {
     const r = await liveJob(pid, final ? 'Rendering final MP4' : 'Building draft', 'render', { final, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines },
-      ['Joining the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
-    updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.status = 'rendered'; q.step = 'export'; } else q.render.draft_path = r.url; });
+      ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
+    updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; } });
     toast(final ? 'Final video rendered.' : 'Draft ready. Play it before rendering the final file.');
   } catch (e) { updateP(pid, q => { q.rendering = null; q.render_error = e.message; }); toast(e.message); }
 }
@@ -1018,6 +1073,60 @@ const api = {
     await runJob(pid, 'Writing script', [wr + ' is reading the chosen angles', wr + ' is drafting 3 hooks', wr + ' is writing the story to target length', 'Checking originality'], 550);
     updateP(pid, p => { p.script = buildScript(p); p.script.written_by = wr; p.scenes = []; p.plan_sig = null; addCost(p, modelOf(p, 'writer').perVideo * 0.3); });
   },
+  // Rewrites the story with the creator's idea; the previous version is kept for Undo.
+  async reviseStory(pid, idea) {
+    const p0 = STATE.projects[pid]; const wr = modelOf(p0, 'writer');
+    updateP(pid, p => { p.script.revising = true; });
+    try {
+      let story, changed, hints = {}, cost = 0, warning = null;
+      if (LIVE) {
+        const r = await liveJob(pid, 'Rewriting the story', 'revise', { writer: wr.id, story: p0.script.story, idea, target_seconds: p0.format.target_seconds,
+          video_type: p0.video_type, characters: p0.characters.map(c => ({ name: c.name, description: c.description })) }, [wr.name + ' is rewriting the story with your idea']);
+        story = r.story; changed = r.changed || 'Your idea was added.'; cost = r.cost || 0; warning = r.warning;
+        (r.visuals || []).forEach(v => splitSentences(v.sentence).forEach(x => { hints[norm(x)] = v.visual; }));
+      } else {
+        await runJob(pid, 'Rewriting the story', [wr.name + ' is reading your idea', wr.name + ' is working it into the story'], 600);
+        const isChar = p0.video_type === 'character'; const sep = isChar ? '\n' : '\n\n';
+        const parts = p0.script.story.split(sep); const line = (isChar && p0.characters[0] ? p0.characters[0].name + ': ' : '') + idea.trim().replace(/([^.!?])$/, '$1.');
+        parts.splice(Math.max(1, parts.length - 1), 0, line); story = parts.join(sep); changed = 'Added your idea just before the ending (simulated in the demo).';
+      }
+      updateP(pid, p => { p.script.prev_story = p.script.story; p.script.story = story; p.script.changed = changed; p.script.revising = false; p.script.visual_hints = { ...(p.script.visual_hints || {}), ...hints }; addCost(p, cost); });
+      toast(warning || 'Story rewritten with your idea.');
+      return true;
+    } catch (e) { updateP(pid, p => { p.script.revising = false; }); toast(e.message); return false; }
+  },
+  // After the video: titles, post captions and thumbnails written from the story, to choose from.
+  async publishKit(pid) {
+    const p0 = STATE.projects[pid]; const wr = modelOf(p0, 'writer');
+    const a = p0.angles.find(x => x.id === p0.selected_angle_ids[0]) || p0.angles[0] || {};
+    updateP(pid, p => { p.kit = { loading: true }; });
+    try {
+      let kit;
+      if (LIVE) {
+        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [] }, ['Writing titles, captions and thumbnail ideas from your story']);
+        kit = { titles: r.titles, captions: r.captions, tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
+        if (r.warning) toast(r.warning);
+      } else {
+        await runJob(pid, 'Writing the publish kit', ['Reading your story', 'Writing titles and captions', 'Sketching thumbnails'], 500);
+        const tags = (a.tags || []).slice(0, 4).map(t => '#' + t.replace(/\s+/g, '')).join(' ');
+        kit = { titles: [a.suggested_title, a.title, a.hooks[1].replace(/\.$/, ''), 'I tried this so you don\u2019t have to: ' + a.title.toLowerCase()],
+          captions: [a.pitch + ' ' + a.reason + ' What would you try first? ' + tags, a.hooks[0] + ' The full story is in the video. Save it for later. ' + tags, 'Everything I learned, in ' + lenLabel(p0.format.target_seconds) + '. ' + a.pitch + ' ' + tags],
+          tags: a.tags || [], thumbnails: [a.suggested_title.split(':')[0], a.hooks[1].split('.')[0], a.type].map((t, i) => ({ concept: 'Scene ' + (i * 2 + 1) + ' with bold text', text: t.split(' ').slice(0, 4).join(' '), status: 'ready', scene: Math.min(p0.scenes.length - 1, i * 2) })), cost: 0 };
+      }
+      updateP(pid, p => { p.kit = { ...kit, sel: { title: 0, caption: 0, thumb: 0 } }; addCost(p, kit.cost || 0); });
+      if (LIVE) await Promise.all(kit.thumbnails.map((t, i) => api.makeThumb(pid, i)));
+    } catch (e) { updateP(pid, p => { p.kit = { error: e.message }; }); toast(e.message); }
+  },
+  async makeThumb(pid, i) {
+    const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = styleById(p0.style);
+    updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; p.kit.thumbnails[i].error = null; });
+    try {
+      const prompt = st.prefix + '. A video thumbnail: ' + t.concept + '. Print this text large, bold and easy to read at small size: "' + t.text + '". High contrast, one clear focal point, uncluttered background.';
+      const anchor = lookAnchor(p0, null);
+      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs: (st.refs || []).concat(anchor ? [anchor] : []) });
+      updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'ready', url: r.url }); addCost(p, r.cost || 0); });
+    } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
+  },
   async generateAudio(pid, lineIds) {
     if (LIVE) {
       const p0 = STATE.projects[pid]; const ids = lineIds || p0.script.lines.map(l => l.id);
@@ -1072,7 +1181,10 @@ const api = {
   async generateImages(pid, ids) {
     if (LIVE) {
       // A few at a time, so the provider is not flooded; stop early if the key is out of quota.
-      const queue = ids.slice(); const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+      const queue = ids.slice();
+      // Locked look: make the first scene alone, so it can guide every other scene.
+      if (STATE.projects[pid].style_lock !== false && !lookAnchor(STATE.projects[pid], null) && queue.length > 1) await api.generateImage(pid, queue.shift());
+      const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
         while (queue.length) {
           const id = queue.shift(); await api.generateImage(pid, id);
           const sc = STATE.projects[pid].scenes.find(x => x.id === id);
@@ -1088,9 +1200,12 @@ const api = {
       const p0 = STATE.projects[pid]; const sc0 = p0.scenes.find(x => x.id === sceneId); if (!sc0) return;
       updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (x) { x.image_status = 'generating'; x.error = null; } });
       const chars = p0.characters.filter(c => sc0.character_ids.includes(c.id)).map(c => c.name + ', ' + c.description).join('; ');
-      const prompt = styleById(p0.style).prefix + ', ' + (sc0.image_prompt || sc0.description) + (chars ? '. Characters: ' + chars : '') + '. No words, captions or logos in the image.';
+      const st = styleById(p0.style);
+      const prompt = imagePrompt(st, (sc0.image_prompt || sc0.description) + (chars ? '. Characters: ' + chars : ''));
+      const anchor = lookAnchor(p0, sceneId);
+      const refs = (st.refs || []).concat(anchor ? [anchor] : []);
       try {
-        const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image });
+        const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs });
         updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (!x) return; x.image_versions.push({ url: r.url, prompt, model: p.models.image, style: p.style, at: Date.now() }); x.image_index = x.image_versions.length - 1; x.image_status = 'ready'; addCost(p, r.cost || 0); });
       } catch (e) { updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (x) { x.image_status = 'failed'; x.error = e.message; } }); }
       return;
@@ -1500,6 +1615,7 @@ function AnglesScreen({ p, s }) {
 function ScriptScreen({ p, s }) {
   const sc = p.script; const locked = p.checkpoints.script;
   const [custom, setCustom] = useState(!LENGTHS.includes(p.format.target_seconds));
+  const [idea, setIdea] = useState('');
   if (sc && sc.error) return html`<${Fragment}><${StepHead} title="The story could not be written" sub=${sc.error} /><div className="row"><button type="button" className="btn primary" onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Try again</button><span className="note">You can also switch the Writing model in the top bar first.</span></div></${Fragment}>`;
   if (!sc || sc.generating) return html`<${Fragment}><${StepHead} title="Writing the story" sub="Drafting three hook options and a story that fits your target length." /><div className="panel stack">${[90, 70, 85, 60, 75].map((w, i) => html`<div key=${i} className="skeleton" style=${{ width: w + '%' }}></div>`)}</div></${Fragment}>`;
   const isChar = p.video_type === 'character';
@@ -1544,6 +1660,15 @@ function ScriptScreen({ p, s }) {
           <textarea id="story" className="textarea story" rows="16" disabled=${locked} value=${sc.story} onChange=${e => updateP(p.id, q => { q.script.story = e.target.value; })}></textarea>
           ${Math.abs(total - target) > target * 0.25 ? html`<p className="warnbox">The story runs about ${fmtT(total)} against a ${fmtT(target)} target. Rewrite it, or trim or add to it by hand.</p>` : null}
         </section>
+        <section className="panel stack">
+          <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Add an idea</h2><span className="note">The writer works it into the story and keeps the length</span></div>
+          <textarea id="idea" className="textarea" rows="3" disabled=${locked || sc.revising} placeholder="e.g. Add that tomatoes need at least six hours of sun, and end by asking viewers what they grow" value=${idea} onChange=${e => setIdea(e.target.value)}></textarea>
+          <div className="row">
+            <button type="button" className="btn primary" disabled=${locked || sc.revising || !idea.trim()} onClick=${async () => { if (await api.reviseStory(p.id, idea)) setIdea(''); }}>${sc.revising ? html`<span className="spinner"></span> Rewriting` : html`<${Fragment}><${Icon} n="spark" />Rewrite with this idea</${Fragment}>`}</button>
+            ${sc.prev_story && !locked ? html`<button type="button" className="btn ghost" onClick=${() => updateP(p.id, q => { const t = q.script.story; q.script.story = q.script.prev_story; q.script.prev_story = t; q.script.changed = 'Back to the version before the last rewrite.'; })}><${Icon} n="redo" />Undo last rewrite</button>` : null}
+          </div>
+          ${sc.changed ? html`<p className="okbox">${sc.changed}</p>` : null}
+        </section>
       </div>
       <div className="stack">
         <section className="panel stack">
@@ -1564,7 +1689,7 @@ function ScriptScreen({ p, s }) {
         <section className="panel stack"><h3>Written from</h3>${sc.written_with.map(id => { const a = p.angles.find(x => x.id === id); return a ? html`<div key=${id} style=${{ fontSize: 13 }}><span className="eyebrow">${a.type}</span><div>${a.title}</div></div>` : null; })}</section>
       </div>
     </div>
-    <${ApproveBar} p=${p} step="script" ready=${lines.length > 0} hint="Write the story first." label="Approve story" onApprove=${onApprove} />
+    <${ApproveBar} p=${p} step="script" ready=${lines.length > 0 && !sc.revising} hint=${sc.revising ? 'Wait for the rewrite to finish.' : 'Write the story first.'} label="Approve story" onApprove=${onApprove} />
   </${Fragment}>`;
 }
 
@@ -1573,7 +1698,25 @@ function ScriptScreen({ p, s }) {
    ====================================================================== */
 function StyleScreen({ p, s }) {
   const locked = p.checkpoints.style; const suggested = (p.angles.find(a => a.id === p.selected_angle_ids[0]) || {}).style;
-  const cur = p.style || suggested;
+  const cur = p.style || suggested || 'photoreal'; const st = styleById(cur);
+  const [files, setFiles] = useState([]); const [name, setName] = useState(''); const [busy, setBusy] = useState(false);
+  const pick = id => !locked && updateP(p.id, q => { q.style = id; });
+  const addFiles = async list => {
+    const out = [];
+    for (const f of Array.from(list).slice(0, 3)) { try { out.push(await readImage(f)); } catch (e) { toast('“' + f.name + '” could not be read as an image.'); } }
+    setFiles(out.slice(0, 3));
+  };
+  const create = async () => {
+    setBusy(true);
+    try {
+      const r = LIVE ? await post('style-from-images', { images: files, name }) : (await sleep(900), { name: name || 'My style', mood: 'Your own look', prefix: 'in the visual style of the reference images: same medium, palette, lighting and texture', avoid: 'anything that breaks the reference look', palette: ['#2B2B2B', '#7A6F63', '#EFE8DE', '#C47A4A'], cost: 0 });
+      const id = uid('custom');
+      update(x => { x.customStyles = (x.customStyles || []).concat({ id, name: r.name, kind: 'soft', mood: r.mood, best: 'Your own channel look', prefix: r.prefix, avoid: r.avoid, palette: r.palette, refs: files.slice(), custom: true }); });
+      updateP(p.id, q => { q.style = id; addCost(q, r.cost || 0); });
+      setFiles([]); setName(''); toast('Template “' + r.name + '” created and selected.');
+    } catch (e) { toast(e.message); }
+    setBusy(false);
+  };
   return html`<${Fragment}>
     <${StepHead} title="Visual style" sub="Choose the frame and the look. Both are used for every scene image, so they are set here, before any image is made." />
     <section className="panel stack">
@@ -1582,16 +1725,42 @@ function StyleScreen({ p, s }) {
         <i style=${{ width: f.w, height: f.h }}></i><strong className="mono">${f.v}</strong><span>${f.name}</span><span className="note">${f.use}</span>
       </button>`)}</div>
     </section>
-    <h2>Look</h2>
-    <div className="styles">${STYLES.map(st => html`<button key=${st.id} type="button" className="scard" aria-pressed=${cur === st.id} disabled=${locked} onClick=${() => updateP(p.id, q => { q.style = st.id; })}>
-      <div className="art"><${Art} seed=${hashSeed(st.id)} styleId=${st.id} title=${st.name + ' example'} /></div>
-      <div className="sbody"><div className="row" style=${{ justifyContent: 'space-between' }}><strong>${st.name}</strong>${st.id === suggested ? html`<span className="chip">Suggested</span>` : null}</div>
-        <span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c, width: 14, height: 14 }} />`)}</span>
-        <span className="note">${st.mood}</span><span className="prefix">${st.prefix}</span></div>
-    </button>`)}</div>
-    <section className="panel row"><div className="grow"><strong>Saved templates</strong><p className="note">Apply your channel look: style, voice, captions, music and aspect ratio in one click.</p></div>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Look</h2><span className="note">${allStyles().length} templates. Each one is shown on the same four scenes so you can compare.</span></div>
+      <div className="tgal" role="radiogroup" aria-label="Visual template">${allStyles().map(t => html`<button key=${t.id} type="button" className="tcard" role="radio" aria-checked=${cur === t.id} aria-pressed=${cur === t.id} disabled=${locked} onClick=${() => pick(t.id)}>
+        <div className="tmain">${styleImg(t, 1) ? html`<img src=${styleImg(t, 1)} alt=${t.name + ' example'} loading="lazy" />` : html`<${Art} seed=${hashSeed(t.id)} styleId=${t.id} />`}</div>
+        <div className="tthumbs">${[2, 3, 4].map(n => html`<span key=${n}>${styleImg(t, n) ? html`<img src=${styleImg(t, n)} alt="" loading="lazy" />` : null}</span>`)}</div>
+        <div className="tbody"><div className="row" style=${{ justifyContent: 'space-between', gap: 4 }}><strong>${t.name}</strong>${t.id === suggested ? html`<span className="chip">Suggested</span>` : t.custom ? html`<span className="chip">Yours</span>` : null}</div>
+          <span className="note">${t.mood}</span><span className="note">Best for: ${t.best}</span></div>
+        ${cur === t.id ? html`<span className="tcheck"><${Icon} n="check" /></span>` : null}
+      </button>`)}</div>
+    </section>
+    <section className="panel stack">
+      <div className="tdetail">
+        ${styleImg(st, 1) ? html`<img src=${styleImg(st, 1)} alt=${st.name} />` : html`<div className="frame r1x1"><${Art} seed=${hashSeed(st.id)} styleId=${st.id} /></div>`}
+        <div className="stack" style=${{ gap: 8, minWidth: 0 }}>
+          <div className="row" style=${{ justifyContent: 'space-between' }}><h2>${st.name}</h2><span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c, width: 16, height: 16 }} />`)}</span></div>
+          <div><div className="eyebrow">Recipe added to every scene image</div><p className="prompt" style=${{ fontSize: 12.5, marginTop: 2 }}>${st.prefix}</p></div>
+          <div><div className="eyebrow">Kept out</div><p className="note">${st.avoid}</p></div>
+          <label className="switch"><input id="lock-look" type="checkbox" checked=${p.style_lock !== false} disabled=${locked} onChange=${e => updateP(p.id, q => { q.style_lock = e.target.checked; })} /><span><strong>Lock the look from scene 1.</strong> Scene 1 is made first, then sent as a style reference with every other scene so the whole video matches.</span></label>
+          ${st.custom ? html`<div className="row"><span className="note">Your reference images are sent with every scene image.</span><button type="button" className="btn sm ghost danger" disabled=${locked} onClick=${() => { update(x => { x.customStyles = (x.customStyles || []).filter(c => c.id !== st.id); }); updateP(p.id, q => { q.style = 'photoreal'; }); }}><${Icon} n="trash" />Delete template</button></div>` : null}
+        </div>
+      </div>
+    </section>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Create a template from your images</h2><span className="note">1 to 3 images in the look you want: your own work, or frames you made before</span></div>
+      <div className="row">
+        <label className="btn" htmlFor="tpl-files"><${Icon} n="upload" />Choose images</label>
+        <input id="tpl-files" type="file" accept="image/*" multiple hidden disabled=${locked} onChange=${e => addFiles(e.target.files)} />
+        <input id="tpl-name" className="input" style=${{ maxWidth: 240 }} placeholder="Name, e.g. My channel look" value=${name} disabled=${locked} onChange=${e => setName(e.target.value)} />
+        <button type="button" className="btn primary" disabled=${locked || !files.length || busy} onClick=${create}>${busy ? html`<span className="spinner"></span> Reading the style` : 'Create template'}</button>
+      </div>
+      ${files.length ? html`<div className="upl">${files.map((f, i) => html`<img key=${i} src=${f} alt=${'Reference ' + (i + 1)} />`)}</div>` : null}
+      <p className="note">${LIVE ? 'Gemini describes the style (never the subjects) as a recipe, and your images are sent as style references with every scene.' : 'In the demo the recipe is simulated. In live mode Gemini writes it from your images.'}</p>
+    </section>
+    <section className="panel row"><div className="grow"><strong>Saved channel looks</strong><p className="note">Apply style, voice, captions, music and frame in one click.</p></div>
       ${s.templates.map(t => html`<button key=${t.id} type="button" className="btn" disabled=${locked} onClick=${() => { applyTemplate(p.id, t); toast('Applied “' + t.name + '”.'); }}>Apply “${t.name}”</button>`)}</section>
-    <${ApproveBar} p=${p} step="style" ready=${!!cur} label="Approve style" onApprove=${() => { updateP(p.id, q => { q.style = cur; }); approve(p.id, 'style'); }} />
+    <${ApproveBar} p=${p} step="style" ready=${!!cur} label=${'Approve ' + st.name} onApprove=${() => { updateP(p.id, q => { q.style = cur; }); approve(p.id, 'style'); }} />
   </${Fragment}>`;
 }
 function hashSeed(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) % 100000; }
@@ -1676,6 +1845,7 @@ function VoiceScreen({ p, s }) {
 function CapSample({ id }) {
   if (id === 'bold') return html`<div className="caption bold" style=${{ position: 'static' }}><span>Three</span><span className="on">hours</span><span>of sun</span></div>`;
   if (id === 'clean') return html`<div className="caption clean" style=${{ position: 'static' }}>Three hours of sun.</div>`;
+  if (id === 'none') return html`<div className="caption clean" style=${{ position: 'static', background: 'transparent', color: 'rgba(255,255,255,0.55)' }}>Off</div>`;
   return html`<div className="caption karaoke" style=${{ position: 'static' }}><span className="past">Three </span><span className="past">hours </span><span>of sun</span></div>`;
 }
 function FormatScreen({ p, s }) {
@@ -1903,12 +2073,13 @@ function Player({ p, mode }) {
   const tr = clip
     ? 'scale(' + (1.1 + 0.08 * local) + ') translate(' + (Math.sin(local * 6.28) * 2.5) + '%, ' + (Math.cos(local * 6.28) * 2) + '%) rotate(' + Math.sin(local * 6.28) * 1 + 'deg)'
     : 'scale(' + (1.05 + 0.12 * local) + ') translate(' + (dir * (local - 0.5) * 5) + '%, ' + ((0.5 - local) * 2) + '%)';
-  const ls = sceneLines(p, sc); const text = sceneText(p, sc); const ws = words(text); const wi = Math.min(ws.length - 1, Math.floor(local * ws.length));
+  const ls = sceneLines(p, sc); const text = captionOf(p, sc); const ws = words(text); const wi = Math.min(ws.length - 1, Math.floor(local * ws.length));
   const cap = p.audio.caption_style;
   const speaker = p.video_type === 'character' && ls[0] && p.characters.find(c => c.id === ls[0].speaker);
   const h = p.format.aspect_ratio === '16:9';
   let caption = null;
-  if (cap === 'bold') { const start = Math.floor(wi / 3) * 3; caption = html`<div className="caption bold">${ws.slice(start, start + 3).map((w, k) => html`<span key=${k} className=${start + k === wi ? 'on' : ''}>${w}</span>`)}</div>`; }
+  if (cap === 'none') caption = null;
+  else if (cap === 'bold') { const start = Math.floor(wi / 3) * 3; caption = html`<div className="caption bold">${ws.slice(start, start + 3).map((w, k) => html`<span key=${k} className=${start + k === wi ? 'on' : ''}>${w}</span>`)}</div>`; }
   else if (cap === 'clean') caption = html`<div className="caption clean">${text}</div>`;
   else caption = html`<div className="caption karaoke">${ws.map((w, k) => html`<span key=${k} className=${k <= wi ? 'past' : ''}>${w + ' '}</span>`)}</div>`;
   const music = MUSIC.find(m => m.id === p.audio.music_path);
@@ -1936,6 +2107,23 @@ function VideoBox({ p, url }) {
   const w = { '9:16': 300, '16:9': 560, '1:1': 400, '4:5': 360 }[p.format.aspect_ratio] || 300; // fixed width: an empty video has no size of its own
   return html`<div className=${'player' + frameCls(p)} style=${{ width: w, maxWidth: '100%' }}><video key=${url} className=${'frame' + frameCls(p)} src=${url} controls playsInline style=${{ borderRadius: 14, background: '#000', display: 'block' }}></video></div>`;
 }
+function CaptionEditor({ p }) {
+  const on = p.audio.caption_style !== 'none';
+  const setOn = v => updateP(p.id, q => { if (v) q.audio.caption_style = q.audio.prev_caption || 'bold'; else { q.audio.prev_caption = q.audio.caption_style; q.audio.caption_style = 'none'; } });
+  const edited = p.scenes.filter(sc => sc.caption_text != null).length;
+  return html`<section className="panel stack">
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Captions</h2><${Seg} label="Captions" value=${on ? 'on' : 'off'} onChange=${v => setOn(v === 'on')} options=${[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} /></div>
+    ${on ? html`<${Fragment}>
+      <div className="row"><span className="note">Style</span><${Seg} label="Caption style" value=${p.audio.caption_style} onChange=${v => updateP(p.id, q => { q.audio.caption_style = v; })} options=${CAPTIONS.filter(c => c.id !== 'none').map(c => ({ value: c.id, label: c.name }))} /></div>
+      <p className="note">Edit any scene\u2019s caption. Untouched captions follow the narration word by word. ${edited ? edited + ' edited.' : ''} Rebuild the draft to see changes.</p>
+      <div className="caplist">${p.scenes.map((sc, i) => html`<div key=${sc.id} className="capline">
+        <span className="idx">${i + 1}</span>
+        <textarea className="textarea" rows="1" aria-label=${'Caption for scene ' + (i + 1)} value=${captionOf(p, sc)} onChange=${e => updateP(p.id, q => { const x = q.scenes.find(y => y.id === sc.id); x.caption_text = e.target.value; })}></textarea>
+        ${sc.caption_text != null ? html`<button type="button" className="btn ghost sm" title="Use the story words again" aria-label=${'Reset caption ' + (i + 1)} onClick=${() => updateP(p.id, q => { delete q.scenes.find(y => y.id === sc.id).caption_text; })}><${Icon} n="redo" /></button>` : html`<span></span>`}
+      </div>`)}</div>
+    </${Fragment}>` : html`<p className="note">The video will have no burned-in captions. A captions file (.srt) is still saved with each render, for uploading separately.</p>`}
+  </section>`;
+}
 function CompileScreen({ p, s }) {
   const anim = p.scenes.filter(sc => sc.animate).length;
   const draftJob = p.rendering === 'draft'; const finalJob = p.rendering === 'final';
@@ -1943,7 +2131,8 @@ function CompileScreen({ p, s }) {
   const checks = [
     [p.scenes.length + ' scenes with images', true], [anim ? anim + ' animated, ' + (p.scenes.length - anim) + ' zoom and pan' : 'All scenes zoom and pan', true],
     [(p.video_type === 'character' ? 'Dialogue' : 'Narration') + ' audio, ' + fmtT(scriptSecs(p)), p.script.lines.every(l => l.audio_status === 'ready')],
-    ['Captions: ' + CAPTIONS.find(c => c.id === p.audio.caption_style).name, true],
+    [p.audio.caption_style === 'none' ? 'No captions' : 'Captions: ' + CAPTIONS.find(c => c.id === p.audio.caption_style).name + (p.scenes.some(sc => sc.caption_text != null) ? ', with your edits' : ''), p.audio.caption_style !== 'none'],
+    ['Each image stays on screen exactly as long as its sentences are spoken', true],
     [p.audio.music_path === 'none' ? 'No background music' : 'Music: ' + MUSIC.find(m => m.id === p.audio.music_path).name + (p.audio.duck ? ', ducked under voice' : ''), p.audio.music_path !== 'none'],
     [p.format.aspect_ratio + ' at 1080p, MP4', true],
   ];
@@ -1956,6 +2145,7 @@ function CompileScreen({ p, s }) {
         <section className="panel stack"><h2>What goes in</h2>
           <ul className="checklist">${checks.map(([k, ok]) => html`<li key=${k} className=${ok ? '' : 'no'}><${Icon} n=${ok ? 'check' : 'x'} />${k}</li>`)}</ul>
         </section>
+        <${CaptionEditor} p=${p} />
         <section className="panel stack"><h2>Final polish</h2>
           <ul className="checklist"><li><${Icon} n="check" />Loudness normalized to −14 LUFS</li><li><${Icon} n="check" />Same transition between every scene</li><li><${Icon} n="check" />Captions kept inside the platform’s safe area</li></ul>
         </section>
@@ -1978,31 +2168,68 @@ function CopyBtn({ text }) {
   const [done, setDone] = useState(false);
   return html`<button type="button" className="btn sm" onClick=${() => { const ok = () => { setDone(true); setTimeout(() => setDone(false), 1500); }; try { navigator.clipboard.writeText(text).then(ok, () => toast('Copy was blocked. Select the text and copy it by hand.')); } catch (e) { toast('Copy was blocked. Select the text and copy it by hand.'); } }}><${Icon} n=${done ? 'check' : 'copy'} />${done ? 'Copied' : 'Copy'}</button>`;
 }
+function Choice({ on, onClick, children }) {
+  return html`<button type="button" className="hookopt" aria-pressed=${on} onClick=${onClick}><span className="radio"></span><span style=${{ whiteSpace: 'pre-wrap', minWidth: 0 }}>${children}</span></button>`;
+}
+function PublishKit({ p }) {
+  const k = p.kit; const im = modelOf(p, 'image');
+  const sel = (key, v) => updateP(p.id, q => { q.kit.sel[key] = v; });
+  if (!k || k.error) return html`<section className="panel stack">
+    <h2>Titles, captions and thumbnails</h2>
+    <p className="note">Written from your story: four titles, three post captions with hashtags and three thumbnails to choose from.</p>
+    ${k && k.error ? html`<div className="warnbox">${k.error}</div>` : null}
+    <div><${CostGate} p=${p} label="Generate options" cost=${(modelOf(p, 'writer').perVideo * 0.2) + (LIVE ? 3 * im.cost : 0)} rows=${[[modelOf(p, 'writer').name, 'titles and captions'], [im.name, '3 thumbnails']]} onGo=${() => api.publishKit(p.id)} /></div>
+  </section>`;
+  if (k.loading) return html`<section className="panel stack"><h2>Titles, captions and thumbnails</h2><div className="row note"><span className="spinner"></span> Writing options from your story</div></section>`;
+  const title = k.titles[k.sel.title] || ''; const cap = k.captions[k.sel.caption] || ''; const tags = k.tags || [];
+  return html`<${Fragment}>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">Pick one. Made in your video’s style with ${im.name}.</span></div>
+      <div className="kthumbs">${k.thumbnails.map((t, i) => { const sc = t.scene != null && p.scenes[t.scene]; const v = sc && sc.image_versions[sc.image_index]; return html`<div key=${i} className="kthumb" role="radio" tabIndex="0" aria-pressed=${k.sel.thumb === i} aria-checked=${k.sel.thumb === i} onClick=${() => sel('thumb', i)} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel('thumb', i); } }}>
+        <div className=${'frame' + frameCls(p)}>
+          ${t.url ? html`<img src=${t.url} alt=${t.concept} />` : v ? html`<${Fragment}><${Art} seed=${v.seed} styleId=${p.style} upload=${v.upload || v.url} /><div className="caption bold" style=${{ bottom: '10%' }}>${t.text.split(' ').map((w, j) => html`<span key=${j}>${w}</span>`)}</div></${Fragment}>` : null}
+          ${t.status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>Drawing</div>` : null}
+          ${t.status === 'failed' ? html`<div className="overlay"><span>${t.error || 'Failed'}</span></div>` : null}
+        </div>
+        <span className="note"><strong>${t.text}</strong> · ${t.concept}</span>
+        <div className="row" style=${{ gap: 4 }}>
+          ${LIVE ? html`<button type="button" className="btn sm" disabled=${t.status === 'generating'} onClick=${e => { e.stopPropagation(); api.makeThumb(p.id, i); }}><${Icon} n="redo" />Redo</button>` : null}
+          ${LIVE && t.url ? html`<a className="btn sm" href=${t.url} download=${'thumbnail-' + (i + 1) + '.jpg'} onClick=${e => e.stopPropagation()}><${Icon} n="download" />Download</a>` : null}
+        </div>
+      </div>`; })}</div>
+    </section>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Title</h2><${CopyBtn} text=${title} /></div>
+      <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${k.titles.map((t, i) => html`<${Choice} key=${i} on=${k.sel.title === i} onClick=${() => sel('title', i)}>${t}</${Choice}>`)}</div>
+    </section>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Post caption</h2><${CopyBtn} text=${cap + '\n\nVisuals in this video are AI-generated.'} /></div>
+      <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${k.captions.map((c, i) => html`<${Choice} key=${i} on=${k.sel.caption === i} onClick=${() => sel('caption', i)}>${c}</${Choice}>`)}</div>
+    </section>
+    <section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Tags</h2><${CopyBtn} text=${tags.join(', ')} /></div>
+      <div className="tags">${tags.map(t => html`<span key=${t} className="chip">${t}</span>`)}</div>
+      <div><button type="button" className="btn sm ghost" onClick=${() => updateP(p.id, q => { q.kit = null; })}><${Icon} n="redo" />Write new options</button></div>
+    </section>
+  </${Fragment}>`;
+}
 function ExportScreen({ p, s }) {
   const a = p.angles.find(x => x.id === p.selected_angle_ids[0]) || p.angles[0];
   const secs = p.scenes.reduce((n, sc) => n + sceneSecs(p, sc), 0);
   const fname = (a.id + '-' + a.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 28)).replace(/-+$/, '') + '_' + p.format.aspect_ratio.replace(':', 'x') + '_1080p.mp4';
-  const desc = a.pitch + ' A follow-up for anyone who watched a year of balcony growing and asked: ' + (a.origin ? '“' + (p.source.comments.find(c => c.id === a.origin) || {}).text + '”' : 'what next?') + '\n\nVisuals in this video are AI-generated.';
-  const hashtags = a.tags.slice(0, 4).map(t => '#' + t.replace(/\s+/g, '')).join(' ');
-  const thumbs = [a.suggested_title.split(':')[0].split('.')[0], a.hooks[1].split('.')[0], (a.title.match(/\d+[^ ]* \w+/) || [a.type])[0]];
   const [disclose, setDisclose] = useState(true);
   return html`<${Fragment}>
-    <${StepHead} title="Export" sub="Your video is rendered. Copy the suggested title, description and tags. They use the reference video’s key terms and describe your video honestly." />
+    <${StepHead} title="Export" sub="Your video is rendered. Download it, then pick a thumbnail, a title and a post caption written from your story." />
     <div className="compile-grid">
       ${LIVE && p.render.final_path ? html`<${VideoBox} p=${p} url=${p.render.final_path} />` : html`<${Player} p=${p} mode="final" />`}
       <div className="stack">
         <div className="filecard"><span className="fileicon">MP4</span><div className="grow" style=${{ minWidth: 0 }}><div className="mono" style=${{ fontSize: 13, overflowWrap: 'anywhere' }}>${fname}</div><div className="note mono">${p.format.aspect_ratio} · 1080p · H.264 · ${fmtT(secs)} · ~${Math.round(secs * 0.7)} MB</div></div>
           ${LIVE && p.render.final_path ? html`<a className="btn primary" href=${p.render.final_path} download=${fname}><${Icon} n="download" />Download</a>` : html`<button type="button" className="btn primary" disabled title="In this preview no real file is rendered. Downloads work once the backend is connected."><${Icon} n="download" />Download</button>`}</div>
         <p className="note">${LIVE ? 'Rendered on your server with FFmpeg. The file stays in the server\u2019s data/media/renders folder.' : 'This preview renders no real file. Once the backend is connected, Download saves the MP4 and the project folder keeps it.'}</p>
-        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h3>Title</h3><${CopyBtn} text=${a.suggested_title} /></div><p style=${{ fontWeight: 600 }}>${a.suggested_title}</p></section>
-        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h3>Description</h3><${CopyBtn} text=${desc + '\n\n' + hashtags} /></div><p style=${{ whiteSpace: 'pre-wrap', fontSize: 13.5 }}>${desc}</p><p className="mono" style=${{ fontSize: 12, color: 'var(--accent)' }}>${hashtags}</p></section>
-        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h3>Tags</h3><${CopyBtn} text=${a.tags.join(', ')} /></div><div className="tags">${a.tags.map(t => html`<span key=${t} className="chip">${t}</span>`)}</div></section>
+        ${LIVE && (p.render.final_srt) ? html`<div className="row"><a className="btn" href=${p.render.final_srt} download=${fname.replace('.mp4', '.srt')}><${Icon} n="download" />Captions file (.srt)</a><span className="note">For uploading captions separately.</span></div>` : null}
       </div>
     </div>
-    <section className="panel stack"><h2>Thumbnail ideas</h2>
-      <div className="thumbs">${thumbs.map((t, i) => { const sc = p.scenes[Math.min(p.scenes.length - 1, i * 2)]; const v = sc && sc.image_versions[sc.image_index]; return html`<div key=${i} className="tn">${v ? html`<${Art} seed=${v.seed} styleId=${p.style} upload=${v.upload || v.url} />` : null}<b>${t}</b></div>`; })}</div>
-      <p className="note">Styled to fit what the reference video’s audience clicks on, without copying its thumbnail.</p>
-    </section>
+    <${PublishKit} p=${p} />
     <section className="panel row">
       <label className="switch grow"><input id="disclose" type="checkbox" checked=${disclose} onChange=${e => setDisclose(e.target.checked)} />Remind me to tick the platform’s “altered or synthetic content” box when uploading</label>
       <button type="button" className="btn" onClick=${() => { update(st => { st.templates.push({ id: uid('tpl'), name: p.title + ' look', style: p.style, voice_id: p.audio.voice_id, caption_style: p.audio.caption_style, music: p.audio.music_path, aspect: p.format.aspect_ratio, tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }); }); toast('Saved this look as a template.'); }}><${Icon} n="layers" />Save this look as a template</button>

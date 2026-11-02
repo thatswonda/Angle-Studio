@@ -48,6 +48,7 @@ def healthz():
 app.include_router(live.router)
 live.MEDIA.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=live.MEDIA), name="media")
+app.mount("/templates", StaticFiles(directory=Path(__file__).resolve().parents[2] / "web" / "templates"), name="templates")
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
 CHECKPOINT_ORDER = ["angles", "script", "style", "scenes", "voice", "format", "clips"]
 

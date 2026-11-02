@@ -1,0 +1,94 @@
+{
+  "subjects": [
+    "a young woman tending herbs on a small city balcony at sunrise",
+    "a lone hiker standing on a rocky ridge above a misty valley",
+    "close-up of weathered hands holding an old brass compass over a paper map",
+    "a busy night market street with glowing lanterns and food stalls"
+  ],
+  "styles": [
+    {
+      "id": "photoreal", "name": "Cinematic photoreal", "kind": "soft",
+      "mood": "True to life, premium, film-like", "best": "Stories, explainers, travel, true events",
+      "palette": ["#1E2A33", "#5E7A8A", "#E9DCC9", "#C9853F"],
+      "prefix": "cinematic photorealistic film still, shot on a full-frame cinema camera with a 35mm lens, natural motivated lighting, shallow depth of field, rich true-to-life colors, subtle film grain, high dynamic range, crisp fine detail",
+      "avoid": "cartoon, illustration, oversaturated colors, plastic-looking skin, distorted hands or faces"
+    },
+    {
+      "id": "cinematic", "name": "Moody cinematic", "kind": "soft",
+      "mood": "Dark, dramatic, high stakes", "best": "Mystery, history, true crime, tension",
+      "palette": ["#0E1A24", "#1F4E5A", "#E7B15A", "#C2563A"],
+      "prefix": "moody cinematic film still, low-key lighting with deep shadows, teal and amber color grade, anamorphic lens with soft flares, atmospheric haze, dramatic composition, rich contrast",
+      "avoid": "flat lighting, bright cheerful colors, cartoon look, blown-out highlights"
+    },
+    {
+      "id": "documentary", "name": "Documentary", "kind": "soft",
+      "mood": "Authentic, observed, real", "best": "Nature, culture, how-to, field reports",
+      "palette": ["#2F3B2C", "#7C8B5E", "#E6DFCF", "#B9773C"],
+      "prefix": "documentary photograph for a nature and travel magazine, available light, candid unposed moment, authentic textures, natural colors, sharp focus, environmental storytelling, 50mm lens",
+      "avoid": "staged studio look, heavy filters, fantasy elements, cartoon style"
+    },
+    {
+      "id": "botanical", "name": "Warm lifestyle", "kind": "soft",
+      "mood": "Calm, cozy, inviting", "best": "Home, food, gardening, wellness, routines",
+      "palette": ["#3E4A3B", "#A7C4A0", "#F4ECDD", "#D9895B"],
+      "prefix": "warm lifestyle photograph, soft window light, airy and bright, gentle warm pastel tones, cozy natural materials like linen and wood, shallow depth of field, inviting and calm atmosphere",
+      "avoid": "harsh shadows, neon colors, gloomy mood, cluttered backgrounds"
+    },
+    {
+      "id": "animated3d", "name": "3D animated film", "kind": "flat",
+      "mood": "Playful, bright, family friendly", "best": "Kids, character stories, fun facts",
+      "palette": ["#2B3A67", "#5DA9E9", "#FFF1D0", "#FF8C42"],
+      "prefix": "stylized 3D animated film still, soft global illumination, appealing rounded character design with expressive faces, vibrant harmonious colors, subsurface scattering on skin, cinematic depth of field, polished family-film quality",
+      "avoid": "photorealism, live action, creepy uncanny faces, copyrighted characters"
+    },
+    {
+      "id": "anime", "name": "Anime-inspired", "kind": "comic",
+      "mood": "Vivid, emotional, epic skies", "best": "Stories, motivation, adventure, lofi",
+      "palette": ["#24305E", "#6C8EEF", "#FDE8E9", "#F76C6C"],
+      "prefix": "anime-inspired illustration, clean cel shading, crisp confident line art, luminous painted sky, vibrant saturated palette, dramatic rim lighting, richly detailed background art",
+      "avoid": "photorealism, 3D render look, muddy colors, copyrighted characters"
+    },
+    {
+      "id": "comic", "name": "Graphic novel", "kind": "comic",
+      "mood": "Bold, punchy, dramatic", "best": "Rivalries, history, action, explainers with attitude",
+      "palette": ["#1B1B1E", "#D7263D", "#F4E9CD", "#1B998B"],
+      "prefix": "graphic novel panel, bold ink outlines, halftone shading, dramatic camera angles, limited bold palette with strong blacks and one spot color, dynamic composition, hand-inked texture",
+      "avoid": "photorealism, soft gradients, speech bubbles, lettering"
+    },
+    {
+      "id": "watercolor", "name": "Watercolor storybook", "kind": "watercolor",
+      "mood": "Gentle, nostalgic, handmade", "best": "Bedtime stories, journaling, travel memories",
+      "palette": ["#5B7B7A", "#C8D5B9", "#FAF3E3", "#E08D79"],
+      "prefix": "loose watercolor storybook illustration on cold-press paper, soft bleeding edges, granulating pigments, delicate hand-drawn pencil lines, gentle muted palette, white paper showing through",
+      "avoid": "photorealism, hard digital edges, neon colors, heavy black outlines"
+    },
+    {
+      "id": "infographic", "name": "Clean explainer", "kind": "flat",
+      "mood": "Clear, modern, informative", "best": "Finance, science, tech, step-by-step guides",
+      "palette": ["#12355B", "#4F8BC9", "#EAF2FA", "#F2B134"],
+      "prefix": "clean flat vector illustration for an explainer video, simple geometric shapes, generous negative space, a calm palette of navy, sky blue and off-white with one golden accent, subtle long shadows, modern and tidy",
+      "avoid": "photorealism, clutter, tiny details, written labels"
+    },
+    {
+      "id": "retro", "name": "Retro 80s", "kind": "soft",
+      "mood": "Neon, nostalgic, energetic", "best": "Tech, music, gaming, nostalgia",
+      "palette": ["#1A1033", "#7B2CBF", "#FF5D8F", "#2EC4F1"],
+      "prefix": "1980s retro aesthetic, VHS camcorder look, neon magenta and cyan lighting, synthwave sunset colors, soft bloom, slight chromatic aberration and scanlines, nostalgic analog grain",
+      "avoid": "modern minimal look, muted earthy colors, clean digital sharpness"
+    },
+    {
+      "id": "papercut", "name": "Paper cut-out", "kind": "flat",
+      "mood": "Crafty, charming, tactile", "best": "Kids, education, light-hearted stories",
+      "palette": ["#3D405B", "#81B29A", "#F4F1DE", "#E07A5F"],
+      "prefix": "layered paper cut-out diorama, handcrafted colored paper with visible fibers, soft drop shadows between layers, playful stop-motion craft feel, warm cheerful craft palette, shot from the front with gentle studio light",
+      "avoid": "photorealistic people, glossy plastic, digital gradients"
+    },
+    {
+      "id": "lineart", "name": "Minimal line art", "kind": "flat",
+      "mood": "Elegant, calm, thoughtful", "best": "Quotes, philosophy, psychology, mindfulness",
+      "palette": ["#222222", "#9A8C7B", "#F7F3EC", "#C98B6B"],
+      "prefix": "minimal continuous line art, single-weight black ink lines on a warm off-white background, one muted terracotta accent color, lots of empty space, elegant and simple composition",
+      "avoid": "shading, busy backgrounds, many colors, photorealism"
+    }
+  ]
+}

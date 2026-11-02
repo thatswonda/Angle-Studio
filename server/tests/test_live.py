@@ -20,30 +20,55 @@ def test_video_links():
         youtube.video_id("https://example.com/not-a-video")
 
 
-def test_captions_cover_every_word():
-    ass = render.captions([{"text": "one two three four five"}, {"text": "six seven"}], [0, 2], [2, 1], "bold", 1080, 1920)
-    lines = [l for l in ass.splitlines() if l.startswith("Dialogue")]
-    assert len(lines) == 3 and "ONE TWO THREE" in lines[0] and lines[-1].endswith("SIX SEVEN")
+def test_captions_follow_each_sentence():
+    scenes = [{"lines": [0, 1], "caption": "one two three four five six seven", "caption_auto": True},
+              {"lines": [2], "caption": "My own edited caption", "caption_auto": False}]
+    texts = ["one two three", "four five six seven", "eight nine"]
+    times = [(0, 1.0), (1.0, 3.0), (3.0, 4.0)]
+    cues = render.caption_cues(scenes, texts, times, [0, 3.0], [3.0, 1.0], per=3)
+    # sentence 2 starts exactly when its audio does; the edited caption replaces the story words
+    assert cues[0] == (0, 1.0, ["one", "two", "three"]) and cues[1][0] == 1.0
+    assert [w for c in cues[-2:] for w in c[2]] == ["My", "own", "edited", "caption"]
+    assert "00:00:01,000 --> " in render.captions_srt(cues)
+
+
+def test_scene_timing_is_exact():
+    secs = [1.25, 2.5, 3.0]
+    starts, durs = render.scene_timing([{"lines": [0, 1]}, {"lines": [2], "split": {"index": 0, "of": 2}},
+                                        {"lines": [2], "split": {"index": 1, "of": 2}}], secs)
+    assert durs == [3.75, 1.5, 1.5] and starts == [0, 3.75, 5.25]
+    assert render.scene_timing([{"lines": [1]}, {"lines": [0]}], [1, 1]) is None  # out of story order
+
+
+def _tone(path, seconds):
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(24000)
+        w.writeframes(b"".join(struct.pack("<h", int(3000 * math.sin(n / 20))) for n in range(int(24000 * seconds))))
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
-def test_render_makes_a_video(tmp_path):
+def test_render_matches_audio(tmp_path):
+    import subprocess
     media = tmp_path / "media"
     (media / "audio").mkdir(parents=True)
-    for i in range(2):
-        with wave.open(str(media / "audio" / f"a{i}.wav"), "wb") as w:
-            w.setnchannels(1), w.setsampwidth(2), w.setframerate(24000)
-            w.writeframes(b"".join(struct.pack("<h", int(3000 * math.sin(n / 20))) for n in range(24000)))
+    _tone(media / "audio" / "a0.wav", 1.2)
+    _tone(media / "audio" / "a1.wav", 0.9)
     png = base64.b64encode(bytes.fromhex(
         "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode()
-    url = render.render({"final": False, "aspect": "1:1", "caption_style": "clean",
-                         "scenes": [{"image": "data:image/png;base64," + png, "duration": 1, "text": "hello there"},
-                                    {"image": "data:image/png;base64," + png, "duration": 1, "text": "and goodbye"}],
-                         "lines": [{"audio": "/media/audio/a0.wav"}, {"audio": "/media/audio/a1.wav"}]}, media, lambda _: None)
-    out = media / url.removeprefix("/media/")
-    assert out.exists() and out.stat().st_size > 1000
+    img = "data:image/png;base64," + png
+    for style in ("clean", "none"):
+        out = render.render({"final": False, "aspect": "1:1", "caption_style": style,
+                             "scenes": [{"image": img, "lines": [0], "caption": "hello there"},
+                                        {"image": img, "lines": [1], "caption": "and goodbye"}],
+                             "lines": [{"audio": "/media/audio/a0.wav", "text": "hello there"},
+                                       {"audio": "/media/audio/a1.wav", "text": "and goodbye"}]}, media, lambda _: None)
+        video = media / out["url"].removeprefix("/media/")
+        assert video.exists() and out["srt"] and (media / out["srt"].removeprefix("/media/")).exists()
+        dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(video)],
+                                   capture_output=True, text=True).stdout)
+        assert abs(dur - 2.1) < 0.1  # video length equals the narration
     with pytest.raises(ProviderError):  # a missing voice clip is reported, not crashed on
-        render.render({"scenes": [{"image": "data:image/png;base64," + png, "duration": 1, "text": "x"}], "lines": [{"audio": ""}]}, media, lambda _: None)
+        render.render({"scenes": [{"image": img, "lines": [0], "caption": "x"}], "lines": [{"audio": ""}]}, media, lambda _: None)
 
 
 def test_password_protects_everything(monkeypatch, tmp_path):

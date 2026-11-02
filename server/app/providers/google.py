@@ -195,10 +195,17 @@ async def speak(text: str, voice_id: str, model_id: str, out: Path, delivery: st
     return len(pcm) / 2 / rate, len(text) / 1000 * TTS_PRICES_PER_1K_CHARS.get(model_id, 0.01)
 
 
-async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path) -> tuple[Path, float]:
-    """Image generation with Nano Banana. Returns (file path, cost)."""
+STYLE_REF_NOTE = ("Use the reference image(s) only for their visual style: medium, rendering, color palette, lighting and "
+                  "texture. Do not copy their subjects, people, objects or composition. Create this new image:\n")
+
+
+async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path,
+               refs: list[tuple[bytes, str]] | None = None) -> tuple[Path, float]:
+    """Image generation with Nano Banana. refs are (bytes, mime) style references. Returns (file path, cost)."""
+    parts = [{"inlineData": {"mimeType": mime, "data": base64.b64encode(data).decode()}} for data, mime in (refs or [])]
+    parts.append({"text": (STYLE_REF_NOTE if refs else "") + prompt})
     body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": aspect}},
     }
     resp = await generate(model_id, body, timeout=240.0)
