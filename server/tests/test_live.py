@@ -81,3 +81,56 @@ def test_password_protects_everything(monkeypatch, tmp_path):
     assert c.get("/healthz").status_code == 200
     assert c.get("/api/live/status", auth=("me", "wrong")).status_code == 401
     assert c.get("/api/live/status", auth=("me", "s3cret")).status_code == 200
+
+
+def test_broken_json_is_repaired_without_resending(monkeypatch):
+    import asyncio
+    from app.providers import google
+    calls = []
+
+    async def fake_generate(model_id, body, timeout=600.0):
+        calls.append((model_id, body["contents"][0]["parts"]))
+        text = '{"a": 1,}' if len(calls) == 1 else '{"a": 1}'
+        return {"candidates": [{"content": {"parts": [{"text": text}]}}], "usageMetadata": {}}
+
+    monkeypatch.setattr(google, "generate", fake_generate)
+    video = google.youtube_part("https://youtu.be/V-7zASRCXaQ")
+    data, _ = asyncio.run(google.generate_json("gemini-pro", [video, {"text": "watch"}]))
+    assert data == {"a": 1} and len(calls) == 2
+    assert all("fileData" not in part for part in calls[1][1])  # the repair call does not carry the video
+
+
+def test_analysis_is_cached(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app import live, storage
+    from app.main import app
+    monkeypatch.setattr(storage, "ROOT", tmp_path)
+    watched = []
+
+    async def fake_fetch(url):
+        return {"title": "T", "channel": "C", "duration": 60, "published": "", "views": "", "thumb": "", "comments_scanned": 0, "comments": []}
+
+    async def fake_json(model_id, parts, max_tokens=32768, low_media=False):
+        watched.append(model_id)
+        return {"summary": "s", "scenes": [], "beats": [], "gaps": []}, 0.01
+
+    async def fake_write(writer_id, progress, prompt):
+        return {"angles": [{"title": f"A{i}", "type": "Deep dive", "score": 80} for i in range(4)]}, 0.01, "Gemini Flash", None
+
+    monkeypatch.setattr(live.youtube, "fetch", fake_fetch)
+    monkeypatch.setattr(live.google, "generate_json", fake_json)
+    monkeypatch.setattr(live, "write_json", fake_write)
+    c = TestClient(app)
+
+    def run():
+        jid = c.post("/api/live/ingest", json={"url": "https://youtu.be/V-7zASRCXaQ", "analyst": "gemini-flash", "writer": "gemini-flash-writer"}).json()["id"]
+        import time
+        for _ in range(100):
+            j = c.get(f"/api/live/jobs/{jid}").json()
+            if j["status"] != "running" and j["status"] != "queued":
+                return j
+            time.sleep(0.02)
+
+    first, second = run(), run()
+    assert first["status"] == "done" and second["result"]["cached"] and second["result"]["cost"] == 0
+    assert len(watched) == 1  # the video was watched once

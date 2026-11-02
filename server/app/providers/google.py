@@ -137,21 +137,28 @@ def token_cost(model_id: str, resp: dict) -> float:
 
 
 async def generate_json(model_id: str, parts: list[dict], max_tokens: int = 32768, low_media: bool = False) -> tuple[dict, float]:
-    """Asks for JSON and retries once if the answer does not parse."""
+    """Asks for JSON. If the answer does not parse, a cheap text-only Flash call repairs it,
+    so the video (or other large input) is never sent twice."""
     cfg = {"responseMimeType": "application/json", "maxOutputTokens": max_tokens}
     if low_media:
         cfg["mediaResolution"] = "MEDIA_RESOLUTION_LOW"  # about a third of the video tokens; plenty for analysis
     body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": cfg}
-    cost = 0.0
-    for attempt in range(2):
-        resp = await generate(model_id, body)
-        cost += token_cost(model_id, resp)
-        try:
-            return parse_json(text_of(resp)), cost
-        except (json.JSONDecodeError, ProviderError):
-            if attempt == 1:
-                raise ProviderError("Gemini's answer was not valid JSON twice in a row. Try again.")
-    raise ProviderError("Gemini did not return JSON.")
+    resp = await generate(model_id, body)
+    cost = token_cost(model_id, resp)
+    raw = text_of(resp)
+    try:
+        return parse_json(raw), cost
+    except json.JSONDecodeError:
+        pass
+    fix = {"contents": [{"role": "user", "parts": [{"text": "Turn this into valid JSON. Keep every key and value, change "
+                                                            "nothing else, and return only the JSON:\n" + raw[:200000]}]}],
+           "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": max_tokens}}
+    resp = await generate("gemini-flash", fix)
+    cost += token_cost("gemini-flash", resp)
+    try:
+        return parse_json(text_of(resp)), cost
+    except json.JSONDecodeError:
+        raise ProviderError("Gemini's answer was not valid JSON, even after a repair. Try again.")
 
 
 def youtube_part(url: str) -> dict:

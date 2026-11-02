@@ -179,7 +179,9 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     for i, (sc, a, d) in enumerate(zip(scenes, starts, durs)):
         progress(f"Scene {i + 1} of {len(scenes)}: zoom and pan")
         frames = max(1, round((a + d) * FPS) - round(a * FPS))
-        if i % 2 == 0:
+        if sc.get("variant"):  # second scene on a reused image: start close on another part, then pull back
+            zp = f"zoompan=z='max(1.25-0.2*on/{frames},1.05)':x='(iw-iw/zoom)*(0.85-0.5*on/{frames})':y='(ih-ih/zoom)*0.35'"
+        elif i % 2 == 0:
             zp = f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
         else:
             zp = f"zoompan=z='1.1':x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)'"

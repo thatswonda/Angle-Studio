@@ -104,7 +104,13 @@ class IngestBody(BaseModel):
 async def ingest(body: IngestBody):
     youtube.video_id(body.url)  # fail fast on a bad link
 
+    cache_key = f"{body.url}|{body.analyst}|{body.writer}"
+
     async def work(progress):
+        cached = None if body.transcript else storage.kv_get("live_ingest", cache_key)
+        if cached:  # this link was analyzed before with the same models: no new cost
+            progress("Loaded from cache")
+            return {**cached, "cost": 0, "cached": True, "warning": None}
         progress("YouTube Data API: title, stats and comments")
         warning = None
         try:
@@ -180,7 +186,7 @@ async def ingest(body: IngestBody):
             })
         if len(angles) < 3:
             raise ProviderError(f"{wn} returned too few angles. Try again.")
-        return {
+        result = {
             "source": {"url": body.url, "title": info["title"], "channel": info["channel"], "duration": info["duration"],
                        "published": info["published"], "views": info["views"], "thumb": info["thumb"],
                        "transcript": report.get("transcript", "") if isinstance(report.get("transcript"), str) else json.dumps(report.get("transcript")),
@@ -195,6 +201,9 @@ async def ingest(body: IngestBody):
                          "analyzed_by": an},
             "angles": angles, "written_by": wn, "cost": round(cost + wcost, 4), "warning": warning,
         }
+        if not body.transcript:
+            storage.kv_put("live_ingest", cache_key, result)
+        return result
 
     return _job("Analyzing reference video", work)
 

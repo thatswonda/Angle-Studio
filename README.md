@@ -112,6 +112,17 @@ The writer sits behind one interface (`Writer` in `server/app/providers/base.py`
 - A Claude writer adapter (the Writing selector and `ANGLE_STUDIO_WRITER` are ready for it).
 - Hosting with a login, to use the app from a phone.
 
+## Keeping costs down
+
+Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). The app keeps that number small:
+
+- **Re-planning keeps images:** changing pacing or the story keeps the image of every scene whose sentences did not change.
+- **Image reuse:** one image covers two scenes, the second with a different zoom and framing. Half the images.
+- **Image quality switch** on the Scenes page: Lite (about $0.03), Standard (about $0.07) or Pro (about $0.14).
+- **Image limit per video** (Settings, default 60), and long videos start at Moderate pacing.
+- **Thumbnails on request:** ideas are written first; each thumbnail is drawn only when you ask.
+- **Analysis cache:** analyzing the same link with the same models again costs nothing, and broken JSON is repaired with a small text-only call instead of re-watching the video.
+
 ## Template example images
 
 The 48 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
