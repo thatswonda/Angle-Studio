@@ -68,18 +68,18 @@
     },
     {
       "id": "clay",
-      "name": "Clay stop-motion",
+      "name": "Clay animation",
       "kind": "soft",
-      "mood": "Handmade, charming, funny",
-      "best": "Comedy, kids, character stories, explainers with personality",
+      "mood": "Polished, charming, character-led",
+      "best": "Character stories, comedy, kids, explainers with personality",
       "palette": [
         "#4A3B2C",
         "#B07A48",
         "#EADBC4",
         "#5E9E96"
       ],
-      "prefix": "handmade clay stop-motion animation still, plasticine characters with visible thumbprints and sculpting marks, big round glossy bead eyes and exaggerated expressive faces, chunky rounded proportions, miniature handcrafted tabletop set built from clay, felt and painted wood, warm soft studio lighting with gentle shadows, shallow depth of field like a macro lens, earthy tones with soft pastel accents",
-      "avoid": "photorealistic people, smooth glossy CGI plastic, flat 2D illustration, recognizable characters from existing films or shows"
+      "prefix": "polished clay animation film still, smooth clean sculpted characters with flawless soft matte surfaces and crisp tidy edges, appealing well-designed characters with simple rounded shapes, big expressive eyes and clear readable poses, premium stop-motion feature film quality, neat miniature set with clean handcrafted details, soft warm studio lighting with gentle shadows, shallow depth of field, rich harmonious colors",
+      "avoid": "fingerprints, lumpy or messy clay, cracks, rough unfinished textures, photorealistic people, flat 2D illustration, recognizable characters from existing films or shows"
     },
     {
       "id": "animated3d",
@@ -200,6 +200,81 @@
       ],
       "prefix": "minimal continuous line art, single-weight black ink lines on a warm off-white background, one muted terracotta accent color, lots of empty space, elegant and simple composition",
       "avoid": "shading, busy backgrounds, many colors, photorealism"
+    },
+    {
+      "id": "stickman",
+      "name": "Stick figure",
+      "kind": "flat",
+      "mood": "Funny, simple, fast to read",
+      "best": "Explainers, storytimes, life lessons, comedy",
+      "palette": [
+        "#1A1A1A",
+        "#9AA0A6",
+        "#FAF8F3",
+        "#E4572E"
+      ],
+      "prefix": "stick figure animation frame, expressive black stick-figure characters with round heads, dot eyes and simple expressive mouths, clean confident marker lines, minimal props drawn in the same simple line style, plain warm white paper background, one bright orange accent color on key objects, lots of empty space, funny readable poses",
+      "avoid": "realistic anatomy, shading, detailed backgrounds, 3D render, photorealism, words or letters"
+    },
+    {
+      "id": "toyworld",
+      "name": "Toy figures, virtual set",
+      "kind": "soft",
+      "mood": "Sleek, playful, futuristic",
+      "best": "Tech, gaming, business stories, product explainers",
+      "palette": [
+        "#141A3A",
+        "#5B5BD6",
+        "#E8E6FF",
+        "#2FE0C4"
+      ],
+      "prefix": "stylized designer vinyl toy characters with smooth satin finish and simple cute proportions, placed in a sleek virtual 3D environment like a digital stage, soft glowing gradients, floating geometric shapes and translucent holographic panels, clean cinematic lighting with colored rim light, crisp high-end CG render, vivid harmonious colors",
+      "avoid": "photorealistic people, messy textures, real brand logos, copyrighted characters, words or letters"
+    },
+    {
+      "id": "wiresketch",
+      "name": "Wire figures on sketch",
+      "kind": "flat",
+      "mood": "Artsy, thoughtful, unusual",
+      "best": "Psychology, philosophy, poetry, personal stories",
+      "palette": [
+        "#2B2B2B",
+        "#8C8C8C",
+        "#F2EEE6",
+        "#C0663A"
+      ],
+      "prefix": "characters sculpted from shiny silver and copper metal wire, three-dimensional wire sculpture figures made of a few continuous bent strands with hollow see-through bodies and simple looped faces, catching small specular highlights and casting crisp shadows, placed inside a flat hand-drawn pencil sketch world on textured off-white paper with loose graphite hatching and construction lines, the solid metal figures clearly standing out from the drawn background, gentle warm light",
+      "avoid": "pencil-drawn people, solid filled bodies, skin, clothing, photorealistic people, heavy color, glossy plastic, words or letters"
+    },
+    {
+      "id": "pixel",
+      "name": "Pixel art",
+      "kind": "flat",
+      "mood": "Retro, cozy, nostalgic",
+      "best": "Gaming, nostalgia, lofi, fun facts, kids",
+      "palette": [
+        "#1F1B3A",
+        "#3F6EA8",
+        "#F3E7C9",
+        "#E9724C"
+      ],
+      "prefix": "detailed 16-bit pixel art scene, crisp square pixels with a limited harmonious palette, charming chunky characters with clear silhouettes, layered background with depth, soft dithered gradients in the sky, cozy retro video game atmosphere",
+      "avoid": "blurry or smooth rendering, photorealism, 3D render, user interface, health bars, copyrighted game characters, words or letters"
+    },
+    {
+      "id": "silhouette",
+      "name": "Shadow puppets",
+      "kind": "flat",
+      "mood": "Elegant, dramatic, timeless",
+      "best": "Folk tales, history, myths, bedtime stories",
+      "palette": [
+        "#0F0A08",
+        "#7A2E1E",
+        "#F6B256",
+        "#E0602B"
+      ],
+      "prefix": "shadow puppet theatre style, solid black silhouette characters and props with intricate cut-out details and visible articulated joints, backlit by a glowing warm screen fading from amber to deep red, layered silhouette scenery for depth, elegant storybook composition",
+      "avoid": "detailed faces, photorealism, full color characters, 3D render, signs, banners, lettering, words or letters"
     }
   ]
 }

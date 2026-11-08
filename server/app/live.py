@@ -24,8 +24,7 @@ from .providers.openai_writer import OpenAIWriter
 
 router = APIRouter(prefix="/api/live")
 MEDIA = storage.ROOT / "media"
-STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor",
-             "infographic", "retro", "papercut", "lineart"]
+STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette"]
 ANGLE_TYPES = ["Deep dive", "Continuation", "Different storyline", "Perspective flip", "Different niche", "Different topic", "Different visuals"]
 WRITER_NAMES = {"gpt-5-5": "GPT-5.5", "gpt-5": "GPT-5", "gemini-pro-writer": "Gemini Pro", "gemini-flash-writer": "Gemini Flash",
                 "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5-5": "Claude Sonnet 5.5"}

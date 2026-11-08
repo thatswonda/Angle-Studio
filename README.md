@@ -73,7 +73,7 @@ The blueprint uses the Starter plan (always on, about $7 a month). On the free p
 | Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
 | Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
 | Voice | Gemini TTS | Director's-notes prompt keeps the delivery consistent without reading it aloud |
-| Images | Nano Banana 2 / Pro / 2 Lite | 13 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
+| Images | Nano Banana 2 / Pro / 2 Lite | 18 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
 | Story edits | The writer | "Add an idea" rewrites the story with your idea and keeps the length; Undo restores the previous version |
 | Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from |
 | Channel ideas | The writer + Nano Banana | Optional, on Export: reads the story type and visual style and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
@@ -127,7 +127,7 @@ Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). Th
 
 ## Template example images
 
-The 52 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
+The 72 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
 
 ```bash
 cd server && python scripts/make_template_examples.py
