@@ -25,7 +25,16 @@ from .providers.openai_writer import OpenAIWriter
 router = APIRouter(prefix="/api/live")
 MEDIA = storage.ROOT / "media"
 STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette"]
-ANGLE_TYPES = ["Deep dive", "Continuation", "Different storyline", "Perspective flip", "Different niche", "Different topic", "Different visuals"]
+# Ways to recreate what made the reference video go viral, so the new video is recommended beside it.
+# Never a sequel or "part 2": each one is a stand-alone video built on the same proven idea.
+ANGLE_TYPES = ["Fill a gap", "Same story, new look", "Same idea, new niche", "Similar storyline", "New perspective"]
+ANGLE_GUIDE = {
+    "Fill a gap": "covers what the video left out or what viewers asked for in the comments, using the same format and hook style",
+    "Same story, new look": "retells the same story or concept in a clearly different visual style (for example animated, clay, stick figure, cinematic)",
+    "Same idea, new niche": "takes the idea that made it go viral and applies it to a different niche or audience",
+    "Similar storyline": "a fresh story with the same structure, emotional beats and payoff that made the original work",
+    "New perspective": "the same events or idea told from another character's or group's point of view",
+}
 WRITER_NAMES = {"gpt-5-5": "GPT-5.5", "gpt-5": "GPT-5", "gemini-pro-writer": "Gemini Pro", "gemini-flash-writer": "Gemini Flash",
                 "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5-5": "Claude Sonnet 5.5"}
 ANALYST_NAMES = {"gemini-pro": "Gemini Pro", "gemini-flash": "Gemini Flash"}
@@ -91,6 +100,49 @@ def job(job_id: str):
 
 
 # ---------- 1. Watch the reference video and write angle cards
+ANGLES_VERSION = 2  # bump when the angle prompt changes, so cached analyses get new angles without re-watching
+
+
+async def write_angles(writer: str, progress, handoff: dict, ids: set) -> tuple[list, float, str, Optional[str]]:
+    """The 4 angles most likely to go viral, from the analysis report."""
+    angles_raw, wcost, wn, wwarn = await write_json(writer, progress, (
+        "A model watched a video that went viral and wrote this report. The creator wants to recreate what made it go "
+        "viral in a new, original video, so that it has the same chance of going viral and gets recommended next to the "
+        "original. This is NOT a continuation, sequel or part 2: the new video stands on its own and does not pick up "
+        "where the original stopped. Use these ways of recreating it:\n"
+        + "\n".join(f"- {k}: {v}" for k, v in ANGLE_GUIDE.items()) + "\n"
+        "Propose exactly 4 angles: the 4 with the highest chance of going viral, best first, using at least 3 different "
+        "types. Keep the original's proven ingredients (hook, structure, emotion, topic keywords) so the platform links "
+        "the two videos, and change one clear thing. Never copy its wording, footage or characters.\n"
+        f"Report: {json.dumps(handoff)[:60000]}\n"
+        'Return {"angles": [{"type": one of the types, "title": short working title, "pitch": one line,'
+        ' "reason": one line on why it can go viral like the original and be recommended next to it,'
+        ' "keeps": what it keeps from the original (a few words), "changes": what is new (a few words),'
+        ' "score": viral potential 0-100,'
+        f' "style": one of {STYLE_IDS}, "effort": "Low|Medium|High", "potential": "Low|Medium|High",'
+        ' "origin": comment id it answers or null, "character": true if it suits a video with voiced characters,'
+        ' "hooks": [three opening lines], "suggested_title": honest title using the reference video\'s key terms,'
+        ' "tags": [5 tags]}]}'))
+    angles = []
+    raw_list = angles_raw if isinstance(angles_raw, list) else (angles_raw.get("angles") or [])
+    raw_list = sorted([a for a in raw_list if isinstance(a, dict)], key=lambda a: -(int(a.get("score") or 0) if str(a.get("score") or "0").isdigit() else 0))
+    for i, a in enumerate(raw_list[:4], 1):
+        hooks = [h for h in (a.get("hooks") or []) if isinstance(h, str)][:3] or [a.get("pitch", "")]
+        while len(hooks) < 3:
+            hooks.append(hooks[-1])
+        angles.append({
+            "id": f"a{i}", "type": a.get("type") if a.get("type") in ANGLE_TYPES else "Similar storyline",
+            "keeps": str(a.get("keeps", ""))[:120], "changes": str(a.get("changes", ""))[:120],
+            "style": a.get("style") if a.get("style") in STYLE_IDS else "botanical",
+            "score": max(0, min(100, int(a.get("score") or 70))), "effort": a.get("effort") if a.get("effort") in ("Low", "Medium", "High") else "Medium",
+            "potential": a.get("potential") if a.get("potential") in ("Low", "Medium", "High") else "Medium",
+            "origin": a.get("origin") if a.get("origin") in ids else None, "character": bool(a.get("character")),
+            "title": a.get("title", "Untitled angle"), "pitch": a.get("pitch", ""), "reason": a.get("reason", ""),
+            "suggested_title": a.get("suggested_title", a.get("title", "")), "tags": [str(t) for t in (a.get("tags") or [])][:8],
+            "hooks": hooks, "hook_visual": "", "beats": [],
+        })
+    return angles, wcost, wn, wwarn
+
 
 class IngestBody(BaseModel):
     url: str
@@ -107,9 +159,22 @@ async def ingest(body: IngestBody):
 
     async def work(progress):
         cached = None if body.transcript else storage.kv_get("live_ingest", cache_key)
-        if cached:  # this link was analyzed before with the same models: no new cost
+        if cached and cached.get("angles_v") == ANGLES_VERSION:  # analyzed before with the same models: no new cost
             progress("Loaded from cache")
             return {**cached, "cost": 0, "cached": True, "warning": None}
+        if cached:  # analyzed before, but with the older angle style: keep the analysis, write new angles only
+            wn = WRITER_NAMES.get(body.writer, body.writer)
+            progress(f"Reusing the saved analysis; {wn} is picking the 4 angles most likely to go viral")
+            src, an_ = cached["source"], cached["analysis"]
+            handoff = cached.get("handoff") or {"video": {k: src.get(k) for k in ("title", "channel", "duration", "views")},
+                                                "report": {"transcript": src.get("transcript", "")[:20000], "scenes": src.get("key_frames", []), **an_},
+                                                "comments": src.get("comments", [])}
+            angles, wcost, wn, wwarn = await write_angles(body.writer, progress, handoff, {c.get("id") for c in src.get("comments", [])})
+            if len(angles) < 2:
+                raise ProviderError(f"{wn} returned too few angles. Try again.")
+            fresh = {**cached, "angles": angles, "written_by": wn, "angles_v": ANGLES_VERSION, "handoff": handoff}
+            storage.kv_put("live_ingest", cache_key, fresh)
+            return {**fresh, "cost": round(wcost, 4), "cached": False, "warning": wwarn}
         progress("YouTube Data API: title, stats and comments")
         warning = None
         try:
@@ -152,42 +217,17 @@ async def ingest(body: IngestBody):
             report = report[0] if report and isinstance(report[0], dict) else {}
         wn = WRITER_NAMES.get(body.writer, body.writer)
         progress(f"Handing the report to {wn}")
-        progress(f"{wn} is writing angle cards")
-        handoff = {"video": {k: info[k] for k in ("title", "channel", "duration", "views")}, "report": report, "comments": comments}
-        angles_raw, wcost, wn, wwarn = await write_json(body.writer, progress, (
-            "A model watched a reference video and wrote this report. Propose 10 original angles for a new video that a viewer "
-            "of the reference video would want to watch next, so the new video can be recommended beside it. Mix the angle types "
-            f"{ANGLE_TYPES}. Score relatedness 0-100 from topic, audience, format and keyword overlap.\n"
-            f"Report: {json.dumps(handoff)[:60000]}\n"
-            'Return {"angles": [{"type": one of the types, "title": short working title, "pitch": one line,'
-            ' "reason": one line on why a viewer of the reference would watch it next, "score": 0-100,'
-            f' "style": one of {STYLE_IDS}, "effort": "Low|Medium|High", "potential": "Low|Medium|High",'
-            ' "origin": comment id it answers or null, "character": true if it suits a video with voiced characters,'
-            ' "hooks": [three opening lines], "suggested_title": honest title using the reference video\'s key terms,'
-            ' "tags": [5 tags]}]}'))
-        warning = " ".join(x for x in (warning, wwarn) if x) or None
-        angles = []
+        progress(f"{wn} is picking the 4 angles most likely to go viral")
+        handoff = {"video": {k: info.get(k) for k in ("title", "channel", "duration", "views", "tags")}, "report": report, "comments": comments}
         ids = {c["id"] for c in comments}
-        raw_list = angles_raw if isinstance(angles_raw, list) else (angles_raw.get("angles") or [])
-        for i, a in enumerate([a for a in raw_list if isinstance(a, dict)][:12], 1):
-            hooks = [h for h in (a.get("hooks") or []) if isinstance(h, str)][:3] or [a.get("pitch", "")]
-            while len(hooks) < 3:
-                hooks.append(hooks[-1])
-            angles.append({
-                "id": f"a{i}", "type": a.get("type") if a.get("type") in ANGLE_TYPES else "Deep dive",
-                "style": a.get("style") if a.get("style") in STYLE_IDS else "botanical",
-                "score": max(0, min(100, int(a.get("score") or 70))), "effort": a.get("effort") if a.get("effort") in ("Low", "Medium", "High") else "Medium",
-                "potential": a.get("potential") if a.get("potential") in ("Low", "Medium", "High") else "Medium",
-                "origin": a.get("origin") if a.get("origin") in ids else None, "character": bool(a.get("character")),
-                "title": a.get("title", "Untitled angle"), "pitch": a.get("pitch", ""), "reason": a.get("reason", ""),
-                "suggested_title": a.get("suggested_title", a.get("title", "")), "tags": [str(t) for t in (a.get("tags") or [])][:8],
-                "hooks": hooks, "hook_visual": "", "beats": [],
-            })
-        if len(angles) < 3:
+        angles, wcost, wn, wwarn = await write_angles(body.writer, progress, handoff, ids)
+        warning = " ".join(x for x in (warning, wwarn) if x) or None
+        if len(angles) < 2:
             raise ProviderError(f"{wn} returned too few angles. Try again.")
         result = {
             "source": {"url": body.url, "title": info["title"], "channel": info["channel"], "duration": info["duration"],
                        "published": info["published"], "views": info["views"], "thumb": info["thumb"],
+                       "tags": info.get("tags", []), "description": info.get("description", ""),
                        "transcript": report.get("transcript", "") if isinstance(report.get("transcript"), str) else json.dumps(report.get("transcript")),
                        "key_frames": [{"t": s.get("t", ""), "d": s.get("description", ""), "seed": 11 + i * 13} for i, s in enumerate(report.get("scenes") or [])],
                        "comments": [{k: c[k] for k in ("id", "text", "kind")} | {"likes": f"{c['likes'] / 1000:.1f}k" if c["likes"] >= 1000 else str(c["likes"])} for c in comments[:10]],
@@ -199,6 +239,7 @@ async def ingest(body: IngestBody):
                                   for g in (report.get("gaps") or []) if isinstance(g, dict)],
                          "analyzed_by": an},
             "angles": angles, "written_by": wn, "cost": round(cost + wcost, 4), "warning": warning,
+            "angles_v": ANGLES_VERSION, "handoff": handoff,
         }
         if not body.transcript:
             storage.kv_put("live_ingest", cache_key, result)
@@ -501,6 +542,7 @@ class KitBody(BaseModel):
     angle: dict = {}
     source_title: str = ""
     tags: list[str] = []
+    source: dict = {}    # the analyzed video: title, channel, tags, description, summary, hook, why it worked
 
 
 @router.post("/publish-kit")
@@ -509,10 +551,14 @@ async def publish_kit(body: KitBody):
         progress("Writing titles, captions, descriptions and thumbnail ideas from your story")
         data, cost, wn, warning = await write_json(body.writer, progress, (
             f"A creator finished this video. Its story:\n---\n{body.story[:12000]}\n---\n"
-            f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'pitch', 'reason')})}. "
-            f"It should be recommended next to this video: {body.source_title}. Suggested tags so far: {body.tags}.\n"
-            "Write options the creator can choose from. Titles and captions must honestly describe this video and may use "
-            "the reference video's key terms. Return "
+            f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'pitch', 'reason', 'keeps', 'changes')})}. "
+            f"Suggested tags so far: {body.tags}.\n"
+            + (f"It recreates this viral video and must be recommended next to it: {json.dumps(body.source)[:5000]}\n"
+               "Make the titles, captions, descriptions and thumbnails clearly related to that video: echo its title "
+               "pattern, its main keywords and tags, its hook and its thumbnail style (subject, emotion, bold short text), "
+               "so viewers and the platform connect the two. Do not copy its title word for word, and do not claim to be "
+               "that creator or a part 2.\n" if body.source.get("title") else "")
+            + "Write options the creator can choose from. Everything must honestly describe this video. Return "
             '{"titles": [4 different titles under 70 characters],'
             ' "captions": [3 different post captions/descriptions, each 2-4 sentences that hook, summarize and invite a comment, '
             'each ending with 3-5 hashtags],'
@@ -543,6 +589,8 @@ class ChannelBody(BaseModel):
     style_recipe: str = ""
     video_type: str = "voiceover"
     platform: str = "YouTube"
+    source: dict = {}    # the analyzed video
+    idea: str = ""       # the creator's own idea of the channel they want
 
 
 @router.post("/channel-kit")
@@ -551,6 +599,10 @@ async def channel_kit(body: ChannelBody):
         progress("Reading the story type and the visual style")
         data, cost, wn, warning = await write_json(body.writer, progress, (
             f"A creator makes {body.video_type} videos like this one. Story:\n---\n{body.story[:8000]}\n---\n"
+            + (f"The videos recreate the success of this viral video, and the channel should grow from it: {json.dumps(body.source)[:4000]}\n"
+               "Base the channel's niche, name and promise on what made that video work, so it attracts the same viewers.\n" if body.source.get("title") else "")
+            + (f"The creator's own idea of the channel they want (follow it closely): {body.idea[:1000]}\n" if body.idea.strip() else "")
+            + 
             f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'type', 'pitch')})}. Reference video summary: {body.summary[:1500]}\n"
             f"Visual style: {body.style_name} ({body.style_recipe[:400]}).\n"
             f"First decide what type of story this is (its genre, tone and audience) and how the visual style feels. Then propose "

@@ -46,7 +46,7 @@ async def basic_info(url: str) -> dict:
     except httpx.HTTPError:
         pass  # no page info either; Gemini still reads the title from the video itself
     return {"title": d.get("title", "Reference video"), "channel": d.get("author_name", ""), "duration": 0, "published": "",
-            "views": "", "thumb": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg", "comments_scanned": 0, "comment_count": 0, "comments": []}
+            "views": "", "thumb": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg", "comments_scanned": 0, "comment_count": 0, "comments": [], "tags": [], "description": ""}
 
 
 async def fetch(url: str) -> dict:
@@ -92,4 +92,5 @@ async def fetch(url: str) -> dict:
         "thumb": (thumbs.get("maxres") or thumbs.get("high") or thumbs.get("medium") or {}).get("url", ""),
         "comments_scanned": len(comments), "comment_count": int(st.get("commentCount", 0)),
         "comments": kept[:40],
+        "tags": [str(t) for t in (sn.get("tags") or [])][:20], "description": (sn.get("description") or "")[:3000],
     }

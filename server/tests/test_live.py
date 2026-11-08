@@ -114,8 +114,12 @@ def test_analysis_is_cached(monkeypatch, tmp_path):
         watched.append(model_id)
         return {"summary": "s", "scenes": [], "beats": [], "gaps": []}, 0.01
 
+    prompts = []
+
     async def fake_write(writer_id, progress, prompt):
-        return {"angles": [{"title": f"A{i}", "type": "Deep dive", "score": 80} for i in range(4)]}, 0.01, "Gemini Flash", None
+        prompts.append(prompt)
+        return {"angles": [{"title": f"A{i}", "type": "Same idea, new niche" if i % 2 else "Fill a gap", "score": 60 + i * 5,
+                            "keeps": "the hook", "changes": "the niche"} for i in range(6)]}, 0.01, "Gemini Flash", None
 
     monkeypatch.setattr(live.youtube, "fetch", fake_fetch)
     monkeypatch.setattr(live.google, "generate_json", fake_json)
@@ -134,6 +138,10 @@ def test_analysis_is_cached(monkeypatch, tmp_path):
     first, second = run(), run()
     assert first["status"] == "done" and second["result"]["cached"] and second["result"]["cost"] == 0
     assert len(watched) == 1  # the video was watched once
+    angles = first["result"]["angles"]
+    assert [a["title"] for a in angles] == ["A5", "A4", "A3", "A2"]  # only the 4 with the highest viral potential, best first
+    assert angles[0]["keeps"] == "the hook" and angles[0]["type"] == "Same idea, new niche"
+    assert "NOT a continuation" in prompts[0] and "exactly 4" in prompts[0]
 
 
 def test_tts_wav_wrapper_is_stripped():
@@ -278,3 +286,28 @@ def test_interrupted_render_continues_from_finished_scenes(tmp_path):
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0",
                             str(media / again["url"].removeprefix("/media/"))], capture_output=True, text=True).stdout
     assert probe.splitlines()[0] == "1280,720"
+
+
+def test_old_cached_analysis_gets_new_angles_without_rewatching(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app import live, storage
+    from app.main import app
+    monkeypatch.setattr(storage, "ROOT", tmp_path)
+    url = "https://youtu.be/V-7zASRCXaQ"
+    old = {"source": {"title": "T", "channel": "C", "comments": [], "key_frames": [], "transcript": "words"},
+           "analysis": {"summary": "s", "gaps": []}, "angles": [{"id": "a1", "type": "Continuation"}] * 10, "written_by": "GPT-5.5"}
+    storage.kv_put("live_ingest", f"{url}|gemini-flash|gemini-flash-writer", old)
+    watched = []
+
+    async def fake_json(*a, **k):
+        watched.append(1)
+        return {}, 0.0
+
+    async def fake_write(writer_id, progress, prompt):
+        return {"angles": [{"title": f"N{i}", "type": "Fill a gap", "score": 90 - i} for i in range(4)]}, 0.003, "Gemini Flash", None
+
+    monkeypatch.setattr(live.google, "generate_json", fake_json)
+    monkeypatch.setattr(live, "write_json", fake_write)
+    j = _run_job(TestClient(app), "/api/live/ingest", {"url": url, "analyst": "gemini-flash", "writer": "gemini-flash-writer"})
+    assert j["status"] == "done", j
+    assert [a["title"] for a in j["result"]["angles"]] == ["N0", "N1", "N2", "N3"] and not watched  # no re-watching

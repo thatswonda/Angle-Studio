@@ -1,6 +1,6 @@
 # Angle Studio
 
-A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You start in one of three ways: paste a link to a video that already performs and pick one of 8 to 12 original angles, type your own idea and let the writer draft the story, or paste a story you wrote. Then you take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
+A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You start in one of three ways: paste a link to a video that went viral and pick one of 4 angles that recreate what made it work (fill a gap, same story in a new look, same idea in a new niche, a similar storyline; never a part 2), type your own idea and let the writer draft the story, or paste a story you wrote. Then you take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
 
 **Status:** working. Opened from the server it runs in **live mode** with real APIs; the claude.ai preview is a demo with simulated AI.
 
@@ -76,8 +76,8 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | Images | Nano Banana 2 / Pro / 2 Lite | 18 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
 | Your idea on a template | - | Add your own idea to any visual template (added to every image prompt) for one video, or save it as your own template |
 | Story edits | The writer | "Add an idea" rewrites the story with your idea and keeps the length; Undo restores the previous version |
-| Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from |
-| Channel ideas | The writer + Nano Banana | Optional, on Export: reads the story type and visual style and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
+| Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from, matched to the analyzed video's keywords, title style and thumbnail look so the two get recommended together |
+| Channel ideas | The writer + Nano Banana | Optional, on Export: grows from the analyzed video, follows the kind of channel you type, and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
 | Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional (On/Off on the Format and Compile steps; after a render, edits show at once in the preview and "Update the video" re-renders for free), come in 9 styles (Bold pop, One word, Karaoke, Highlight box, Comic, Neon glow, Typewriter, Clean bar, Minimal) and are editable per scene; a .srt captions file is saved with every render |
 | Animated clips | Not yet | The Gemini key has no Veo models, so scenes use zoom and pan |
 | Music | Not yet | Narration only |
@@ -89,7 +89,7 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | PRD area | Where |
 |---|---|
 | Ingest, cache, manual transcript (ING-1..6) | Paste link step |
-| Breakdown, gaps, 10 angle cards, type filter, sort, merge two, comment source, title and tags, idea bank (ANG-1..9) | Pick angle step |
+| Breakdown, gaps, the 4 angles with the highest viral potential (each shows what it keeps and what it changes), type filter, sort, merge two, comment source, title and tags, idea bank (ANG-1..9) | Pick angle step |
 | Target length, 3 hooks, editable narration or dialogue, style guide, originality check (SCR-1..6) | Script step |
 | Style templates and saved looks (SCR-4, PRJ-4) | Visual style step, Templates |
 | Voice choice and preview, per-line regenerate, clone consent, characters with voices (AUD-1..4, CHR-1..4) | Voice step |

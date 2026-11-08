@@ -199,6 +199,8 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .hooks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .hookopt { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px 12px; cursor: pointer; font-size: 13.5px; display: flex; gap: 8px; }
 .hookopt[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.keepchange { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); }
+.keepchange b { color: var(--ink); font-weight: 600; margin-right: 4px; }
 .hookopt .radio, .chcard .radio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; margin-top: 3px; }
 .hookopt[aria-pressed="true"] .radio, .chcard[aria-pressed="true"] .radio { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
 .lines { display: flex; flex-direction: column; gap: 8px; }
@@ -608,6 +610,9 @@ const CAPTIONS = [
   { id: 'minimal', name: 'Minimal', per: 10 },
   { id: 'none', name: 'No captions' },
 ];
+// What the writer needs to know about the analyzed video, so titles, thumbnails and channels relate to it.
+const sourceBrief = p => !p.source || p.source.own ? {} : { title: p.source.title, channel: p.source.channel, tags: (p.source.tags || []).slice(0, 15), description: (p.source.description || '').slice(0, 1200),
+  summary: p.analysis && p.analysis.summary, hook: p.analysis && p.analysis.hook, why_it_worked: p.analysis && p.analysis.why_it_worked, views: p.source.views };
 const capById = id => CAPTIONS.find(c => c.id === id) || CAPTIONS[0];
 // A scene's caption: your edit if you made one, otherwise its words from the story.
 const captionOf = (p, sc) => sc.caption_text != null ? sc.caption_text : sceneText(p, sc);
@@ -623,7 +628,8 @@ const frameCls = p => ' r' + p.format.aspect_ratio.replace(':', 'x');
 const LENGTHS = [30, 60, 90, 180, 300, 600];
 const lenLabel = v => v < 120 ? v + 's' : (Math.round(v / 6) / 10) + ' min';
 const LENGTH_OPTS = [...LENGTHS.map(v => ({ value: v, label: lenLabel(v) })), { value: 'c', label: 'Custom' }];
-const ANGLE_TYPES = ['Deep dive', 'Continuation', 'Different storyline', 'Perspective flip', 'Different niche', 'Different topic', 'Different visuals'];
+// Ways to recreate what made the reference video go viral (never a sequel): the new video stands alone and is recommended beside it.
+const ANGLE_TYPES = ['Fill a gap', 'Same story, new look', 'Same idea, new niche', 'Similar storyline', 'New perspective'];
 
 /* ======================================================================
    Sample reference video (fictional). In demo mode any link loads this.
@@ -805,6 +811,13 @@ const SAMPLE = {
       ] },
   ],
 };
+// The demo shows the 4 angles with the highest viral potential, as the real writer returns them.
+SAMPLE.angles = [
+  ['a1', 'Fill a gap', 94, 'the 12-month balcony format and its hook', 'answers the top question: a balcony with little sun'],
+  ['a6', 'Same idea, new niche', 91, 'growing real food in a tiny rented space', 'a single windowsill instead of a balcony'],
+  ['a9', 'Same story, new look', 88, 'the same year, beat by beat', 'told in watercolor instead of live action'],
+  ['a4', 'Similar storyline', 85, 'a year of small wins and one funny rival', 'a fresh story built around the pigeon'],
+].map(([id, type, score, keeps, changes]) => ({ ...SAMPLE.angles.find(a => a.id === id), type, score, keeps, changes, potential: 'High' }));
 const DEFAULT_CHARS = [
   { id: 'ch-tomi', name: 'Tomi', description: 'A cheerful cartoon tomato plant with a small round face and leaf arms', notes: 'Proud, a little dramatic', voice_id: 'v-puck', seed: 501 },
   { id: 'ch-gus', name: 'Gus', description: 'A scheming grey city pigeon with an iridescent green neck', notes: 'Deadpan, always hungry', voice_id: 'v-charon', seed: 733 },
@@ -1247,7 +1260,7 @@ const api = {
       an + ': describing each scene on screen',
       an + ': breakdown and gaps from the comments',
       'Handing the report to ' + wr,
-      wr + ' is writing 10 angle cards',
+      wr + ' is picking the 4 angles most likely to go viral',
     ], 650);
     updateP(pid, (p, s) => {
       if (!cached) addCost(p, analystOf().perVideo + modelOf(p, 'writer').perVideo * 0.7);
@@ -1258,7 +1271,7 @@ const api = {
       p.ingesting = false; p.step = 'angles'; s.cache[cacheKey] = true;
       if (p.title === 'Untitled project') p.title = 'Balcony garden follow-up';
     });
-    toast(cached ? 'Loaded from cache. This link was analyzed before, so it cost nothing.' : '10 angles are ready.');
+    toast(cached ? 'Loaded from cache. This link was analyzed before, so it cost nothing.' : '4 angles are ready.');
   },
   // Start without a reference video: from the creator's own idea (the writer drafts the story) or from a pasted story (no writing cost).
   async startOwn(pid, mode, text, opts) {
@@ -1352,7 +1365,7 @@ const api = {
     try {
       let kit;
       if (LIVE) {
-        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [] }, ['Writing titles, captions, descriptions and thumbnail ideas from your story']);
+        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [], source: sourceBrief(p0) }, ['Writing titles, captions, descriptions and thumbnail ideas from your story']);
         kit = { titles: r.titles, captions: r.captions, descriptions: r.descriptions || [], tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
         if (r.warning) toast(r.warning);
       } else {
@@ -1377,13 +1390,13 @@ const api = {
     try {
       let r;
       if (LIVE) {
-        r = await liveJob(pid, 'Writing channel ideas', 'channel-kit', { writer: wr.id, story: p0.script.story, angle: a, summary: (p0.analysis && p0.analysis.summary) || '', style_name: st.name, style_recipe: st.prefix, video_type: p0.video_type }, ['Reading the story type and the visual style']);
+        r = await liveJob(pid, 'Writing channel ideas', 'channel-kit', { writer: wr.id, story: p0.script.story, angle: a, summary: (p0.analysis && p0.analysis.summary) || '', style_name: st.name, style_recipe: st.prefix, video_type: p0.video_type, source: sourceBrief(p0), idea: p0.channel_idea || '' }, ['Reading the story type and the visual style']);
         if (r.warning) toast(r.warning);
       } else {
         await runJob(pid, 'Writing channel ideas', ['Reading the story type', 'Reading the visual style', 'Naming 3 channels'], 500);
         const topic = (a.tags && a.tags[0]) || 'this topic'; const T = topic.replace(/\b\w/g, c => c.toUpperCase());
         const look = st.name.toLowerCase();
-        r = { story_type: a.type + ' stories about ' + topic + ', ' + (st.mood || '').toLowerCase().split(',')[0] + ' tone, for curious beginners', visual_type: st.name + ': ' + st.mood.toLowerCase(), cost: 0,
+        r = { story_type: (p0.channel_idea ? 'Following your idea (' + p0.channel_idea.trim() + '). ' : '') + (p0.source && !p0.source.own ? 'Grown from \u201c' + p0.source.title + '\u201d: ' : '') + a.type + ' stories about ' + topic + ', ' + (st.mood || '').toLowerCase().split(',')[0] + ' tone, for curious beginners', visual_type: st.name + ': ' + st.mood.toLowerCase(), cost: 0,
           channels: [
             { name: T + ' Made Simple', handle: '@' + T.replace(/\W/g, '') + 'MadeSimple', tagline: 'Short, honest ' + topic + ' stories you can use today.', about: 'Every week, one clear story about ' + topic + ', told in ' + look + ' visuals. No filler, no hype: just what works and why. Subscribe if you want to learn it the easy way.', niche: topic + ' how-to', avatar: 'one bold ' + topic + ' symbol on a plain warm background', banner: 'a wide scene about ' + topic + ' with an open middle for the name' },
             { name: 'The ' + T + ' Diaries', handle: '@' + T.replace(/\W/g, '') + 'Diaries', tagline: 'Real ' + topic + ' moments, one story at a time.', about: 'Story-first videos about ' + topic + ': the wins, the mistakes and the lessons. Told in ' + look + ' visuals, new episodes every Friday.', niche: topic + ' stories', avatar: 'a friendly character holding a ' + topic + ' item', banner: 'a row of small story scenes about ' + topic },
@@ -1849,7 +1862,7 @@ function SourceCard({ p }) {
    ====================================================================== */
 function Score({ v }) {
   const c = 2 * Math.PI * 20; const col = v >= 85 ? 'var(--ok)' : v >= 75 ? 'var(--accent)' : 'var(--warn)';
-  return html`<div className="score" title=${'Relatedness ' + v + ' of 100'}><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="20" fill="none" stroke="var(--line)" strokeWidth="4" /><circle cx="23" cy="23" r="20" fill="none" stroke=${col} strokeWidth="4" strokeLinecap="round" strokeDasharray=${c} strokeDashoffset=${c * (1 - v / 100)} /></svg>${v}</div>`;
+  return html`<div className="score" title=${'Viral potential ' + v + ' of 100'}><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="20" fill="none" stroke="var(--line)" strokeWidth="4" /><circle cx="23" cy="23" r="20" fill="none" stroke=${col} strokeWidth="4" strokeLinecap="round" strokeDasharray=${c} strokeDashoffset=${c * (1 - v / 100)} /></svg>${v}</div>`;
 }
 function toggleSave(s, p, a) {
   update(st => {
@@ -1863,7 +1876,8 @@ function AngleCard({ a, p, s, selected, onSelect, locked }) {
   return html`<article className=${'acard' + (selected ? ' sel' : '')}>
     <div className="acard-top"><${Score} v=${a.score} /><div className="grow stack" style=${{ gap: 4 }}><span className="eyebrow">${a.type}</span><h3>${a.title}</h3></div></div>
     <p className="pitch">${a.pitch}</p>
-    <p className="why"><strong>Why they’d watch next:</strong> ${a.reason}</p>
+    <p className="why"><strong>Why it can go viral too:</strong> ${a.reason}</p>
+    ${a.keeps || a.changes ? html`<div className="keepchange">${a.keeps ? html`<span><b>Keeps</b> ${a.keeps}</span>` : null}${a.changes ? html`<span><b>Changes</b> ${a.changes}</span>` : null}</div>` : null}
     <p className="hookq">“${a.hooks[0]}”</p>
     <div className="meta">
       <span className="chip"><span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c }} />`)}</span>${st.name}</span>
@@ -1897,7 +1911,7 @@ function AnglesScreen({ p, s }) {
   };
   return html`<${Fragment}>
     ${s.intro ? html`<div className="banner"><div className="grow"><b>Demo mode.</b> Every AI call is simulated and costs nothing. Gemini watched the reference video and wrote the breakdown; GPT-5.5 (ChatGPT API) wrote the angle cards from that report. Pick an angle below, then walk the pipeline: script, style, voice, format, scenes, compile and export. Your progress saves in this browser.</div><button type="button" className="btn sm ghost" onClick=${() => update(st => { st.intro = false; })} aria-label="Dismiss"><${Icon} n="x" /></button></div>` : null}
-    <${StepHead} title="Pick an angle" sub="Ten original ideas built so the new video sits next to the reference video in recommendations. Select one, or two to merge." />
+    <${StepHead} title="Pick an angle" sub="The 4 ways to recreate what made this video go viral, ranked by viral potential: fill a gap, retell the story in a new look, take the idea to a new niche, or build a similar storyline. Each stands on its own (not a part 2) and is made to be recommended next to the original. Select one, or two to merge." />
     <div className="angles-layout">
       <div className="stack">
         <section className="panel"><div className="panel-h"><h2>Reference</h2><button type="button" className="btn sm ghost" onClick=${() => goStep('ingest')}>Change</button></div><${SourceCard} p=${p} /></section>
@@ -1930,7 +1944,7 @@ function AnglesScreen({ p, s }) {
             <button type="button" className="chip btnchip" aria-pressed=${type === 'All'} onClick=${() => setType('All')}>All ${p.angles.length}</button>
             ${ANGLE_TYPES.filter(t => counts[t]).map(t => html`<button key=${t} type="button" className="chip btnchip" aria-pressed=${type === t} onClick=${() => setType(t)}>${t} ${counts[t]}</button>`)}
           </div>
-          <label className="row note" htmlFor="sort">Sort <select id="sort" className="select" style=${{ width: 'auto' }} value=${sort} onChange=${e => setSort(e.target.value)}><option value="score">Relatedness</option><option value="potential">Potential</option><option value="effort">Lowest effort</option></select></label>
+          <label className="row note" htmlFor="sort">Sort <select id="sort" className="select" style=${{ width: 'auto' }} value=${sort} onChange=${e => setSort(e.target.value)}><option value="score">Viral potential</option><option value="potential">Potential</option><option value="effort">Lowest effort</option></select></label>
         </div>
         <div className="cards">${list.map(a => html`<${AngleCard} key=${a.id} a=${a} p=${p} s=${s} selected=${sel.includes(a.id)} locked=${locked} onSelect=${() => toggle(a.id)} />`)}</div>
         <section className="panel tray">
@@ -2679,7 +2693,7 @@ function PublishKit({ p }) {
   const sel = (key, v) => updateP(p.id, q => { q.kit.sel[key] = v; });
   if (!k || k.error) return html`<section className="panel stack">
     <h2>Titles, captions, descriptions and thumbnails</h2>
-    <p className="note">Written from your story: four titles, three post captions with hashtags, three video descriptions and three thumbnail ideas. You then draw only the thumbnails you want.</p>
+    <p className="note">Written from your story${p.source && !p.source.own ? ' and matched to \u201c' + p.source.title + '\u201d (its keywords, title style and thumbnail look), so the two get recommended together' : ''}: four titles, three post captions with hashtags, three video descriptions and three thumbnail ideas. You then draw only the thumbnails you want.</p>
     ${k && k.error ? html`<div className="warnbox">${k.error}</div>` : null}
     <div><${CostGate} p=${p} label="Write options" cost=${modelOf(p, 'writer').perVideo * 0.2} rows=${[[modelOf(p, 'writer').name, 'titles, captions, descriptions and 3 thumbnail ideas'], ['Thumbnail images', 'made one at a time, only the ones you want']]} onGo=${() => api.publishKit(p.id)} /></div>
   </section>`;
@@ -2740,7 +2754,8 @@ function ChannelKit({ p }) {
   if (!ch || ch.error) return html`<details className="panel chkit">
     <summary><strong>Start a channel for videos like this</strong> <span className="note">optional</span></summary>
     <div className="stack" style=${{ marginTop: 10 }}>
-      <p className="note">The app reads your story type and the ${st.name} look, then suggests 3 channels with a name, handle, bio and about text to copy. Profile photos and banners are made only when you ask.</p>
+      <p className="note">${p.source && !p.source.own ? 'Built from the video you analyzed (\u201c' + p.source.title + '\u201d), your story and the ' + st.name + ' look.' : 'Built from your story and the ' + st.name + ' look.'} You get 3 channels with a name, handle, bio and about text to copy. Profile photos and banners are made only when you ask.</p>
+      <label className="field" htmlFor="channel-idea">The kind of channel you want (optional)<textarea id="channel-idea" className="textarea" rows="2" placeholder="e.g. a faceless storytelling channel for Nigerian folk tales, 3 videos a week, for teens" value=${p.channel_idea || ''} onChange=${e => updateP(p.id, q => { q.channel_idea = e.target.value; })}></textarea></label>
       ${ch && ch.error ? html`<div className="warnbox">${ch.error}</div>` : null}
       <div><${CostGate} p=${p} label="Suggest 3 channels" cost=${modelOf(p, 'writer').perVideo * 0.1} rows=${[[modelOf(p, 'writer').name, 'story and style analysis, 3 channel ideas'], ['Profile photo and banner', 'made one at a time, only the ones you want']]} onGo=${() => api.channelKit(p.id)} /></div>
     </div>
@@ -2749,7 +2764,8 @@ function ChannelKit({ p }) {
   const c = ch.list[ch.sel] || ch.list[0];
   const all = 'Name: ' + c.name + '\nHandle: ' + c.handle + '\nBio: ' + c.tagline + '\n\nAbout:\n' + c.about;
   return html`<section className="panel stack">
-    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Channel ideas</h2><button type="button" className="btn sm ghost" onClick=${() => updateP(p.id, q => { q.channels = null; })}><${Icon} n="redo" />New ideas</button></div>
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Channel ideas</h2><button type="button" className="btn sm ghost" onClick=${() => updateP(p.id, q => { q.channels = null; })}><${Icon} n="redo" />New ideas or change my idea</button></div>
+    ${p.channel_idea ? html`<p className="note">Your idea: \u201c${p.channel_idea}\u201d</p>` : null}
     <div className="note"><strong>Story type:</strong> ${ch.story_type}<br /><strong>Visual type:</strong> ${ch.visual_type}</div>
     <div className="chcards">${ch.list.map((x, i) => html`<button key=${i} type="button" className="chcard" aria-pressed=${ch.sel === i} onClick=${() => updateP(p.id, q => { q.channels.sel = i; })}>
       <span className="radio"></span><span style=${{ minWidth: 0 }}><strong>${x.name}</strong><span className="note mono" style=${{ display: 'block' }}>${x.handle}</span><span className="note" style=${{ display: 'block' }}>${x.tagline}</span><span className="chip" style=${{ marginTop: 4 }}>${x.niche}</span></span>
