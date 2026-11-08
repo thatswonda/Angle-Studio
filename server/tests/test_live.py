@@ -215,3 +215,18 @@ def test_every_caption_style_writes_valid_events():
         assert events and ass.count("Style: Default,") == 1, style
     tw = [l for l in render.captions_ass(cues, "typewriter", 1080, 1920).splitlines() if l.startswith("Dialogue:")]
     assert len(tw) == 4 and tw[2].endswith("one two three")  # words appear one at a time
+
+
+def test_media_check_reports_lost_files():
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    (live.MEDIA / "audio").mkdir(parents=True, exist_ok=True)
+    kept = live.MEDIA / "audio" / "kept-test.wav"
+    kept.write_bytes(b"x")
+    try:
+        r = TestClient(app).post("/api/live/media-check", json={"paths": [
+            "/media/audio/kept-test.wav", "/media/audio/gone.wav", "/media/../app/main.py", "data:image/png;base64,AA"]}).json()
+        assert r["missing"] == ["/media/audio/gone.wav", "/media/../app/main.py"]
+    finally:
+        kept.unlink()

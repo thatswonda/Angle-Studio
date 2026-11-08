@@ -261,6 +261,24 @@ async def story(body: StoryBody):
     return _job("Writing the story", work)
 
 
+class MediaCheckBody(BaseModel):
+    paths: list[str]
+
+
+@router.post("/media-check")
+async def media_check(body: MediaCheckBody):
+    """Which of these saved files are gone (for example after a redeploy without a persistent disk)."""
+    root = MEDIA.resolve()
+    missing = []
+    for ref in body.paths[:5000]:
+        if not ref.startswith("/media/"):
+            continue
+        path = (MEDIA / ref.removeprefix("/media/")).resolve()
+        if root not in path.parents or not path.is_file():
+            missing.append(ref)
+    return {"missing": missing}
+
+
 class VisualsBody(BaseModel):
     writer: str = "gpt-5-5"
     story: str

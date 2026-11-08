@@ -62,7 +62,7 @@ Vercel cannot run this app: it needs a server that stays on, FFmpeg, background 
 3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `YOUTUBE_API_KEY`.
 4. Deploy. The first build takes a few minutes. Open the `onrender.com` link, type any user name and your `APP_PASSWORD`.
 
-The blueprint uses the Starter plan (always on, about $7 a month). On the free plan the app sleeps when idle and loses rendered videos on restart, so download each video when it is done.
+The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB persistent disk (about $1.25 a month) mounted at `/app/server/data`. Voice clips, images, videos and the analysis cache live there; without the disk every redeploy deletes them. If files are lost anyway, the Compile step lists them and offers to make only those again.
 
 ## What is live
 

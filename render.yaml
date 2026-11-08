@@ -5,6 +5,10 @@ services:
     runtime: docker
     plan: starter            # always on; the free plan sleeps and loses rendered files on restart
     healthCheckPath: /healthz
+    disk:                    # keeps voice clips, images and videos when the app redeploys or restarts
+      name: angle-studio-data
+      mountPath: /app/server/data
+      sizeGB: 5
     envVars:
       - key: APP_PASSWORD    # the password the browser asks for; keeps strangers off your API keys
         sync: false

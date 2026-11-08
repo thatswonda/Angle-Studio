@@ -925,6 +925,7 @@ function load() {
     Object.values(s.projects).forEach(p => {
       p.ingesting = false;
       if (p.script && p.script.generating) p.script = { error: 'Writing was interrupted when the page closed.' };
+      p.recovering = false;
       if (p.script) { p.script.picturing = false; p.script.revising = false; }
       (p.script && p.script.lines || []).forEach(l => { if (l.audio_status === 'generating') l.audio_status = 'failed'; });
       p.scenes.forEach(sc => { if (sc.image_status === 'generating') sc.image_status = 'failed'; if (sc.clip_status === 'generating') sc.clip_status = 'failed'; });
@@ -1065,7 +1066,29 @@ function lookAnchor(p, exceptId) {
   }
   return null;
 }
+// Finds voice clips, images and videos the server no longer has (a redeploy without a persistent disk wipes them).
+// Lost clips and images are marked failed so they can be made again; lost renders are cleared.
+async function checkMedia(pid) {
+  const p = STATE.projects[pid]; if (!p || !p.script || !p.script.lines) return { lines: [], scenes: [] };
+  const own = sc => { const v = sc.image_versions[sc.image_index]; return v && v.url; };
+  const paths = [...p.script.lines.map(l => l.audio_url), ...p.scenes.filter(sc => !sc.reuse_of).map(own), p.render.draft_path, p.render.final_path].filter(x => x && x.startsWith('/media/'));
+  if (!paths.length) return { lines: [], scenes: [] };
+  const { missing } = await post('media-check', { paths }); const gone = new Set(missing);
+  const lines = p.script.lines.filter(l => gone.has(l.audio_url)).map(l => l.id);
+  const scenes = p.scenes.filter(sc => !sc.reuse_of && gone.has(own(sc))).map(sc => sc.id);
+  const lost = 'This file was lost when the server restarted. Make it again.';
+  updateP(pid, q => {
+    q.script.lines.forEach(l => { if (lines.includes(l.id)) { l.audio_status = 'failed'; l.error = lost; } });
+    q.scenes.forEach(sc => { if (scenes.includes(sc.id)) { sc.image_status = 'failed'; sc.error = lost; } });
+    if (gone.has(q.render.draft_path)) q.render.draft_path = null;
+    if (gone.has(q.render.final_path)) { q.render.final_path = null; q.status = 'draft'; }
+    q.missing = lines.length || scenes.length ? { lines, scenes } : null;
+    if (q.missing) q.render_error = null;
+  });
+  return { lines, scenes };
+}
 async function liveRender(pid, final) {
+  try { const m = await checkMedia(pid); if (m.lines.length || m.scenes.length) { toast('Some files were lost on the server. Make them again, then render.'); return; } } catch (e) { /* the render itself reports anything still missing */ }
   const p = STATE.projects[pid];
   updateP(pid, q => { q.rendering = final ? 'final' : 'draft'; q.render_error = null; });
   // Each scene lists its sentences, so the server can time every image to exactly those sentences' audio.
@@ -1331,6 +1354,19 @@ const api = {
       p.scenes = out;
       p.plan_sig = planSig(p);
     });
+  },
+  // Makes again only the voice clips and images the server lost.
+  async recoverMissing(pid) {
+    const m = STATE.projects[pid].missing; if (!m) return;
+    updateP(pid, q => { q.recovering = true; });
+    try {
+      if (m.lines.length) await api.generateAudio(pid, m.lines);
+      if (m.scenes.length) await api.generateImages(pid, m.scenes);
+      const p = STATE.projects[pid];
+      const left = p.script.lines.filter(l => m.lines.includes(l.id) && l.audio_status !== 'ready').length + p.scenes.filter(sc => m.scenes.includes(sc.id) && sc.image_status !== 'ready').length;
+      updateP(pid, q => { q.recovering = false; q.missing = left ? q.missing : null; });
+      toast(left ? left + ' file' + (left > 1 ? 's' : '') + ' could not be made. Try again.' : 'Everything is back. Build the draft again.');
+    } catch (e) { updateP(pid, q => { q.recovering = false; }); toast(e.message); }
   },
   async generateImages(pid, ids) {
     if (LIVE) {
@@ -2351,7 +2387,21 @@ function CaptionEditor({ p }) {
     </${Fragment}>` : html`<p className="note">The video will have no burned-in captions. A captions file (.srt) is still saved with each render, for uploading separately.</p>`}
   </section>`;
 }
+function MissingPanel({ p }) {
+  const m = p.missing; if (!m) return null;
+  const im = modelOf(p, 'image'); const vm = modelOf(p, 'voice');
+  const chars = p.script.lines.filter(l => m.lines.includes(l.id)).reduce((n, l) => n + l.text.length, 0);
+  const cost = m.scenes.length * im.cost + chars / 1000 * vm.cost;
+  const parts = [m.lines.length ? m.lines.length + ' voice clip' + (m.lines.length > 1 ? 's' : '') : '', m.scenes.length ? m.scenes.length + ' image' + (m.scenes.length > 1 ? 's' : '') : ''].filter(Boolean).join(' and ');
+  return html`<section className="panel stack" style=${{ borderColor: 'var(--warn)' }}>
+    <h2>Files lost on the server</h2>
+    <p>${parts} of this project ${m.lines.length + m.scenes.length > 1 ? 'are' : 'is'} no longer on the server. This happens when the app redeploys without a storage disk. Everything else, including your story, scenes and caption edits, is safe.</p>
+    ${m.scenes.length ? html`<p className="note">New images are drawn from the same scene prompts and style, so they will look similar but not identical. You can check them on the Scenes step afterwards.</p>` : null}
+    <div>${p.recovering ? html`<span className="row note"><span className="spinner"></span> Making the lost files again</span>` : html`<${CostGate} p=${p} label=${'Make the ' + parts + ' again'} cost=${cost} rows=${[m.lines.length ? [vm.name, m.lines.length + ' sentences'] : null, m.scenes.length ? [im.name, m.scenes.length + ' images'] : null].filter(Boolean)} onGo=${() => api.recoverMissing(p.id)} />`}</div>
+  </section>`;
+}
 function CompileScreen({ p, s }) {
+  useEffect(() => { if (LIVE && !p.rendering && !p.recovering) checkMedia(p.id).catch(() => {}); }, [p.id, !!LIVE]);
   const anim = p.scenes.filter(sc => sc.animate).length;
   const draftJob = p.rendering === 'draft'; const finalJob = p.rendering === 'final';
   const job = s.jobs.find(j => j.pid === p.id && j.status === 'running' && /draft|final/i.test(j.label));
@@ -2372,13 +2422,14 @@ function CompileScreen({ p, s }) {
         <section className="panel stack"><h2>What goes in</h2>
           <ul className="checklist">${checks.map(([k, ok]) => html`<li key=${k} className=${ok ? '' : 'no'}><${Icon} n=${ok ? 'check' : 'x'} />${k}</li>`)}</ul>
         </section>
+        <${MissingPanel} p=${p} />
         <${CaptionEditor} p=${p} />
         <section className="panel stack"><h2>Final polish</h2>
           <ul className="checklist"><li><${Icon} n="check" />Loudness normalized to −14 LUFS</li><li><${Icon} n="check" />Same transition between every scene</li><li><${Icon} n="check" />Captions kept inside the platform’s safe area</li></ul>
         </section>
         ${job ? html`<section className="panel stack" aria-live="polite"><strong>${job.label}</strong><div className="stages">${job.stages.map((st, i) => html`<div key=${i} className=${'stage ' + (i < job.stage ? 'done' : i === job.stage ? 'now' : 'todo')}><span className="dot">${i < job.stage ? html`<${Icon} n="check" />` : i === job.stage ? html`<span className="spinner"></span>` : '·'}</span>${st}</div>`)}</div></section>` : null}
         <div className="row">
-          <button type="button" className="btn" disabled=${!!p.rendering} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />${p.render.draft_path ? 'Rebuild draft' : 'Build 480p draft'}</button>
+          <button type="button" className="btn" disabled=${!!p.rendering || !!p.missing || p.recovering} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />${p.render.draft_path ? 'Rebuild draft' : 'Build 480p draft'}</button>
           <button type="button" className="btn primary" disabled=${!!p.rendering || !p.render.draft_path} onClick=${() => api.renderFinal(p.id)}>${finalJob ? html`<span className="spinner"></span> Rendering` : 'Render final 1080p MP4'}<span className="tag">$0.00</span></button>
         </div>
         ${p.render_error ? html`<div className="warnbox">${p.render_error}</div>` : null}
