@@ -24,7 +24,7 @@ from .providers.openai_writer import OpenAIWriter
 
 router = APIRouter(prefix="/api/live")
 MEDIA = storage.ROOT / "media"
-STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "animated3d", "anime", "comic", "watercolor",
+STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor",
              "infographic", "retro", "papercut", "lineart"]
 ANGLE_TYPES = ["Deep dive", "Continuation", "Different storyline", "Perspective flip", "Different niche", "Different topic", "Different visuals"]
 WRITER_NAMES = {"gpt-5-5": "GPT-5.5", "gpt-5": "GPT-5", "gemini-pro-writer": "Gemini Pro", "gemini-flash-writer": "Gemini Flash",
@@ -400,7 +400,7 @@ class KitBody(BaseModel):
 @router.post("/publish-kit")
 async def publish_kit(body: KitBody):
     async def work(progress):
-        progress("Writing titles, captions and thumbnail ideas from your story")
+        progress("Writing titles, captions, descriptions and thumbnail ideas from your story")
         data, cost, wn, warning = await write_json(body.writer, progress, (
             f"A creator finished this video. Its story:\n---\n{body.story[:12000]}\n---\n"
             f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'pitch', 'reason')})}. "
@@ -410,6 +410,8 @@ async def publish_kit(body: KitBody):
             '{"titles": [4 different titles under 70 characters],'
             ' "captions": [3 different post captions/descriptions, each 2-4 sentences that hook, summarize and invite a comment, '
             'each ending with 3-5 hashtags],'
+            ' "descriptions": [3 different full YouTube descriptions, each 2 short paragraphs that summarize the video and what '
+            'the viewer will learn or feel, then one line inviting a comment, then a line of 3-5 hashtags],'
             ' "thumbnails": [3 objects {"concept": "what the thumbnail image shows, one vivid moment from the story, close and readable at small size",'
             ' "text": "2-4 bold words to print on it"}],'
             ' "tags": [8 search tags]}'))
@@ -417,10 +419,58 @@ async def publish_kit(body: KitBody):
             data = data[0] if data and isinstance(data[0], dict) else {}
         thumbs = [t for t in (data.get("thumbnails") or []) if isinstance(t, dict) and t.get("concept")][:3]
         return {"titles": [str(t) for t in (data.get("titles") or [])][:4], "captions": [str(c) for c in (data.get("captions") or [])][:3],
+                "descriptions": [str(c) for c in (data.get("descriptions") or [])][:3],
                 "thumbnails": [{"concept": str(t["concept"]), "text": str(t.get("text", ""))[:40]} for t in thumbs],
                 "tags": [str(t) for t in (data.get("tags") or [])][:10], "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
     return _job("Writing the publish kit", work)
+
+
+# ---------- Channel ideas: a channel built around this kind of story and look
+
+class ChannelBody(BaseModel):
+    writer: str = "gpt-5-5"
+    story: str
+    angle: dict = {}
+    summary: str = ""
+    style_name: str = ""
+    style_recipe: str = ""
+    video_type: str = "voiceover"
+    platform: str = "YouTube"
+
+
+@router.post("/channel-kit")
+async def channel_kit(body: ChannelBody):
+    async def work(progress):
+        progress("Reading the story type and the visual style")
+        data, cost, wn, warning = await write_json(body.writer, progress, (
+            f"A creator makes {body.video_type} videos like this one. Story:\n---\n{body.story[:8000]}\n---\n"
+            f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'type', 'pitch')})}. Reference video summary: {body.summary[:1500]}\n"
+            f"Visual style: {body.style_name} ({body.style_recipe[:400]}).\n"
+            f"First decide what type of story this is (its genre, tone and audience) and how the visual style feels. Then propose "
+            f"3 different {body.platform} channels built for many videos like it. Names must be original, short, easy to say, and "
+            "must not copy or imitate an existing well-known channel, brand or character. Return "
+            '{"story_type": "one line: genre, tone and audience", "visual_type": "one line on the look",'
+            ' "channels": [3 objects {"name": "channel name", "handle": "@handle without spaces", "tagline": "bio under 150 characters",'
+            ' "about": "channel description of 3-4 sentences: what viewers get, how often, why subscribe", "niche": "2-4 words",'
+            ' "avatar": "what the round profile picture shows: one simple, bold subject that reads at tiny size",'
+            ' "banner": "what the wide banner shows, with room in the middle for the channel name"}]}'))
+        if isinstance(data, list):
+            data = data[0] if data and isinstance(data[0], dict) else {}
+        chans = []
+        for c in (data.get("channels") or [])[:3]:
+            if not isinstance(c, dict) or not c.get("name"):
+                continue
+            handle = "@" + "".join(ch for ch in str(c.get("handle") or c["name"]) if ch.isalnum() or ch in "._-")[:30]
+            chans.append({"name": str(c["name"])[:50], "handle": handle, "tagline": str(c.get("tagline", ""))[:160],
+                          "about": str(c.get("about", ""))[:1000], "niche": str(c.get("niche", ""))[:40],
+                          "avatar": str(c.get("avatar", ""))[:400], "banner": str(c.get("banner", ""))[:400]})
+        if not chans:
+            raise ProviderError(f"{wn} returned no channel ideas. Try again.")
+        return {"story_type": str(data.get("story_type", "")), "visual_type": str(data.get("visual_type", "")),
+                "channels": chans, "written_by": wn, "cost": round(cost, 4), "warning": warning}
+
+    return _job("Writing channel ideas", work)
 
 
 # ---------- 4. Render

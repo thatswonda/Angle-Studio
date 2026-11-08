@@ -72,9 +72,10 @@ The blueprint uses the Starter plan (always on, about $7 a month). On the free p
 | Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
 | Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
 | Voice | Gemini TTS | Director's-notes prompt keeps the delivery consistent without reading it aloud |
-| Images | Nano Banana 2 / Pro / 2 Lite | 12 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
+| Images | Nano Banana 2 / Pro / 2 Lite | 13 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
 | Story edits | The writer | "Add an idea" rewrites the story with your idea and keeps the length; Undo restores the previous version |
-| Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags and 3 thumbnails with bold text, to choose from |
+| Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from |
+| Channel ideas | The writer + Nano Banana | Optional, on Export: reads the story type and visual style and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
 | Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional and editable per scene; a .srt captions file is saved with every render |
 | Animated clips | Not yet | The Gemini key has no Veo models, so scenes use zoom and pan |
 | Music | Not yet | Narration only |
@@ -125,7 +126,7 @@ Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). Th
 
 ## Template example images
 
-The 48 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
+The 48 images in `web/templates` were made once with Nano Banana 2. The Clay stop-motion template has no example images yet (it shows a drawn placeholder); to make them, and to remake missing ones after editing `web/templates/templates.json`:
 
 ```bash
 cd server && python scripts/make_template_examples.py

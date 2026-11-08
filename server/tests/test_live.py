@@ -149,3 +149,37 @@ def test_tts_wav_wrapper_is_stripped():
     assert pcm[400:600] == body[400:600]  # the middle is untouched; only the 5 ms edges fade
     raw, _ = clean_pcm(body)  # raw samples pass through
     assert len(raw) == len(body)
+
+
+def _run_job(c, path, body):
+    import time
+    jid = c.post(path, json=body).json()["id"]
+    for _ in range(200):
+        j = c.get(f"/api/live/jobs/{jid}").json()
+        if j["status"] in ("done", "failed"):
+            return j
+        time.sleep(0.02)
+
+
+def test_publish_kit_and_channel_ideas(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+
+    async def fake_write(writer_id, progress, prompt):
+        if "channels" in prompt:
+            return {"story_type": "Practical DIY garden tips, upbeat, for renters", "visual_type": "Warm handmade clay",
+                    "channels": [{"name": f"Clay Garden {i}", "handle": f"clay garden {i}!", "tagline": "Tiny gardens, big harvests",
+                                  "about": "Weekly clay-animated garden fixes.", "niche": "balcony gardening",
+                                  "avatar": "a clay tomato with a smile", "banner": "a clay balcony full of plants"} for i in range(3)]}, 0.01, "Gemini Flash", None
+        return {"titles": ["A", "B", "C", "D"], "captions": ["c1 #x", "c2 #y", "c3 #z"], "descriptions": ["d1", "d2", "d3"],
+                "thumbnails": [{"concept": "x", "text": "BIG"}], "tags": ["t"]}, 0.01, "Gemini Flash", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    c = TestClient(app)
+    kit = _run_job(c, "/api/live/publish-kit", {"writer": "gemini-flash-writer", "story": "A story."})
+    assert kit["status"] == "done" and kit["result"]["descriptions"] == ["d1", "d2", "d3"]
+    ch = _run_job(c, "/api/live/channel-kit", {"writer": "gemini-flash-writer", "story": "A story.", "style_name": "Clay stop-motion"})
+    r = ch["result"]
+    assert ch["status"] == "done" and len(r["channels"]) == 3 and r["story_type"].startswith("Practical")
+    assert r["channels"][0]["handle"] == "@claygarden0"  # handles are cleaned of spaces and symbols

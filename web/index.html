@@ -199,8 +199,8 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .hooks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .hookopt { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px 12px; cursor: pointer; font-size: 13.5px; display: flex; gap: 8px; }
 .hookopt[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.hookopt .radio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; margin-top: 3px; }
-.hookopt[aria-pressed="true"] .radio { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
+.hookopt .radio, .chcard .radio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); flex: none; margin-top: 3px; }
+.hookopt[aria-pressed="true"] .radio, .chcard[aria-pressed="true"] .radio { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
 .lines { display: flex; flex-direction: column; gap: 8px; }
 .line { display: grid; grid-template-columns: 30px minmax(0, 1fr) 64px 32px; gap: 8px; align-items: start; }
 .line.char { grid-template-columns: 30px 130px minmax(0, 1fr) 64px 32px; }
@@ -240,6 +240,20 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .kthumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px; }
 .kthumb { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; text-align: left; }
 .kthumb[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chkit summary { cursor: pointer; list-style: revert; }
+.chcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 8px; }
+.chcard { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px 12px; cursor: pointer; display: flex; gap: 8px; font: inherit; color: inherit; }
+.chcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chdetail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 720px) { .chdetail { grid-template-columns: 1fr; } }
+.chart { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; align-items: start; }
+.chav, .chbanner { position: relative; overflow: hidden; background: var(--sunk); display: grid; place-items: center; border: 1px solid var(--line); }
+.chav { width: 112px; height: 112px; border-radius: 50%; }
+.chbanner { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r); }
+.chav img, .chbanner img, .chav svg, .chbanner svg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.chname { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-weight: 800; font-size: clamp(14px, 3vw, 22px); color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.6); padding: 0 8px; }
+.chfield { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; background: var(--surface); }
+.chav .overlay, .chbanner .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); }
 .kthumb .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 @media (max-width: 860px) { .tdetail { grid-template-columns: minmax(0, 1fr); } .tdetail img { max-width: 220px; } }
 .styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
@@ -489,6 +503,7 @@ const STYLES = [
   { id: "cinematic", name: "Moody cinematic", kind: "soft", mood: "Dark, dramatic, high stakes", best: "Mystery, history, true crime, tension", prefix: "moody cinematic film still, low-key lighting with deep shadows, teal and amber color grade, anamorphic lens with soft flares, atmospheric haze, dramatic composition, rich contrast", avoid: "flat lighting, bright cheerful colors, cartoon look, blown-out highlights", palette: ["#0E1A24", "#1F4E5A", "#E7B15A", "#C2563A"], examples: 4 },
   { id: "documentary", name: "Documentary", kind: "soft", mood: "Authentic, observed, real", best: "Nature, culture, how-to, field reports", prefix: "documentary photograph for a nature and travel magazine, available light, candid unposed moment, authentic textures, natural colors, sharp focus, environmental storytelling, 50mm lens", avoid: "staged studio look, heavy filters, fantasy elements, cartoon style", palette: ["#2F3B2C", "#7C8B5E", "#E6DFCF", "#B9773C"], examples: 4 },
   { id: "botanical", name: "Warm lifestyle", kind: "soft", mood: "Calm, cozy, inviting", best: "Home, food, gardening, wellness, routines", prefix: "warm lifestyle photograph, soft window light, airy and bright, gentle warm pastel tones, cozy natural materials like linen and wood, shallow depth of field, inviting and calm atmosphere", avoid: "harsh shadows, neon colors, gloomy mood, cluttered backgrounds", palette: ["#3E4A3B", "#A7C4A0", "#F4ECDD", "#D9895B"], examples: 4 },
+  { id: "clay", name: "Clay stop-motion", kind: "soft", mood: "Handmade, charming, funny", best: "Comedy, kids, character stories, explainers with personality", prefix: "handmade clay stop-motion animation still, plasticine characters with visible thumbprints and sculpting marks, big round glossy bead eyes and exaggerated expressive faces, chunky rounded proportions, miniature handcrafted tabletop set built from clay, felt and painted wood, warm soft studio lighting with gentle shadows, shallow depth of field like a macro lens, earthy tones with soft pastel accents", avoid: "photorealistic people, smooth glossy CGI plastic, flat 2D illustration, recognizable characters from existing films or shows", palette: ["#4A3B2C", "#B07A48", "#EADBC4", "#5E9E96"], examples: 0 },
   { id: "animated3d", name: "3D animated film", kind: "flat", mood: "Playful, bright, family friendly", best: "Kids, character stories, fun facts", prefix: "stylized 3D animated film still, soft global illumination, appealing rounded character design with expressive faces, vibrant harmonious colors, subsurface scattering on skin, cinematic depth of field, polished family-film quality", avoid: "photorealism, live action, creepy uncanny faces, copyrighted characters", palette: ["#2B3A67", "#5DA9E9", "#FFF1D0", "#FF8C42"], examples: 4 },
   { id: "anime", name: "Anime-inspired", kind: "comic", mood: "Vivid, emotional, epic skies", best: "Stories, motivation, adventure, lofi", prefix: "anime-inspired illustration, clean cel shading, crisp confident line art, luminous painted sky, vibrant saturated palette, dramatic rim lighting, richly detailed background art", avoid: "photorealism, 3D render look, muddy colors, copyrighted characters", palette: ["#24305E", "#6C8EEF", "#FDE8E9", "#F76C6C"], examples: 4 },
   { id: "comic", name: "Graphic novel", kind: "comic", mood: "Bold, punchy, dramatic", best: "Rivalries, history, action, explainers with attitude", prefix: "graphic novel panel, bold ink outlines, halftone shading, dramatic camera angles, limited bold palette with strong blacks and one spot color, dynamic composition, hand-inked texture", avoid: "photorealism, soft gradients, speech bubbles, lettering", palette: ["#1B1B1E", "#D7263D", "#F4E9CD", "#1B998B"], examples: 4 },
@@ -1117,18 +1132,57 @@ const api = {
     try {
       let kit;
       if (LIVE) {
-        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [] }, ['Writing titles, captions and thumbnail ideas from your story']);
-        kit = { titles: r.titles, captions: r.captions, tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
+        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [] }, ['Writing titles, captions, descriptions and thumbnail ideas from your story']);
+        kit = { titles: r.titles, captions: r.captions, descriptions: r.descriptions || [], tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
         if (r.warning) toast(r.warning);
       } else {
         await runJob(pid, 'Writing the publish kit', ['Reading your story', 'Writing titles and captions', 'Sketching thumbnails'], 500);
         const tags = (a.tags || []).slice(0, 4).map(t => '#' + t.replace(/\s+/g, '')).join(' ');
         kit = { titles: [a.suggested_title, a.title, a.hooks[1].replace(/\.$/, ''), 'I tried this so you don\u2019t have to: ' + a.title.toLowerCase()],
           captions: [a.pitch + ' ' + a.reason + ' What would you try first? ' + tags, a.hooks[0] + ' The full story is in the video. Save it for later. ' + tags, 'Everything I learned, in ' + lenLabel(p0.format.target_seconds) + '. ' + a.pitch + ' ' + tags],
+          descriptions: [
+            a.pitch + ' ' + a.reason + '\n\nIn ' + lenLabel(p0.format.target_seconds) + ' you get the whole story, step by step, with nothing left out.\n\nWhich part surprised you most? Tell me in the comments.\n\n' + tags,
+            a.hooks[0] + '\n\nThis video answers the questions people kept asking under the original: ' + a.title.toLowerCase() + '. Watch to the end for the part most people miss.\n\nWhat should I cover next? Comment below.\n\n' + tags,
+            'Everything you need to know about ' + a.title.toLowerCase() + ', told as one simple story.\n\n' + a.pitch + ' Save it so you can come back to it later.\n\nHave you tried this yourself? Let me know.\n\n' + tags],
           tags: a.tags || [], thumbnails: [a.suggested_title.split(':')[0], a.hooks[1].split('.')[0], a.type].map((t, i) => ({ concept: 'Scene ' + (i * 2 + 1) + ' with bold text', text: t.split(' ').slice(0, 4).join(' '), status: 'ready', scene: Math.min(p0.scenes.length - 1, i * 2) })), cost: 0 };
       }
-      updateP(pid, p => { p.kit = { ...kit, sel: { title: 0, caption: 0, thumb: 0 } }; addCost(p, kit.cost || 0); });  // thumbnails are drawn one at a time, on request
+      updateP(pid, p => { p.kit = { ...kit, sel: { title: 0, caption: 0, desc: 0, thumb: 0 } }; addCost(p, kit.cost || 0); });  // thumbnails are drawn one at a time, on request
     } catch (e) { updateP(pid, p => { p.kit = { error: e.message }; }); toast(e.message); }
+  },
+  // Channel ideas: 3 channels built around this story type and visual style, each with a profile photo and banner on request.
+  async channelKit(pid) {
+    const p0 = STATE.projects[pid]; const wr = modelOf(p0, 'writer'); const st = styleById(p0.style);
+    const a = p0.angles.find(x => x.id === p0.selected_angle_ids[0]) || p0.angles[0] || {};
+    updateP(pid, p => { p.channels = { loading: true }; });
+    try {
+      let r;
+      if (LIVE) {
+        r = await liveJob(pid, 'Writing channel ideas', 'channel-kit', { writer: wr.id, story: p0.script.story, angle: a, summary: (p0.analysis && p0.analysis.summary) || '', style_name: st.name, style_recipe: st.prefix, video_type: p0.video_type }, ['Reading the story type and the visual style']);
+        if (r.warning) toast(r.warning);
+      } else {
+        await runJob(pid, 'Writing channel ideas', ['Reading the story type', 'Reading the visual style', 'Naming 3 channels'], 500);
+        const topic = (a.tags && a.tags[0]) || 'this topic'; const T = topic.replace(/\b\w/g, c => c.toUpperCase());
+        const look = st.name.toLowerCase();
+        r = { story_type: a.type + ' stories about ' + topic + ', ' + (st.mood || '').toLowerCase().split(',')[0] + ' tone, for curious beginners', visual_type: st.name + ': ' + st.mood.toLowerCase(), cost: 0,
+          channels: [
+            { name: T + ' Made Simple', handle: '@' + T.replace(/\W/g, '') + 'MadeSimple', tagline: 'Short, honest ' + topic + ' stories you can use today.', about: 'Every week, one clear story about ' + topic + ', told in ' + look + ' visuals. No filler, no hype: just what works and why. Subscribe if you want to learn it the easy way.', niche: topic + ' how-to', avatar: 'one bold ' + topic + ' symbol on a plain warm background', banner: 'a wide scene about ' + topic + ' with an open middle for the name' },
+            { name: 'The ' + T + ' Diaries', handle: '@' + T.replace(/\W/g, '') + 'Diaries', tagline: 'Real ' + topic + ' moments, one story at a time.', about: 'Story-first videos about ' + topic + ': the wins, the mistakes and the lessons. Told in ' + look + ' visuals, new episodes every Friday.', niche: topic + ' stories', avatar: 'a friendly character holding a ' + topic + ' item', banner: 'a row of small story scenes about ' + topic },
+            { name: 'Tiny ' + T + ' Lab', handle: '@Tiny' + T.replace(/\W/g, '') + 'Lab', tagline: 'We test ' + topic + ' ideas so you don\u2019t have to.', about: 'Experiments, myths and quick fixes about ' + topic + '. Each video tries one idea and shows the result. Made in ' + look + ' style. Subscribe for a new test every week.', niche: topic + ' experiments', avatar: 'a small lab flask with a ' + topic + ' item inside', banner: 'a workbench with ' + topic + ' experiments on both sides' }] };
+      }
+      updateP(pid, p => { p.channels = { story_type: r.story_type, visual_type: r.visual_type, list: r.channels.map(c => ({ ...c, avatar_img: null, banner_img: null })), sel: 0 }; addCost(p, r.cost || 0); });
+    } catch (e) { updateP(pid, p => { p.channels = { error: e.message }; }); toast(e.message); }
+  },
+  async channelArt(pid, i, kind) {
+    const p0 = STATE.projects[pid]; const c = p0.channels.list[i]; const st = styleById(p0.style); const key = kind + '_img';
+    updateP(pid, p => { p.channels.list[i][key] = { status: 'generating' }; });
+    try {
+      if (!LIVE) { await sleep(700); updateP(pid, p => { p.channels.list[i][key] = { status: 'ready', seed: randSeed() }; }); return; }
+      const prompt = kind === 'avatar'
+        ? st.prefix + '. A YouTube channel profile picture for "' + c.name + '": ' + c.avatar + '. One simple bold subject, centered, filling the frame, plain uncluttered background, reads clearly when shown as a tiny circle. No text, no letters, no logos.'
+        : st.prefix + '. A wide YouTube channel banner for "' + c.name + '": ' + c.banner + '. Keep the important parts in the middle third. Print the channel name "' + c.name + '" large, bold and centered in the middle. No other text.';
+      const r = await post('image', { prompt, aspect: kind === 'avatar' ? '1:1' : '16:9', model: p0.models.image, refs: st.refs || [] });
+      updateP(pid, p => { p.channels.list[i][key] = { status: 'ready', url: r.url }; addCost(p, r.cost || 0); });
+    } catch (e) { updateP(pid, p => { p.channels.list[i][key] = { status: 'failed', error: e.message }; }); toast(e.message); }
   },
   async makeThumb(pid, i) {
     const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = styleById(p0.style);
@@ -2209,13 +2263,13 @@ function PublishKit({ p }) {
   const k = p.kit; const im = modelOf(p, 'image');
   const sel = (key, v) => updateP(p.id, q => { q.kit.sel[key] = v; });
   if (!k || k.error) return html`<section className="panel stack">
-    <h2>Titles, captions and thumbnails</h2>
-    <p className="note">Written from your story: four titles, three post captions with hashtags and three thumbnail ideas. You then draw only the thumbnails you want.</p>
+    <h2>Titles, captions, descriptions and thumbnails</h2>
+    <p className="note">Written from your story: four titles, three post captions with hashtags, three video descriptions and three thumbnail ideas. You then draw only the thumbnails you want.</p>
     ${k && k.error ? html`<div className="warnbox">${k.error}</div>` : null}
-    <div><${CostGate} p=${p} label="Write options" cost=${modelOf(p, 'writer').perVideo * 0.2} rows=${[[modelOf(p, 'writer').name, 'titles, captions and 3 thumbnail ideas'], ['Thumbnail images', 'made one at a time, only the ones you want']]} onGo=${() => api.publishKit(p.id)} /></div>
+    <div><${CostGate} p=${p} label="Write options" cost=${modelOf(p, 'writer').perVideo * 0.2} rows=${[[modelOf(p, 'writer').name, 'titles, captions, descriptions and 3 thumbnail ideas'], ['Thumbnail images', 'made one at a time, only the ones you want']]} onGo=${() => api.publishKit(p.id)} /></div>
   </section>`;
-  if (k.loading) return html`<section className="panel stack"><h2>Titles, captions and thumbnails</h2><div className="row note"><span className="spinner"></span> Writing options from your story</div></section>`;
-  const title = k.titles[k.sel.title] || ''; const cap = k.captions[k.sel.caption] || ''; const tags = k.tags || [];
+  if (k.loading) return html`<section className="panel stack"><h2>Titles, captions, descriptions and thumbnails</h2><div className="row note"><span className="spinner"></span> Writing options from your story</div></section>`;
+  const title = k.titles[k.sel.title] || ''; const cap = k.captions[k.sel.caption] || ''; const descs = k.descriptions || []; const desc = descs[k.sel.desc || 0] || ''; const tags = k.tags || [];
   return html`<${Fragment}>
     <section className="panel stack">
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} Made in your video\u2019s style with ${im.name}.</span></div>
@@ -2240,12 +2294,60 @@ function PublishKit({ p }) {
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Post caption</h2><${CopyBtn} text=${cap + '\n\nVisuals in this video are AI-generated.'} /></div>
       <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${k.captions.map((c, i) => html`<${Choice} key=${i} on=${k.sel.caption === i} onClick=${() => sel('caption', i)}>${c}</${Choice}>`)}</div>
     </section>
+    ${descs.length ? html`<section className="panel stack">
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Description</h2><${CopyBtn} text=${desc + '\n\nVisuals in this video are AI-generated.'} /></div>
+      <p className="note">For the description box under the video.</p>
+      <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${descs.map((c, i) => html`<${Choice} key=${i} on=${(k.sel.desc || 0) === i} onClick=${() => sel('desc', i)}>${c}</${Choice}>`)}</div>
+    </section>` : null}
     <section className="panel stack">
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Tags</h2><${CopyBtn} text=${tags.join(', ')} /></div>
       <div className="tags">${tags.map(t => html`<span key=${t} className="chip">${t}</span>`)}</div>
       <div><button type="button" className="btn sm ghost" onClick=${() => updateP(p.id, q => { q.kit = null; })}><${Icon} n="redo" />Write new options</button></div>
     </section>
   </${Fragment}>`;
+}
+function ChannelArt({ p, c, i, kind }) {
+  const im = c[kind + '_img']; const av = kind === 'avatar'; const imm = modelOf(p, 'image');
+  return html`<div className="stack" style=${{ gap: 6, alignItems: av ? 'center' : 'stretch' }}>
+    <div className=${av ? 'chav' : 'chbanner'}>
+      ${im && im.url ? html`<img src=${im.url} alt=${(av ? 'Profile photo' : 'Banner') + ' for ' + c.name} />` : im && im.seed ? html`<${Fragment}><${Art} seed=${im.seed} styleId=${p.style} />${av ? null : html`<div className="chname">${c.name}</div>`}</${Fragment}>` : html`<span className="note">${av ? 'Profile photo' : 'Banner'}</span>`}
+      ${im && im.status === 'generating' ? html`<div className="overlay"><span className="spinner"></span></div>` : null}
+    </div>
+    <div className="row" style=${{ gap: 4, justifyContent: av ? 'center' : 'flex-start' }}>
+      <button type="button" className="btn sm" disabled=${im && im.status === 'generating'} onClick=${() => api.channelArt(p.id, i, kind)}><${Icon} n=${im && im.status === 'ready' ? 'redo' : 'spark'} />${im && im.status === 'ready' ? 'Redo' : av ? 'Make photo' : 'Make banner'}${LIVE ? html`<span className="tag">${fmt$(imm.cost)}</span>` : null}</button>
+      ${im && im.url ? html`<a className="btn sm" href=${im.url} download=${c.handle.replace('@', '') + (av ? '-profile' : '-banner') + '.jpg'}><${Icon} n="download" /></a>` : null}
+    </div>
+    ${im && im.status === 'failed' ? html`<span className="note" style=${{ color: 'var(--fail)' }}>${im.error}</span>` : null}
+  </div>`;
+}
+function ChannelKit({ p }) {
+  const ch = p.channels; const st = styleById(p.style);
+  if (!ch || ch.error) return html`<details className="panel chkit">
+    <summary><strong>Start a channel for videos like this</strong> <span className="note">optional</span></summary>
+    <div className="stack" style=${{ marginTop: 10 }}>
+      <p className="note">The app reads your story type and the ${st.name} look, then suggests 3 channels with a name, handle, bio and about text to copy. Profile photos and banners are made only when you ask.</p>
+      ${ch && ch.error ? html`<div className="warnbox">${ch.error}</div>` : null}
+      <div><${CostGate} p=${p} label="Suggest 3 channels" cost=${modelOf(p, 'writer').perVideo * 0.1} rows=${[[modelOf(p, 'writer').name, 'story and style analysis, 3 channel ideas'], ['Profile photo and banner', 'made one at a time, only the ones you want']]} onGo=${() => api.channelKit(p.id)} /></div>
+    </div>
+  </details>`;
+  if (ch.loading) return html`<section className="panel stack"><h2>Channel ideas</h2><div className="row note"><span className="spinner"></span> Reading your story type and visual style</div></section>`;
+  const c = ch.list[ch.sel] || ch.list[0];
+  const all = 'Name: ' + c.name + '\nHandle: ' + c.handle + '\nBio: ' + c.tagline + '\n\nAbout:\n' + c.about;
+  return html`<section className="panel stack">
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Channel ideas</h2><button type="button" className="btn sm ghost" onClick=${() => updateP(p.id, q => { q.channels = null; })}><${Icon} n="redo" />New ideas</button></div>
+    <div className="note"><strong>Story type:</strong> ${ch.story_type}<br /><strong>Visual type:</strong> ${ch.visual_type}</div>
+    <div className="chcards">${ch.list.map((x, i) => html`<button key=${i} type="button" className="chcard" aria-pressed=${ch.sel === i} onClick=${() => updateP(p.id, q => { q.channels.sel = i; })}>
+      <span className="radio"></span><span style=${{ minWidth: 0 }}><strong>${x.name}</strong><span className="note mono" style=${{ display: 'block' }}>${x.handle}</span><span className="note" style=${{ display: 'block' }}>${x.tagline}</span><span className="chip" style=${{ marginTop: 4 }}>${x.niche}</span></span>
+    </button>`)}</div>
+    <div className="chdetail">
+      <div className="chart"><${ChannelArt} p=${p} c=${c} i=${ch.sel} kind="avatar" /><${ChannelArt} p=${p} c=${c} i=${ch.sel} kind="banner" /></div>
+      <div className="stack" style=${{ gap: 8, minWidth: 0 }}>
+        ${[['Name', c.name], ['Handle', c.handle], ['Bio', c.tagline], ['About', c.about]].map(([k, v]) => html`<div key=${k} className="chfield"><div className="row" style=${{ justifyContent: 'space-between' }}><span className="note"><strong>${k}</strong></span><${CopyBtn} text=${v} /></div><div style=${{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 13.5 }}>${v}</div></div>`)}
+        <div><${CopyBtn} text=${all} /> <span className="note">copies all four</span></div>
+        <p className="note">Check the name and handle are free on the platform before you use them.</p>
+      </div>
+    </div>
+  </section>`;
 }
 function ExportScreen({ p, s }) {
   const a = p.angles.find(x => x.id === p.selected_angle_ids[0]) || p.angles[0];
@@ -2264,6 +2366,7 @@ function ExportScreen({ p, s }) {
       </div>
     </div>
     <${PublishKit} p=${p} />
+    <${ChannelKit} p=${p} />
     <section className="panel row">
       <label className="switch grow"><input id="disclose" type="checkbox" checked=${disclose} onChange=${e => setDisclose(e.target.checked)} />Remind me to tick the platform’s “altered or synthetic content” box when uploading</label>
       <button type="button" className="btn" onClick=${() => { update(st => { st.templates.push({ id: uid('tpl'), name: p.title + ' look', style: p.style, voice_id: p.audio.voice_id, caption_style: p.audio.caption_style, music: p.audio.music_path, aspect: p.format.aspect_ratio, tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }); }); toast('Saved this look as a template.'); }}><${Icon} n="layers" />Save this look as a template</button>

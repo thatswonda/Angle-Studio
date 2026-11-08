@@ -61,6 +61,9 @@ def _error_text(r: httpx.Response, model: str) -> str:
         msg = r.text[:300]
     if r.status_code in (401, 403):
         return f"Gemini refused the request ({r.status_code}). Check that GEMINI_API_KEY is valid and has billing enabled. {msg}"
+    if r.status_code == 402:
+        return ("Your Gemini prepaid credits have run out. Top up in Google AI Studio (ai.studio/projects, then Billing) "
+                "and try again.")
     if r.status_code == 429:
         return f"Gemini rate limit or quota reached for {model}. Wait a minute and retry. {msg}"
     return f"Gemini error {r.status_code} on {model}: {msg}"
