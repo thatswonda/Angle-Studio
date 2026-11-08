@@ -3,8 +3,11 @@ track, burned-in captions timed to the narration, and loudness normalization on 
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
+import shutil
 import subprocess
+import time
 import uuid
 import wave
 from pathlib import Path
@@ -16,11 +19,15 @@ FPS = 30
 # Keeps each FFmpeg run well under 512 MB (Render Starter): few encoder threads and a short lookahead.
 # Measured on a 1080x1920 render: about 270 MB peak (it was about 680 MB with default threads).
 LOWMEM_CLIP = ["-threads", "2", "-filter_threads", "1", "-x264-params", "rc-lookahead=10:threads=2"]
-LOWMEM = ["-threads", "1", "-filter_threads", "1", "-x264-params", "rc-lookahead=8:threads=1"]
+
+
+# FFmpeg runs at low priority so the web server keeps answering health checks while a long render uses the CPU
+# (a starved health check makes the host restart the app mid-render).
+NICE = ["nice", "-n", "15"] if shutil.which("nice") else []
 
 
 def _run(args: list[str], cwd: Path) -> None:
-    p = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args], cwd=cwd, capture_output=True, text=True)
+    p = subprocess.run([*NICE, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args], cwd=cwd, capture_output=True, text=True)
     if p.returncode != 0:
         raise ProviderError("FFmpeg failed: " + (p.stderr.strip().splitlines() or ["unknown error"])[-1][:300])
 
@@ -175,7 +182,9 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     """payload: {final, aspect, caption_style, scenes: [{image, lines: [sentence indexes], split, caption, caption_auto}],
     lines: [{audio, text}]} -> {"url": video, "srt": captions file or None}."""
     final = bool(payload.get("final"))
-    w, h = _size(payload.get("aspect", "9:16"), 1080 if final else 480)
+    res = int(payload.get("res") or (1080 if final else 480))
+    res = res if res in (480, 720, 1080) else 1080
+    w, h = _size(payload.get("aspect", "9:16"), res)
     scenes = payload.get("scenes") or []
     lines = payload.get("lines") or []
     style = payload.get("caption_style", "bold")
@@ -218,26 +227,6 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         durs = [d * t / sum(est) for d in est]
         starts = [sum(durs[:i]) for i in range(len(durs))]
 
-    # One zoom-and-pan clip per scene. Frame counts come from rounded start and end times, so cuts never drift.
-    big_w, big_h = round(w * 1.25 / 2) * 2, round(h * 1.25 / 2) * 2
-    seg_list = []
-    for i, (sc, a, d) in enumerate(zip(scenes, starts, durs)):
-        progress(f"Scene {i + 1} of {len(scenes)}: zoom and pan")
-        frames = max(1, round((a + d) * FPS) - round(a * FPS))
-        if sc.get("variant"):  # second scene on a reused image: start close on another part, then pull back
-            zp = f"zoompan=z='max(1.25-0.2*on/{frames},1.05)':x='(iw-iw/zoom)*(0.85-0.5*on/{frames})':y='(ih-ih/zoom)*0.35'"
-        elif i % 2 == 0:
-            zp = f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        else:
-            zp = f"zoompan=z='1.1':x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)'"
-        vf = f"scale={big_w}:{big_h}:force_original_aspect_ratio=increase,crop={big_w}:{big_h},{zp}:d={frames}:s={w}x{h}:fps={FPS},format=yuv420p"
-        seg = f"seg{i:04d}.mp4"
-        _run(["-i", str(local(sc.get("image", ""), f"img{i}")), "-vf", vf, "-frames:v", str(frames),
-              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20" if final else "28", "-r", str(FPS), *LOWMEM_CLIP, seg], work)
-        seg_list.append(seg)
-    (work / "video.txt").write_text("".join(f"file '{s}'\n" for s in seg_list))
-    _run(["-f", "concat", "-safe", "0", "-i", "video.txt", "-c", "copy", "video.mp4"], work)
-
     stem = f"{'final' if final else 'draft'}_{uuid.uuid4().hex[:8]}"
     cues = caption_cues(scenes, [l.get("text", "") for l in lines], line_times, starts, durs,
                         CAPTION_WORDS.get(style, 6))
@@ -245,21 +234,62 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     if cues:
         (media / "renders" / f"{stem}.srt").write_text(captions_srt(cues))
         srt_url = f"/media/renders/{stem}.srt"
-    vf_caps: list[str] = []
-    if style != "none" and cues:
-        progress("Burning in captions")
-        (work / "captions.ass").write_text(captions_ass(cues, style, w, h))
-        vf_caps = ["-vf", "ass=captions.ass"]
+    burn = style != "none" and bool(cues)
+
+    # One zoom-and-pan clip per scene, with that scene's captions burned in, so each frame is encoded only once.
+    # Finished clips are kept on disk by content, so a render that was interrupted continues where it stopped,
+    # and scenes that did not change are reused by the next render.
+    cache = media / "renders" / "clips"
+    cache.mkdir(parents=True, exist_ok=True)
+    for old in cache.glob("*.mp4"):
+        if time.time() - old.stat().st_mtime > 3 * 86400:
+            old.unlink(missing_ok=True)
+    big_w, big_h = round(w * 1.25 / 2) * 2, round(h * 1.25 / 2) * 2
+    crf = "20" if final else "28"
+    seg_list, reused = [], 0
+    for i, (sc, a, d) in enumerate(zip(scenes, starts, durs)):
+        f0, f1 = round(a * FPS), round((a + d) * FPS)
+        frames = max(1, f1 - f0)
+        t0, t1 = f0 / FPS, f0 / FPS + frames / FPS
+        if sc.get("variant"):  # second scene on a reused image: start close on another part, then pull back
+            zp = f"zoompan=z='max(1.25-0.2*on/{frames},1.05)':x='(iw-iw/zoom)*(0.85-0.5*on/{frames})':y='(ih-ih/zoom)*0.35'"
+        elif i % 2 == 0:
+            zp = f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        else:
+            zp = f"zoompan=z='1.1':x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)'"
+        vf = f"scale={big_w}:{big_h}:force_original_aspect_ratio=increase,crop={big_w}:{big_h},{zp}:d={frames}:s={w}x{h}:fps={FPS},format=yuv420p"
+        ass = ""
+        if burn:  # this scene's slice of the captions, timed from the start of the clip
+            part = [(max(0.0, ca - t0), min(cb, t1) - t0, ch) for ca, cb, ch in cues if cb > t0 + 1e-3 and ca < t1 - 1e-3]
+            if part:
+                ass = captions_ass(part, style, w, h)
+                (work / f"cap{i}.ass").write_text(ass)
+                vf += f",ass=cap{i}.ass"
+        img = local(sc.get("image", ""), f"img{i}")
+        key = hashlib.sha1(hashlib.sha1(img.read_bytes()).digest() + f"|{vf}|{frames}|{crf}|{ass}".encode()).hexdigest()[:24]
+        clip = cache / f"{key}.mp4"
+        if clip.exists():
+            reused += 1
+            progress(f"Scene {i + 1} of {len(scenes)}: already made")
+        else:
+            progress(f"Scene {i + 1} of {len(scenes)}: zoom, pan{' and captions' if ass else ''}")
+            tmp = work / f"seg{i:04d}.mp4"
+            _run(["-i", str(img), "-vf", vf, "-frames:v", str(frames),
+                  "-c:v", "libx264", "-preset", "veryfast", "-crf", crf, "-r", str(FPS), *LOWMEM_CLIP, tmp.name], work)
+            shutil.move(str(tmp), clip)  # only a finished clip lands in the cache
+        seg_list.append(clip)
+    (work / "video.txt").write_text("".join(f"file '{c}'\n" for c in seg_list))
+    _run(["-f", "concat", "-safe", "0", "-i", "video.txt", "-c", "copy", "video.mp4"], work)
+
     voice = "narration.wav"
-    if final:  # loudness in its own audio-only pass, so the video encode stays light
+    if final:  # loudness in its own audio-only pass
         progress("Normalizing loudness")
         _run(["-i", "narration.wav", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-c:a", "pcm_s16le", "voice_norm.wav"], work)
         voice = "voice_norm.wav"
-    progress("Encoding the final video" if final else "Encoding the draft")
-    _run(["-i", "video.mp4", "-i", voice, *vf_caps,
-          "-c:v", "libx264", "-preset", "faster" if final else "veryfast", "-crf", "20" if final else "28", *LOWMEM,
-          "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", f"../{stem}.mp4"], work)
+    progress("Joining the scenes and the voice")
+    _run(["-i", "video.mp4", "-i", voice, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+          "-movflags", "+faststart", "-shortest", f"../{stem}.mp4"], work)
     for f in work.iterdir():
         f.unlink()
     work.rmdir()
-    return {"url": f"/media/renders/{stem}.mp4", "srt": srt_url}
+    return {"url": f"/media/renders/{stem}.mp4", "srt": srt_url, "res": res, "reused": reused}

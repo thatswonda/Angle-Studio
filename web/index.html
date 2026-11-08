@@ -1187,21 +1187,36 @@ async function checkMedia(pid) {
   });
   return { lines, scenes };
 }
-async function liveRender(pid, final) {
+async function liveRender(pid, final, attempt = 0) {
   try { const m = await checkMedia(pid); if (m.lines.length || m.scenes.length) { toast('Some files were lost on the server. Make them again, then render.'); return; } } catch (e) { /* the render itself reports anything still missing */ }
   const p = STATE.projects[pid]; const sig = capsSig(p);
-  updateP(pid, q => { q.rendering = final ? 'final' : 'draft'; q.render_error = null; });
+  updateP(pid, q => { q.rendering = final ? 'final' : 'draft'; q.render_error = null; q.render_failed = null; });
   // Each scene lists its sentences, so the server can time every image to exactly those sentences' audio.
   const index = {}; p.script.lines.forEach((l, i) => { index[l.id] = i; });
   const scenes = p.scenes.map(sc => { const v = sceneVersion(p, sc); return { image: v ? (v.url || v.upload || '') : '', duration: sceneSecs(p, sc), variant: sc.reuse_of ? 1 : 0,
     lines: sc.line_ids.map(id => index[id]).filter(i => i != null), split: sc.split || null, caption: captionOf(p, sc), caption_auto: sc.caption_text == null }; });
   const lines = p.script.lines.map(l => ({ audio: l.audio_url || '', text: l.text }));
   try {
-    const r = await liveJob(pid, final ? 'Rendering final MP4' : 'Building draft', 'render', { final, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines },
+    const res = final ? (p.render.res || 1080) : 480;
+    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines },
       ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
-    updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); } });
+    updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.render.final_res = r.res || res; q.render.final_from_draft = false; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); } });
     toast(final ? 'Final video rendered.' : 'Draft ready. Play it before rendering the final file.');
-  } catch (e) { updateP(pid, q => { q.rendering = null; q.render_error = e.message; }); toast(e.message); }
+  } catch (e) {
+    // The server restarted mid-render: finished scenes are kept on its disk, so carry on from there automatically.
+    if (/server restarted|has not answered/i.test(e.message) && attempt < 2) {
+      updateP(pid, q => { q.rendering = null; });
+      toast('The server restarted during the render. Continuing from the scenes already made\u2026');
+      await sleep(8000);
+      return liveRender(pid, final, attempt + 1);
+    }
+    updateP(pid, q => { q.rendering = null; q.render_error = e.message; q.render_failed = final ? 'final' : 'draft'; }); toast(e.message);
+  }
+}
+// Use the draft as the finished video (no extra render).
+function useDraft(pid) {
+  updateP(pid, q => { if (!q.render.draft_path) return; q.render.final_path = q.render.draft_path; q.render.final_srt = q.render.draft_srt; q.render.final_caps = q.render.draft_caps; q.render.final_at = Date.now(); q.render.final_res = 480; q.render.final_from_draft = true; q.render_error = null; q.render_failed = null; q.status = 'rendered'; q.step = 'export'; });
+  toast('Continuing with the 480p draft as your video.');
 }
 const api = {
   async ingest(pid, url, manualTranscript) {
@@ -2635,9 +2650,14 @@ function CompileScreen({ p, s }) {
         ${job ? html`<section className="panel stack" aria-live="polite"><strong>${job.label}</strong><div className="stages">${job.stages.map((st, i) => html`<div key=${i} className=${'stage ' + (i < job.stage ? 'done' : i === job.stage ? 'now' : 'todo')}><span className="dot">${i < job.stage ? html`<${Icon} n="check" />` : i === job.stage ? html`<span className="spinner"></span>` : '·'}</span>${st}</div>`)}</div></section>` : null}
         <div className="row">
           <button type="button" className="btn" disabled=${!!p.rendering || !!p.missing || p.recovering} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />${p.render.draft_path ? 'Rebuild draft' : 'Build 480p draft'}</button>
-          <button type="button" className="btn primary" disabled=${!!p.rendering || !p.render.draft_path} onClick=${() => api.renderFinal(p.id)}>${finalJob ? html`<span className="spinner"></span> Rendering` : 'Render final 1080p MP4'}<span className="tag">$0.00</span></button>
+          <${Seg} label="Final quality" value=${p.render.res || 1080} onChange=${v => !p.rendering && updateP(p.id, q => { q.render.res = v; })} options=${[{ value: 720, label: '720p' }, { value: 1080, label: '1080p' }]} />
+          <button type="button" className="btn primary" disabled=${!!p.rendering || !p.render.draft_path || !!p.missing} onClick=${() => api.renderFinal(p.id)}>${finalJob ? html`<span className="spinner"></span> Rendering` : 'Render final ' + (p.render.res || 1080) + 'p MP4'}<span className="tag">$0.00</span></button>
         </div>
-        ${p.render_error ? html`<div className="warnbox">${p.render_error}</div>` : null}
+        ${p.render.draft_path && !p.rendering ? html`<div className="row"><button type="button" className="btn ghost" onClick=${() => useDraft(p.id)}><${Icon} n="check" />Continue with this draft (480p)</button><span className="note">Skip the final render and use the draft as your video.</span></div>` : null}
+        ${p.render_error ? html`<div className="warnbox stack" style=${{ gap: 8 }}><span>${p.render_error}</span>${p.render_failed === 'final' ? html`<div className="row">
+          <button type="button" className="btn sm primary" onClick=${() => api.renderFinal(p.id)}><${Icon} n="redo" />Try again (keeps finished scenes)</button>
+          ${(p.render.res || 1080) === 1080 ? html`<button type="button" className="btn sm" onClick=${() => { updateP(p.id, q => { q.render.res = 720; }); api.renderFinal(p.id); }}>Render 720p instead (lighter)</button>` : null}
+          ${p.render.draft_path ? html`<button type="button" className="btn sm" onClick=${() => useDraft(p.id)}>Continue with the draft</button>` : null}</div>` : null}</div>` : null}
         <p className="note">${p.render.draft_path ? 'Draft built. Rendering runs on your server with FFmpeg, so it has no provider cost.' : 'Build the draft first. It takes under 3 minutes for a 60-second video once the backend is connected.'}</p>
       </div>
     </div>
@@ -2747,16 +2767,17 @@ function ChannelKit({ p }) {
 function ExportScreen({ p, s }) {
   const a = p.angles.find(x => x.id === p.selected_angle_ids[0]) || p.angles[0];
   const secs = p.scenes.reduce((n, sc) => n + sceneSecs(p, sc), 0);
-  const fname = (a.id + '-' + a.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 28)).replace(/-+$/, '') + '_' + p.format.aspect_ratio.replace(':', 'x') + '_1080p.mp4';
+  const fname = (a.id + '-' + a.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 28)).replace(/-+$/, '') + '_' + p.format.aspect_ratio.replace(':', 'x') + '_' + (p.render.final_res || 1080) + 'p.mp4';
   const [disclose, setDisclose] = useState(true);
   return html`<${Fragment}>
     <${StepHead} title="Export" sub="Your video is rendered. Download it, then pick a thumbnail, a title and a post caption written from your story." />
     <div className="compile-grid">
       ${LIVE && p.render.final_path ? html`<${VideoBox} p=${p} url=${p.render.final_path} />` : html`<${Player} p=${p} mode="final" />`}
       <div className="stack">
-        <div className="filecard"><span className="fileicon">MP4</span><div className="grow" style=${{ minWidth: 0 }}><div className="mono" style=${{ fontSize: 13, overflowWrap: 'anywhere' }}>${fname}</div><div className="note mono">${p.format.aspect_ratio} · 1080p · H.264 · ${fmtT(secs)} · ~${Math.round(secs * 0.7)} MB</div></div>
+        <div className="filecard"><span className="fileicon">MP4</span><div className="grow" style=${{ minWidth: 0 }}><div className="mono" style=${{ fontSize: 13, overflowWrap: 'anywhere' }}>${fname}</div><div className="note mono">${p.format.aspect_ratio} · ${p.render.final_res || 1080}p${p.render.final_from_draft ? ' (the draft)' : ''} · H.264 · ${fmtT(secs)} · ~${Math.round(secs * ((p.render.final_res || 1080) / 1080) ** 2 * 0.7)} MB</div></div>
           ${LIVE && p.render.final_path ? html`<a className="btn primary" href=${p.render.final_path} download=${fname}><${Icon} n="download" />Download</a>` : html`<button type="button" className="btn primary" disabled title="In this preview no real file is rendered. Downloads work once the backend is connected."><${Icon} n="download" />Download</button>`}</div>
         <p className="note">${LIVE ? 'Rendered on your server with FFmpeg. The file stays in the server\u2019s data/media/renders folder.' : 'This preview renders no real file. Once the backend is connected, Download saves the MP4 and the project folder keeps it.'}</p>
+        ${p.render.final_from_draft ? html`<div className="row"><span className="note">This is your 480p draft. You can render a sharper version any time.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Render 720p or 1080p</button></div>` : null}
         ${LIVE && (p.render.final_srt) ? html`<div className="row"><a className="btn" href=${p.render.final_srt} download=${fname.replace('.mp4', '.srt')}><${Icon} n="download" />Captions file (.srt)</a><span className="note">For uploading captions separately.</span></div>` : null}
       </div>
     </div>

@@ -583,6 +583,7 @@ async def channel_kit(body: ChannelBody):
 
 class RenderBody(BaseModel):
     final: bool = False
+    res: int = 0  # short side in pixels: 480, 720 or 1080 (0 = 1080 for final, 480 for the draft)
     aspect: str = "9:16"
     caption_style: str = "bold"
     scenes: list[dict[str, Any]]

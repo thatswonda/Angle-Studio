@@ -254,3 +254,27 @@ def test_voice_speed_and_pitch_are_exact(tmp_path):
     assert abs(live.tune_voice(clip, 1.0, 0) - 2.0) < 0.01  # untouched
     assert abs(live.tune_voice(clip, 1.25, 2) - 1.6) < 0.05  # 25% faster, pitch up, length follows speed only
     assert len(google.VOICE_NAMES) == 30 and google.VOICE_NAMES["v-sulafat"] == "Sulafat"
+
+
+def test_interrupted_render_continues_from_finished_scenes(tmp_path):
+    media = tmp_path / "media"
+    (media / "audio").mkdir(parents=True)
+    for i in range(3):
+        _tone(media / "audio" / f"a{i}.wav", 1.0)
+    png = base64.b64encode(bytes.fromhex(
+        "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode()
+    img = "data:image/png;base64," + png
+    payload = {"final": True, "res": 720, "aspect": "16:9", "caption_style": "karaoke",
+               # scenes 2 and 3 share sentence 1 (a split scene), so its caption crosses a cut
+               "scenes": [{"image": img, "lines": [0], "caption": "first line here"},
+                          {"image": img, "lines": [1], "split": {"index": 0, "of": 2}, "caption": "second line words"},
+                          {"image": img, "lines": [1], "split": {"index": 1, "of": 2}, "variant": 1, "caption": "second line words"},
+                          {"image": img, "lines": [2], "caption": "third"}],
+               "lines": [{"audio": f"/media/audio/a{i}.wav", "text": t} for i, t in enumerate(["first line here", "second line words", "third"])]}
+    first = render.render(payload, media, lambda _: None)
+    again = render.render(payload, media, lambda _: None)
+    assert first["reused"] == 0 and again["reused"] == 4 and first["res"] == 720
+    import subprocess
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0",
+                            str(media / again["url"].removeprefix("/media/"))], capture_output=True, text=True).stdout
+    assert probe.splitlines()[0] == "1280,720"
