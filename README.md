@@ -1,6 +1,6 @@
 # Angle Studio
 
-A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You paste a link to a video that already performs, pick one of 8 to 12 original angles, and take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
+A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You start in one of three ways: paste a link to a video that already performs and pick one of 8 to 12 original angles, type your own idea and let the writer draft the story, or paste a story you wrote. Then you take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
 
 **Status:** working. Opened from the server it runs in **live mode** with real APIs; the claude.ai preview is a demo with simulated AI.
 
@@ -68,6 +68,7 @@ The blueprint uses the Starter plan (always on, about $7 a month). On the free p
 
 | Step | Real service | Notes |
 |---|---|---|
+| Start without a video | The writer | **From my idea**: the writer drafts the story from your idea at your chosen length (one text call). **Paste my story**: used word for word; an optional cheap text call writes an image idea per sentence. The angle step is skipped |
 | Stats and comments | YouTube Data API | Questions and requests are picked out of the top 100 comments |
 | Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
 | Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
@@ -126,7 +127,7 @@ Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). Th
 
 ## Template example images
 
-The 48 images in `web/templates` were made once with Nano Banana 2. The Clay stop-motion template has no example images yet (it shows a drawn placeholder); to make them, and to remake missing ones after editing `web/templates/templates.json`:
+The 52 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
 
 ```bash
 cd server && python scripts/make_template_examples.py

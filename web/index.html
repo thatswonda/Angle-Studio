@@ -503,7 +503,7 @@ const STYLES = [
   { id: "cinematic", name: "Moody cinematic", kind: "soft", mood: "Dark, dramatic, high stakes", best: "Mystery, history, true crime, tension", prefix: "moody cinematic film still, low-key lighting with deep shadows, teal and amber color grade, anamorphic lens with soft flares, atmospheric haze, dramatic composition, rich contrast", avoid: "flat lighting, bright cheerful colors, cartoon look, blown-out highlights", palette: ["#0E1A24", "#1F4E5A", "#E7B15A", "#C2563A"], examples: 4 },
   { id: "documentary", name: "Documentary", kind: "soft", mood: "Authentic, observed, real", best: "Nature, culture, how-to, field reports", prefix: "documentary photograph for a nature and travel magazine, available light, candid unposed moment, authentic textures, natural colors, sharp focus, environmental storytelling, 50mm lens", avoid: "staged studio look, heavy filters, fantasy elements, cartoon style", palette: ["#2F3B2C", "#7C8B5E", "#E6DFCF", "#B9773C"], examples: 4 },
   { id: "botanical", name: "Warm lifestyle", kind: "soft", mood: "Calm, cozy, inviting", best: "Home, food, gardening, wellness, routines", prefix: "warm lifestyle photograph, soft window light, airy and bright, gentle warm pastel tones, cozy natural materials like linen and wood, shallow depth of field, inviting and calm atmosphere", avoid: "harsh shadows, neon colors, gloomy mood, cluttered backgrounds", palette: ["#3E4A3B", "#A7C4A0", "#F4ECDD", "#D9895B"], examples: 4 },
-  { id: "clay", name: "Clay stop-motion", kind: "soft", mood: "Handmade, charming, funny", best: "Comedy, kids, character stories, explainers with personality", prefix: "handmade clay stop-motion animation still, plasticine characters with visible thumbprints and sculpting marks, big round glossy bead eyes and exaggerated expressive faces, chunky rounded proportions, miniature handcrafted tabletop set built from clay, felt and painted wood, warm soft studio lighting with gentle shadows, shallow depth of field like a macro lens, earthy tones with soft pastel accents", avoid: "photorealistic people, smooth glossy CGI plastic, flat 2D illustration, recognizable characters from existing films or shows", palette: ["#4A3B2C", "#B07A48", "#EADBC4", "#5E9E96"], examples: 0 },
+  { id: "clay", name: "Clay stop-motion", kind: "soft", mood: "Handmade, charming, funny", best: "Comedy, kids, character stories, explainers with personality", prefix: "handmade clay stop-motion animation still, plasticine characters with visible thumbprints and sculpting marks, big round glossy bead eyes and exaggerated expressive faces, chunky rounded proportions, miniature handcrafted tabletop set built from clay, felt and painted wood, warm soft studio lighting with gentle shadows, shallow depth of field like a macro lens, earthy tones with soft pastel accents", avoid: "photorealistic people, smooth glossy CGI plastic, flat 2D illustration, recognizable characters from existing films or shows", palette: ["#4A3B2C", "#B07A48", "#EADBC4", "#5E9E96"], examples: 4 },
   { id: "animated3d", name: "3D animated film", kind: "flat", mood: "Playful, bright, family friendly", best: "Kids, character stories, fun facts", prefix: "stylized 3D animated film still, soft global illumination, appealing rounded character design with expressive faces, vibrant harmonious colors, subsurface scattering on skin, cinematic depth of field, polished family-film quality", avoid: "photorealism, live action, creepy uncanny faces, copyrighted characters", palette: ["#2B3A67", "#5DA9E9", "#FFF1D0", "#FF8C42"], examples: 4 },
   { id: "anime", name: "Anime-inspired", kind: "comic", mood: "Vivid, emotional, epic skies", best: "Stories, motivation, adventure, lofi", prefix: "anime-inspired illustration, clean cel shading, crisp confident line art, luminous painted sky, vibrant saturated palette, dramatic rim lighting, richly detailed background art", avoid: "photorealism, 3D render look, muddy colors, copyrighted characters", palette: ["#24305E", "#6C8EEF", "#FDE8E9", "#F76C6C"], examples: 4 },
   { id: "comic", name: "Graphic novel", kind: "comic", mood: "Bold, punchy, dramatic", best: "Rivalries, history, action, explainers with attitude", prefix: "graphic novel panel, bold ink outlines, halftone shading, dramatic camera angles, limited bold palette with strong blacks and one spot color, dynamic composition, hand-inked texture", avoid: "photorealism, soft gradients, speech bubbles, lettering", palette: ["#1B1B1E", "#D7263D", "#F4E9CD", "#1B998B"], examples: 4 },
@@ -896,7 +896,8 @@ function load() {
     // Resumability: anything interrupted mid-generation comes back as failed so it can be retried.
     Object.values(s.projects).forEach(p => {
       p.ingesting = false;
-      if (p.script && p.script.generating) p.script = null;
+      if (p.script && p.script.generating) p.script = { error: 'Writing was interrupted when the page closed.' };
+      if (p.script) { p.script.picturing = false; p.script.revising = false; }
       (p.script && p.script.lines || []).forEach(l => { if (l.audio_status === 'generating') l.audio_status = 'failed'; });
       p.scenes.forEach(sc => { if (sc.image_status === 'generating') sc.image_status = 'failed'; if (sc.clip_status === 'generating') sc.clip_status = 'failed'; });
       if (p.rendering) p.rendering = null;
@@ -976,7 +977,23 @@ async function runJob(pid, label, stages, ms = 650) {
 }
 const addCost = (p, n) => { p.render.cost_actual = Math.round((p.render.cost_actual + n) * 1000) / 1000; };
 
+// Demo only: a simple story built around the creator's own idea. The real writer writes it properly.
+function buildIdeaScript(p) {
+  const idea = (p.own_text || '').trim().replace(/[.!?]+$/, ''); const topic = idea.split(/\s+/).slice(0, 30).join(' ');
+  const count = Math.max(4, Math.round(p.format.target_seconds / 5.2));
+  const pool = ['It started small, the way most good stories do.', 'Nobody expected much at first.', 'Then one detail changed everything.', 'Here is what happened next.',
+    'It was harder than it looked.', 'There was one moment where it almost fell apart.', 'But a simple idea saved it.', 'And that is the part most people miss.',
+    'Every step taught something new.', 'Small choices added up fast.', 'By the end, it looked completely different.', 'And the lesson stuck.'];
+  const hooks = ['What if ' + topic.charAt(0).toLowerCase() + topic.slice(1) + '?', 'This is the story of ' + topic.charAt(0).toLowerCase() + topic.slice(1) + '.', 'You will not believe where this one goes.'];
+  const body = []; for (let i = 0; i < count; i++) body.push(pool[i % pool.length]);
+  body.push('If this story stayed with you, follow for the next one.');
+  let story;
+  if (p.video_type === 'character' && p.characters.length) story = [hooks[0], ...body].map((t, i) => p.characters[i % p.characters.length].name + ': ' + t).join('\n');
+  else { const paras = []; for (let i = 0; i < body.length; i += 3) paras.push(body.slice(i, i + 3).join(' ')); story = [hooks[0], ...paras].join('\n\n'); }
+  return { hook_options: hooks, chosen_hook: 0, story, lines: null, target_seconds: p.format.target_seconds, written_with: ['own'], direction: p.user_direction };
+}
 function buildScript(p) {
+  if (p.start_mode === 'idea') return buildIdeaScript(p);
   const chosen = p.selected_angle_ids.map(id => p.angles.find(a => a.id === id)).filter(Boolean);
   const first = chosen[0];
   const count = Math.max(3, Math.round(p.format.target_seconds / 5.2) - 1);
@@ -1077,6 +1094,43 @@ const api = {
     });
     toast(cached ? 'Loaded from cache. This link was analyzed before, so it cost nothing.' : '10 angles are ready.');
   },
+  // Start without a reference video: from the creator's own idea (the writer drafts the story) or from a pasted story (no writing cost).
+  async startOwn(pid, mode, text, opts) {
+    const t = text.trim(); const first = (splitSentences(t)[0] || t).replace(/^[^:]{1,24}:\s*/, '');
+    const title = first.split(/\s+/).slice(0, 8).join(' ').replace(/[.,!?;:]+$/, '');
+    const angle = { id: 'own', own: true, title, pitch: t.slice(0, 280), reason: mode === 'idea' ? 'Your own idea.' : 'Your own story.', type: mode === 'idea' ? 'Your idea' : 'Your story',
+      hooks: [first, first, first], suggested_title: title, tags: [], style: null, score: 100, effort: 'Medium', potential: 'Medium', character: false, beats: [] };
+    updateP(pid, p => {
+      p.start_mode = mode; p.own_text = t; p.ingest_url = ''; p.ingest_error = null;
+      p.source = { title, channel: mode === 'idea' ? 'Your idea' : 'Your story', url: '', transcript: '', comments: [], key_frames: [], comments_scanned: 0, duration: 0, views: '', published: '', own: true };
+      p.analysis = { summary: t.slice(0, 600), own: true, beats: [], gaps: [], why_it_worked: [] };
+      p.angles = [angle]; p.selected_angle_ids = ['own']; p.checkpoints.angles = true; p.step = 'script';
+      if (p.title === 'Untitled project' || p.title === 'Balcony garden follow-up') p.title = title.slice(0, 60) || 'My story';
+      if (opts.video_type) p.video_type = opts.video_type;
+      if (mode === 'idea') p.format.target_seconds = opts.target_seconds || p.format.target_seconds;
+      else {
+        p.format.target_seconds = Math.max(15, Math.min(600, Math.round(words(t).length / 2.5)));
+        p.script = { hook_options: [first], chosen_hook: 0, story: t, visual_hints: {}, lines: null, target_seconds: p.format.target_seconds, written_with: ['own'], direction: '', written_by: 'You', pasted: true, picturing: !!opts.visuals };
+        p.scenes = []; p.plan_sig = null;
+      }
+    });
+    try { window.scrollTo({ top: 0 }); } catch (e) {}
+    if (mode === 'idea') return api.writeScript(pid);
+    if (!opts.visuals) return;
+    const wr = modelOf(STATE.projects[pid], 'writer');
+    try {
+      let hints = {}, cost = 0;
+      if (LIVE) {
+        const r = await liveJob(pid, 'Picturing the story', 'visuals', { writer: wr.id, story: t }, [wr.name + ' is picturing each sentence']);
+        (r.visuals || []).forEach(v => splitSentences(v.sentence).forEach(x => { hints[norm(x)] = v.visual; })); cost = r.cost || 0;
+        if (r.warning) toast(r.warning);
+      } else {
+        await runJob(pid, 'Picturing the story', [wr.name + ' is picturing each sentence'], 500);
+        splitSentences(t).forEach(x => { hints[norm(x)] = 'a moment from the story: ' + words(x).slice(0, 12).join(' ').replace(/[.,!?]+$/, ''); });
+      }
+      updateP(pid, p => { if (p.script) { p.script.visual_hints = { ...(p.script.visual_hints || {}), ...hints }; p.script.picturing = false; } addCost(p, cost); });
+    } catch (e) { updateP(pid, p => { if (p.script) p.script.picturing = false; }); toast('Image ideas could not be written: ' + e.message + ' Scenes will use the sentences themselves.'); }
+  },
   async writeScript(pid) {
     if (LIVE) {
       const p0 = STATE.projects[pid]; const wr = modelOf(p0, 'writer');
@@ -1086,7 +1140,7 @@ const api = {
         const r = await liveJob(pid, 'Writing the story', 'story', {
           writer: wr.id, angles: chosen, analysis: p0.analysis, source_title: p0.source.title, target_seconds: p0.format.target_seconds,
           video_type: p0.video_type, characters: p0.characters.map(c => ({ name: c.name, description: c.description })),
-          direction: p0.user_direction, tone: (STATE.templates[0] || {}).tone || '' }, [wr.name + ' is writing the story']);
+          direction: p0.user_direction, tone: (STATE.templates[0] || {}).tone || '', idea: p0.start_mode === 'idea' ? p0.own_text : '' }, [wr.name + ' is writing the story']);
         updateP(pid, p => {
           const hints = {}; (r.visuals || []).forEach(v => splitSentences(v.sentence).forEach(x => { hints[norm(x)] = v.visual; }));
           p.script = { hook_options: r.hook_options, chosen_hook: 0, story: r.story, visual_hints: hints, lines: null, target_seconds: p.format.target_seconds,
@@ -1138,7 +1192,7 @@ const api = {
       } else {
         await runJob(pid, 'Writing the publish kit', ['Reading your story', 'Writing titles and captions', 'Sketching thumbnails'], 500);
         const tags = (a.tags || []).slice(0, 4).map(t => '#' + t.replace(/\s+/g, '')).join(' ');
-        kit = { titles: [a.suggested_title, a.title, a.hooks[1].replace(/\.$/, ''), 'I tried this so you don\u2019t have to: ' + a.title.toLowerCase()],
+        kit = { titles: [...new Set(a.own ? [a.title, 'The story of ' + a.title.charAt(0).toLowerCase() + a.title.slice(1), a.title + ': what happened next', 'You will not guess how this ends'] : [a.suggested_title, a.title, a.hooks[1].replace(/\.$/, ''), 'I tried this so you don\u2019t have to: ' + a.title.toLowerCase()])],
           captions: [a.pitch + ' ' + a.reason + ' What would you try first? ' + tags, a.hooks[0] + ' The full story is in the video. Save it for later. ' + tags, 'Everything I learned, in ' + lenLabel(p0.format.target_seconds) + '. ' + a.pitch + ' ' + tags],
           descriptions: [
             a.pitch + ' ' + a.reason + '\n\nIn ' + lenLabel(p0.format.target_seconds) + ' you get the whole story, step by step, with nothing left out.\n\nWhich part surprised you most? Tell me in the comments.\n\n' + tags,
@@ -1324,13 +1378,14 @@ const api = {
    Pipeline steps and checkpoints (PRJ-2)
    ====================================================================== */
 const STEPS = [
-  { id: 'ingest', label: 'Paste link' }, { id: 'angles', label: 'Pick angle', cp: 'angles' },
+  { id: 'ingest', label: 'Start' }, { id: 'angles', label: 'Pick angle', cp: 'angles' },
   { id: 'script', label: 'Script', cp: 'script' }, { id: 'style', label: 'Visual style', cp: 'style' },
   { id: 'scenes', label: 'Scenes & images', cp: 'scenes' }, { id: 'voice', label: 'Voice', cp: 'voice' },
   { id: 'format', label: 'Format', cp: 'format' }, { id: 'animate', label: 'Animate', cp: 'clips' },
   { id: 'compile', label: 'Compile' }, { id: 'export', label: 'Export' },
 ];
-function isSkipped(p, id) { return id === 'animate' && p.checkpoints.format && !needsAnimate(p); }
+const isOwn = p => p.start_mode === 'idea' || p.start_mode === 'paste';
+function isSkipped(p, id) { return (id === 'animate' && p.checkpoints.format && !needsAnimate(p)) || (id === 'angles' && isOwn(p)); }
 function isDone(p, id) {
   if (id === 'ingest') return !!p.analysis;
   if (id === 'compile') return !!p.render.final_path;
@@ -1505,7 +1560,7 @@ function Rail({ s, p }) {
           const cur = s.view === 'flow' && p.step === st.id;
           return html`<button key=${st.id} type="button" className=${'rail-item' + (done ? ' done' : '') + (skipped ? ' skipped' : '')} aria-current=${cur} disabled=${!unlocked || skipped} onClick=${() => goStep(st.id)}>
             <span className="rail-num">${done ? html`<${Icon} n="check" />` : i + 1}</span><span className="rail-label">${st.label}</span>
-            ${skipped ? html`<span className="rail-meta">static</span>` : (!unlocked ? html`<span className="rail-meta"><${Icon} n="lock" /></span>` : null)}
+            ${skipped ? html`<span className="rail-meta">${st.id === 'angles' ? 'not needed' : 'static'}</span>` : (!unlocked ? html`<span className="rail-meta"><${Icon} n="lock" /></span>` : null)}
           </button>`;
         })}
       </nav>
@@ -1531,14 +1586,51 @@ function IngestScreen({ p, s }) {
   const job = s.jobs.find(j => j.pid === p.id && j.label === 'Analyzing reference video' && j.status === 'running');
   const valid = /^https?:\/\/\S+\.\S+/.test(url.trim());
   const cached = valid && s.cache[url.trim()];
+  const [mode, setMode] = useState(p.start_mode || 'link');
+  const [own, setOwn] = useState(''); const [vt, setVt] = useState(p.video_type); const [len, setLen] = useState(p.format.target_seconds); const [pic, setPic] = useState(true);
+  const startOver = () => { if (!window.confirm('Start over? The story, scenes, images and voice of this project will be cleared.')) return;
+    updateP(p.id, q => { q.analysis = null; q.source = null; q.angles = []; q.selected_angle_ids = []; q.script = null; q.scenes = []; q.plan_sig = null; q.start_mode = null; q.own_text = '';
+      Object.keys(q.checkpoints).forEach(k => { q.checkpoints[k] = false; }); q.render.draft_path = null; q.render.final_path = null; q.kit = null; q.channels = null; q.step = 'ingest'; }); };
+  if (p.analysis && !p.ingesting && isOwn(p)) return html`<${Fragment}>
+    <${StepHead} title=${p.start_mode === 'idea' ? 'Started from your idea' : 'Started from your story'} sub="No reference video, so there is no angle step. The story is on the Script step." />
+    <div className="panel stack"><p style=${{ whiteSpace: 'pre-wrap', fontSize: 13.5, maxHeight: 220, overflow: 'auto', margin: 0 }}>${p.own_text}</p></div>
+    <div className="row"><button type="button" className="btn" onClick=${startOver}>Start over</button><button type="button" className="btn primary" onClick=${() => goStep('script')}>Go to script</button></div>
+  </${Fragment}>`;
+  const wr = modelOf(p, 'writer'); const ownWords = words(own).length;
+  const ownSecs = Math.max(15, Math.min(600, Math.round(ownWords / 2.5)));
+  const modeSeg = html`<${Seg} label="How to start" value=${mode} onChange=${setMode} options=${[{ value: 'link', label: 'From a video link' }, { value: 'idea', label: 'From my idea' }, { value: 'paste', label: 'Paste my story' }]} />`;
+  const typeSeg = html`<div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${vt} onChange=${setVt} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>`;
+  if (mode !== 'link' && !(p.analysis && !p.ingesting)) return html`<${Fragment}>
+    <${StepHead} title=${mode === 'idea' ? 'Start from your idea' : 'Start from your own story'} sub=${mode === 'idea' ? 'Type what the video is about. ' + wr.name + ' writes the story, then you go on to style, scenes, voice and the video.' : 'Paste a story you wrote. It is used word for word, then you go on to style, scenes, voice and the video.'} />
+    <div className="panel ingest-hero stack">
+      <div>${modeSeg}</div>
+      ${mode === 'idea' ? html`<${Fragment}>
+        <label className="field" htmlFor="own-idea">Your idea
+          <textarea id="own-idea" className="textarea" rows="5" placeholder="e.g. A grandmother in Lagos teaches her grandson how she survived the 1980s with one sewing machine. Warm, funny, ends with a lesson about patience." value=${own} onChange=${e => setOwn(e.target.value)}></textarea></label>
+        <p className="note">Add anything you want kept: characters, places, the ending, the tone, who it is for.</p>
+        ${typeSeg}
+        <div className="row"><span className="note">Video length</span><${Seg} label="Video length" value=${LENGTHS.includes(len) ? len : 'c'} onChange=${v => setLen(v === 'c' ? 120 : v)} options=${LENGTH_OPTS} />
+          ${!LENGTHS.includes(len) ? html`<input id="own-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} value=${len} onChange=${e => setLen(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" /><span className="note">seconds, up to 600</span>` : null}</div>
+        <div><${CostGate} p=${p} label="Write my story" disabled=${words(own).length < 3} cost=${wr.perVideo * 0.3} rows=${[[wr.name, 'one ' + lenLabel(len) + ' story with 3 hook options and an image idea per sentence']]} onGo=${() => api.startOwn(p.id, 'idea', own, { video_type: vt, target_seconds: len })} /></div>
+      </${Fragment}>` : html`<${Fragment}>
+        <label className="field" htmlFor="own-story">Your story
+          <textarea id="own-story" className="textarea story" rows="12" placeholder=${vt === 'character' ? 'One line per speaker, like\nAda: Where did you find this?\nTunde: In grandma\u2019s old box.' : 'Paste the full narration. Leave a blank line between paragraphs.'} value=${own} onChange=${e => setOwn(e.target.value)}></textarea></label>
+        <p className="note mono">${ownWords} words · about ${fmtT(ownSecs)} spoken${ownWords / 2.5 > 600 ? ' · longer than 10 minutes, so it will be cut to fit. Shorten it first.' : ''}</p>
+        ${typeSeg}
+        <label className="switch"><input id="own-pic" type="checkbox" checked=${pic} onChange=${e => setPic(e.target.checked)} /> Write an image idea for each sentence with ${wr.name} (recommended, about ${fmt$(wr.perVideo * 0.15)}). Off: images are drawn from the sentences themselves.</label>
+        <div><button type="button" className="btn primary" disabled=${ownWords < 5 || ownWords / 2.5 > 600} onClick=${() => api.startOwn(p.id, 'paste', own, { video_type: vt, visuals: pic })}>Use my story${pic ? html`<span className="tag">est. ${fmt$(wr.perVideo * 0.15)}</span>` : html`<span className="tag">free</span>`}</button></div>
+      </${Fragment}>`}
+    </div>
+  </${Fragment}>`;
   if (p.analysis && !p.ingesting) return html`<${Fragment}>
     <${StepHead} title="Reference video" sub="This project is built from the video below. Re-analyzing replaces the angle cards but keeps saved ideas." />
     <div className="panel"><${SourceCard} p=${p} /></div>
-    <div className="row"><button type="button" className="btn" onClick=${() => updateP(p.id, q => { q.analysis = null; q.angles = []; q.checkpoints.angles = false; })}>Use a different link</button><button type="button" className="btn primary" onClick=${() => goStep('angles')}>Go to angles</button></div>
+    <div className="row"><button type="button" className="btn" onClick=${() => updateP(p.id, q => { q.analysis = null; q.angles = []; q.checkpoints.angles = false; })}>Use a different link</button><button type="button" className="btn ghost" onClick=${startOver}>Start over without a video</button><button type="button" className="btn primary" onClick=${() => goStep('angles')}>Go to angles</button></div>
   </${Fragment}>`;
   return html`<${Fragment}>
     <${StepHead} title="Paste a video that already works" sub="The tool reads its metadata, transcript, key frames and comments, then proposes original angles its viewers would click next." />
     <div className="panel ingest-hero">
+      <div>${modeSeg}</div>
       <form className="urlrow" onSubmit=${e => { e.preventDefault(); if (valid && !job) api.ingest(p.id, url.trim(), manual ? tx : null); }}>
         <label htmlFor="url" className="sr" style=${{ position: 'absolute', left: '-9999px' }}>Video link</label>
         <input id="url" className="input" placeholder="https://www.youtube.com/watch?v=..." value=${url} onChange=${e => setUrl(e.target.value)} disabled=${!!job} />
@@ -1618,6 +1710,7 @@ function AnglesScreen({ p, s }) {
   const sel = p.selected_angle_ids;
   const toggle = id => updateP(p.id, q => { const i = q.selected_angle_ids.indexOf(id); if (i >= 0) q.selected_angle_ids.splice(i, 1); else { q.selected_angle_ids.push(id); if (q.selected_angle_ids.length > 2) q.selected_angle_ids.shift(); } });
   const chosen = sel.map(id => p.angles.find(a => a.id === id)).filter(Boolean);
+  if (isOwn(p)) return html`<${Fragment}><${StepHead} title="No angle needed" sub="This video starts from your own idea or story, not a reference video." /><div className="row"><button type="button" className="btn primary" onClick=${() => goStep('script')}>Go to script</button></div></${Fragment}>`;
   const onApprove = () => {
     updateP(p.id, q => { q.checkpoints.angles = true; q.step = 'script'; if (!q.style) q.style = chosen[0].style; });
     api.writeScript(p.id);
@@ -1693,7 +1786,8 @@ function ScriptScreen({ p, s }) {
   if (!sc || sc.generating) return html`<${Fragment}><${StepHead} title="Writing the story" sub="Drafting three hook options and a story that fits your target length." /><div className="panel stack">${[90, 70, 85, 60, 75].map((w, i) => html`<div key=${i} className="skeleton" style=${{ width: w + '%' }}></div>`)}</div></${Fragment}>`;
   const isChar = p.video_type === 'character';
   const lines = linesOf(p); const total = lines.reduce((n, l) => n + lineSecs(p, l), 0); const target = p.format.target_seconds;
-  const ovPct = Math.round(overlap(sc.story, p.source.transcript) * 100);
+  const ovPct = p.source.transcript ? Math.round(overlap(sc.story, p.source.transcript) * 100) : 0;
+  const pasted = !!sc.pasted;
   const sep = isChar ? '\n' : '\n\n';
   const setTarget = v => updateP(p.id, q => { q.format.target_seconds = v; });
   const pickHook = i => updateP(p.id, q => {
@@ -1713,19 +1807,20 @@ function ScriptScreen({ p, s }) {
   };
   const tpl = s.templates[0];
   return html`<${Fragment}>
-    <${StepHead} title="Story script" sub=${'One story, written by ' + (sc.written_by || modelOf(p, 'writer').name) + '. Edit it freely. Next it is split into scenes and each scene gets an image.'}>
+    <${StepHead} title="Story script" sub=${(sc.pasted ? 'Your own story, used word for word.' : 'One story, written by ' + (sc.written_by || modelOf(p, 'writer').name) + '.') + ' Edit it freely. Next it is split into scenes and each scene gets an image.'}>
       <div className="row"><span className="note">Length</span>
         <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (locked) return; if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${LENGTH_OPTS} />
         ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
       </div>
-      <button type="button" className="btn" disabled=${locked} onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Rewrite to ${lenLabel(target)}</button>
+      ${pasted ? html`<button type="button" className="btn" disabled=${locked || sc.revising} title="The writer shortens or lengthens your story to the target and keeps what it says" onClick=${() => api.reviseStory(p.id, 'Do not add new content. Only shorten or lengthen the story so it fits the target length, keeping its events, order, names and voice.')}><${Icon} n="redo" />Fit my story to ${lenLabel(target)}</button>` : html`<button type="button" className="btn" disabled=${locked} onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Rewrite to ${lenLabel(target)}</button>`}
     </${StepHead}>
     <div className="script-grid">
       <div className="stack">
-        <section className="panel stack">
+        ${sc.picturing ? html`<div className="row note"><span className="spinner"></span> Writing an image idea for each sentence</div>` : null}
+        ${sc.hook_options.length > 1 ? html`<section className="panel stack">
           <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Opening hook</h2><span className="note">Pick one of three. It becomes the first ${isChar ? 'line' : 'paragraph'}.</span></div>
           <div className="hooks">${sc.hook_options.map((h, i) => html`<button key=${i} type="button" className="hookopt" aria-pressed=${sc.chosen_hook === i} disabled=${locked} onClick=${() => pickHook(i)}><span className="radio"></span><span>${h}</span></button>`)}</div>
-        </section>
+        </section>` : null}
         <section className="panel stack">
           <div className="panel-h" style=${{ marginBottom: 0 }}><h2>The story</h2><span className="note mono">${words(sc.story).length} words · about ${fmtT(total)} of ${fmtT(target)}</span></div>
           <div className=${'meter' + (Math.abs(total - target) > target * 0.25 ? ' warn' : '')} aria-hidden="true"><i style=${{ width: Math.min(100, total / target * 100) + '%' }}></i></div>
@@ -1744,12 +1839,12 @@ function ScriptScreen({ p, s }) {
         </section>
       </div>
       <div className="stack">
-        <section className="panel stack">
+        ${p.source.transcript ? html`<section className="panel stack">
           <h3>Originality check</h3>
           <div className=${'meter ' + (ovPct > 25 ? 'bad' : ovPct > 10 ? 'warn' : '')}><i style=${{ width: Math.max(3, Math.min(100, ovPct * 2)) + '%' }}></i></div>
           ${ovPct > 25 ? html`<div className="warnbox">${ovPct}% of phrases match the source transcript. Reword those parts so the story is your own.</div>` : html`<div className="okbox">${ovPct}% phrase overlap with the source. Wording is original.</div>`}
           <p className="note">Compares three-word phrases against the reference transcript.</p>
-        </section>
+        </section>` : null}
         <section className="panel stack">
           <h3>Story at a glance</h3>
           <dl className="kv" style=${{ gridTemplateColumns: '1fr auto' }}><dt>Words</dt><dd className="mono">${words(sc.story).length}</dd><dt>Sentences</dt><dd className="mono">${lines.length}</dd><dt>Spoken length</dt><dd className="mono">${fmtT(total)}</dd></dl>
@@ -1762,7 +1857,7 @@ function ScriptScreen({ p, s }) {
         <section className="panel stack"><h3>Written from</h3>${sc.written_with.map(id => { const a = p.angles.find(x => x.id === id); return a ? html`<div key=${id} style=${{ fontSize: 13 }}><span className="eyebrow">${a.type}</span><div>${a.title}</div></div>` : null; })}</section>
       </div>
     </div>
-    <${ApproveBar} p=${p} step="script" ready=${lines.length > 0 && !sc.revising} hint=${sc.revising ? 'Wait for the rewrite to finish.' : 'Write the story first.'} label="Approve story" onApprove=${onApprove} />
+    <${ApproveBar} p=${p} step="script" ready=${lines.length > 0 && !sc.revising && !sc.picturing} hint=${sc.revising ? 'Wait for the rewrite to finish.' : sc.picturing ? 'Wait for the image ideas to finish.' : 'Write the story first.'} label="Approve story" onApprove=${onApprove} />
   </${Fragment}>`;
 }
 

@@ -183,3 +183,25 @@ def test_publish_kit_and_channel_ideas(monkeypatch):
     r = ch["result"]
     assert ch["status"] == "done" and len(r["channels"]) == 3 and r["story_type"].startswith("Practical")
     assert r["channels"][0]["handle"] == "@claygarden0"  # handles are cleaned of spaces and symbols
+
+
+def test_story_from_own_idea_and_visuals_for_pasted_story(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    seen = []
+
+    async def fake_write(writer_id, progress, prompt):
+        seen.append(prompt)
+        if "Do not change the story" in prompt:
+            return {"visuals": [{"sentence": "A fox found a key.", "visual": "a fox sniffing a brass key in snow"}]}, 0.002, "Gemini Flash", None
+        return {"hook_options": ["h1", "h2", "h3"], "story": " ".join(["word"] * 60)}, 0.01, "Gemini Flash", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    c = TestClient(app)
+    j = _run_job(c, "/api/live/story", {"writer": "gemini-flash-writer", "angles": [{"title": "My idea"}], "target_seconds": 30,
+                                         "idea": "A fox finds a key that opens the moon"})
+    assert j["status"] == "done", j
+    assert "opens the moon" in seen[-1] and "Reference video" not in seen[-1]
+    v = _run_job(c, "/api/live/visuals", {"writer": "gemini-flash-writer", "story": "A fox found a key. It glowed."})
+    assert v["status"] == "done" and v["result"]["visuals"][0]["visual"].startswith("a fox")

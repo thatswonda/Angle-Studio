@@ -220,6 +220,7 @@ class StoryBody(BaseModel):
     characters: list[dict] = []
     direction: str = ""
     tone: str = ""
+    idea: str = ""  # set when the creator starts from their own idea instead of a reference video
 
 
 @router.post("/story")
@@ -235,10 +236,13 @@ async def story(body: StoryBody):
         fmt = (f"Write it as dialogue, one line per speaker in the form 'Name: what they say', using only these characters: "
                f"{', '.join(c.get('name', '') + ' (' + c.get('description', '') + ')' for c in body.characters)}."
                if char else "Write it as narration in short paragraphs separated by a blank line.")
+        brief = (f"The creator's own idea for this video (there is no reference video): {body.idea[:4000]}\n"
+                 "Build the story around that idea and keep the creator's details.\n" if body.idea.strip() else
+                 f"Angle(s): {json.dumps([{k: a.get(k) for k in ('title', 'pitch', 'reason', 'hooks', 'type')} for a in body.angles])}\n"
+                 f"Reference video it should sit next to: {body.source_title}. What that video did: {json.dumps(body.analysis)[:6000]}\n")
         data, cost, wn, warning = await write_json(body.writer, progress, (
             f"Write one continuous, original story for a {body.target_seconds}-second video (about {words} spoken words; stay within 10%).\n"
-            f"Angle(s): {json.dumps([{k: a.get(k) for k in ('title', 'pitch', 'reason', 'hooks', 'type')} for a in body.angles])}\n"
-            f"Reference video it should sit next to: {body.source_title}. What that video did: {json.dumps(body.analysis)[:6000]}\n"
+            f"{brief}"
             f"Tone: {body.tone or 'friendly, practical, no filler'}. Direction from the creator: {body.direction or 'none'}.\n"
             f"{fmt} Open with a strong hook, keep a new idea every few seconds, and end with a natural call to action.\n"
             'Return {"hook_options": [three different opening lines; the story starts with the first],'
@@ -256,6 +260,34 @@ async def story(body: StoryBody):
         return {"hook_options": hooks, "story": story_text, "visuals": visuals, "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
     return _job("Writing the story", work)
+
+
+class VisualsBody(BaseModel):
+    writer: str = "gpt-5-5"
+    story: str
+
+
+@router.post("/visuals")
+async def visuals(body: VisualsBody):
+    """Image ideas for a story the creator pasted: one short visual per sentence. Text only, so it costs little."""
+    if len(body.story.split()) < 5:
+        raise HTTPException(422, "Paste a longer story first.")
+
+    async def work(progress):
+        progress(f"{WRITER_NAMES.get(body.writer, body.writer)} is picturing each sentence")
+        data, cost, wn, warning = await write_json(body.writer, progress, (
+            f"Here is a story a creator wrote for a narrated video:\n---\n{body.story[:40000]}\n---\n"
+            "Do not change the story. For each sentence, describe one original image that fits it, showing a real moment "
+            "from the world of the story (never app icons, buttons, logos or on-screen text). Keep each description under 25 words. "
+            'Return {"visuals": [{"sentence": "the sentence, word for word, in order", "visual": "the image"}]}'))
+        if isinstance(data, list):
+            data = {"visuals": data}
+        vis = [v for v in (data.get("visuals") or []) if isinstance(v, dict) and v.get("sentence") and v.get("visual")]
+        if not vis:
+            raise ProviderError(f"{wn} returned no image ideas. Try again.")
+        return {"visuals": vis, "written_by": wn, "cost": round(cost, 4), "warning": warning}
+
+    return _job("Picturing the story", work)
 
 
 # ---------- 3. Voice, images
