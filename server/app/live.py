@@ -261,6 +261,40 @@ async def story(body: StoryBody):
     return _job("Writing the story", work)
 
 
+# ---------- Projects saved on the server too, so clearing the browser or switching devices loses nothing
+
+STATE_FILE = storage.ROOT / "app_state.json"
+
+
+@router.get("/state")
+def get_state():
+    if not STATE_FILE.exists():
+        return {"state": None, "saved_at": 0}
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except (OSError, ValueError):
+        return {"state": None, "saved_at": 0}
+
+
+class StateBody(BaseModel):
+    state: dict
+    saved_at: int
+
+
+@router.put("/state")
+def put_state(body: StateBody):
+    data = json.dumps({"state": body.state, "saved_at": body.saved_at})
+    if len(data) > 60_000_000:
+        raise HTTPException(413, "Projects are too large to back up on the server (over 60 MB).")
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_FILE.with_suffix(".tmp")
+    tmp.write_text(data)
+    if STATE_FILE.exists():  # keep the previous save too, in case a bad save ever overwrites good work
+        STATE_FILE.replace(STATE_FILE.with_name("app_state.prev.json"))
+    tmp.replace(STATE_FILE)  # atomic: a crash mid-write never leaves a broken file
+    return {"ok": True, "saved_at": body.saved_at}
+
+
 class MediaCheckBody(BaseModel):
     paths: list[str]
 
@@ -314,6 +348,28 @@ class SpeakBody(BaseModel):
     voice: str = "v-aoede"
     model: str = "gemini-tts-flash"
     delivery: str = "warm, steady and conversational, like explaining something to a friend, at a medium pace"
+    speed: float = 1.0   # exact tempo change, pitch kept (0.8 to 1.3)
+    pitch: float = 0.0   # semitones (-4 to +4)
+
+
+def tune_voice(path: Path, speed: float, pitch: float) -> float:
+    """Applies an exact speed and pitch change to a voice clip in place; returns its new length in seconds."""
+    import subprocess
+    import wave
+    speed = min(1.3, max(0.8, speed)); pitch = min(4.0, max(-4.0, pitch))
+    with wave.open(str(path)) as w:
+        rate = w.getframerate()
+    if abs(speed - 1) > 1e-3 or abs(pitch) > 1e-3:
+        f = 2 ** (pitch / 12)
+        af = f"asetrate={round(rate * f)},aresample={rate},atempo={speed / f:.5f}"
+        tmp = path.with_suffix(".tuned.wav")
+        p = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(path), "-af", af, "-ac", "1", "-c:a", "pcm_s16le", str(tmp)],
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            raise ProviderError("Could not change the voice speed or pitch: " + (p.stderr.strip()[-200:] or "FFmpeg failed"))
+        tmp.replace(path)
+    with wave.open(str(path)) as w:
+        return w.getnframes() / w.getframerate()
 
 
 @router.post("/tts")
@@ -323,6 +379,7 @@ async def tts(body: SpeakBody):
     out = MEDIA / "audio" / f"{uuid.uuid4().hex}.wav"
     try:
         seconds, cost = await google.speak(body.text, body.voice, body.model, out, body.delivery)
+        seconds = await asyncio.to_thread(tune_voice, out, body.speed, body.pitch)
     except ProviderError as e:
         raise HTTPException(502, str(e))
     return {"url": media_url(out), "duration": round(seconds, 2), "cost": round(cost, 4)}

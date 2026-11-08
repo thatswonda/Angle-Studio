@@ -264,7 +264,12 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .scard .prefix { font-family: var(--f-mono); font-size: 11px; color: var(--muted); line-height: 1.4; }
 
 /* Voice */
-.voices { display: flex; flex-direction: column; gap: 6px; }
+.voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; max-height: 380px; overflow: auto; padding: 2px; }
+.tune summary { cursor: pointer; }
+.idea-box { border: 1px dashed var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--sunk); }
+.tune-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px 14px; margin: 10px 0 6px; }
+.line-edit { grid-column: 1 / -1; display: grid; gap: 8px; padding: 8px 0 4px; }
+.aline.editing { background: var(--sunk); border-radius: var(--r-sm); padding-inline: 6px; }
 .voice { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; }
 .voice[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .wave { display: flex; align-items: center; gap: 2px; height: 22px; }
@@ -505,13 +510,64 @@ const KIND_LABEL = { writer: 'Writing', voice: 'Voiceover', image: 'Image', vide
 const analystOf = () => ANALYSTS.find(a => a.id === STATE.settings.analyst) || ANALYSTS[0];
 
 const VOICES = [
-  { id: 'v-aoede', name: 'Aoede', desc: 'Breezy, warm, conversational', pitch: 1.0, rate: 1.0, speed: 1.0 },
-  { id: 'v-kore', name: 'Kore', desc: 'Firm, clear, confident', pitch: 0.95, rate: 1.0, speed: 1.0 },
-  { id: 'v-charon', name: 'Charon', desc: 'Informative, low, documentary', pitch: 0.75, rate: 0.92, speed: 0.92 },
-  { id: 'v-puck', name: 'Puck', desc: 'Upbeat, bright, quick', pitch: 1.25, rate: 1.1, speed: 1.1 },
-  { id: 'v-fenrir', name: 'Fenrir', desc: 'Excitable, punchy', pitch: 1.05, rate: 1.12, speed: 1.12 },
+  { id: 'v-aoede', name: 'Aoede', desc: 'Breezy, warm, conversational', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-kore', name: 'Kore', desc: 'Firm, clear, confident', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-charon', name: 'Charon', desc: 'Informative, low, documentary', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-puck', name: 'Puck', desc: 'Upbeat, bright, quick', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-fenrir', name: 'Fenrir', desc: 'Excitable, punchy', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-zephyr', name: 'Zephyr', desc: 'Bright', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-leda', name: 'Leda', desc: 'Youthful', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-orus', name: 'Orus', desc: 'Firm', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-callirrhoe', name: 'Callirrhoe', desc: 'Easy-going', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-autonoe', name: 'Autonoe', desc: 'Bright', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-enceladus', name: 'Enceladus', desc: 'Breathy', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-iapetus', name: 'Iapetus', desc: 'Clear', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-umbriel', name: 'Umbriel', desc: 'Easy-going', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-algieba', name: 'Algieba', desc: 'Smooth', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-despina', name: 'Despina', desc: 'Smooth', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-erinome', name: 'Erinome', desc: 'Clear', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-algenib', name: 'Algenib', desc: 'Gravelly', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-rasalgethi', name: 'Rasalgethi', desc: 'Informative', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-laomedeia', name: 'Laomedeia', desc: 'Upbeat', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-achernar', name: 'Achernar', desc: 'Soft', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-alnilam', name: 'Alnilam', desc: 'Firm', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-schedar', name: 'Schedar', desc: 'Even', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-gacrux', name: 'Gacrux', desc: 'Mature', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-pulcherrima', name: 'Pulcherrima', desc: 'Forward', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-achird', name: 'Achird', desc: 'Friendly', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-zubenelgenubi', name: 'Zubenelgenubi', desc: 'Casual', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-vindemiatrix', name: 'Vindemiatrix', desc: 'Gentle', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
+  { id: 'v-sadachbia', name: 'Sadachbia', desc: 'Lively', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-sadaltager', name: 'Sadaltager', desc: 'Knowledgeable', range: 'l', pitch: 0.85, rate: 1.0, speed: 1.0 },
+  { id: 'v-sulafat', name: 'Sulafat', desc: 'Warm', range: 'h', pitch: 1.15, rate: 1.0, speed: 1.0 },
   { id: 'v-own', name: 'My voice', desc: 'Your cloned voice · needs consent', pitch: 1.0, rate: 1.0, speed: 1.0, clone: true },
 ];
+// How the voice should sound. Sent with every sentence as director\u2019s notes so the delivery stays consistent.
+const TONES = [
+  { id: 'warm', name: 'Warm and friendly', text: 'warm, steady and conversational, like explaining something to a friend' },
+  { id: 'calm', name: 'Calm and soothing', text: 'calm, soft and soothing, relaxed and gentle' },
+  { id: 'energetic', name: 'Energetic', text: 'energetic, excited and upbeat, smiling while speaking' },
+  { id: 'documentary', name: 'Documentary', text: 'serious, measured and authoritative, like a nature documentary narrator' },
+  { id: 'storyteller', name: 'Storyteller', text: 'an expressive storyteller, building suspense and emotion with natural dramatic pauses' },
+  { id: 'news', name: 'News presenter', text: 'crisp, confident and neutral, like a professional news presenter' },
+  { id: 'playful', name: 'Funny and playful', text: 'playful and cheeky, with light comic timing' },
+  { id: 'motivational', name: 'Motivational', text: 'inspiring and passionate, building energy like a motivational speaker' },
+  { id: 'kids', name: 'For kids', text: 'bright, kind and animated, like reading a picture book to children' },
+  { id: 'whisper', name: 'Soft whisper', text: 'a quiet, intimate near-whisper, close to the microphone' },
+];
+const PACES = { slow: 'at a slow, unhurried pace', normal: 'at a medium pace', fast: 'at a brisk, fast pace' };
+const ENERGY = { low: 'low energy, understated', medium: '', high: 'high energy, very expressive' };
+// The delivery sent with every sentence. Older projects keep the delivery text they already had.
+function deliveryOf(p) {
+  const a = p.audio;
+  if (!a.tone) return a.delivery || DEFAULT_DELIVERY;
+  const t = (TONES.find(x => x.id === a.tone) || TONES[0]).text;
+  return [t, PACES[a.pace || 'normal'], ENERGY[a.energy || 'medium'], a.accent ? 'with ' + a.accent : '', a.notes || ''].filter(Boolean).join(', ');
+}
+const lineDelivery = (p, l) => deliveryOf(p) + (l.note ? '. For this sentence: ' + l.note : '');
+const lineSig = (p, l) => [lineVoice(p, l), lineDelivery(p, l), p.audio.speed || 1, p.audio.pitch || 0, p.models.voice].join('|');
+const isOutdated = (p, l) => l.audio_status === 'ready' && (l.sig ? l.sig !== lineSig(p, l) : !!(l.voice_used && l.voice_used !== lineVoice(p, l)));
+
 
 // Visual templates. Example images live in templates/<id>-<n>.jpg (made with Nano Banana 2 from the same four scenes).
 const STYLES = [
@@ -782,7 +838,9 @@ function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79
 const voiceById = id => VOICES.find(v => v.id === id) || VOICES[0];
 const allStyles = () => { let custom = []; try { custom = STATE.customStyles || []; } catch (e) { /* state not loaded yet */ } return STYLES.concat(custom); };
 const styleById = id => allStyles().find(s => s.id === id) || STYLES[0];
-const styleImg = (st, n) => st.refs ? st.refs[n - 1] : (st.examples ? 'templates/' + st.id + '-' + n + '.jpg' : null);
+const styleImg = (st, n) => st.refs ? st.refs[n - 1] : (st.examples ? 'templates/' + (st.img_id || st.id) + '-' + n + '.jpg' : null);
+// The project's look: the template, plus the creator's own idea for it when they added one.
+const projStyle = p => { const st = styleById(p.style); return p.style_note && p.style_note.trim() ? { ...st, prefix: st.prefix + '. Also: ' + p.style_note.trim() } : st; };
 // The prompt every scene image is made from: the template's recipe, the scene, and what to keep out.
 const imagePrompt = (st, scene) => st.prefix + '. Scene: ' + scene + (st.avoid ? '. Avoid: ' + st.avoid : '') + '. No words, captions, watermarks or logos in the image.';
 const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || MODELS[kind][0];
@@ -921,7 +979,12 @@ function load() {
   try {
     const raw = localStorage.getItem(KEY); if (!raw) return null;
     const s = JSON.parse(raw); if (!s || s.version !== 1) return null;
-    // Resumability: anything interrupted mid-generation comes back as failed so it can be retried.
+    return settle(s);
+  } catch (e) { return null; }
+}
+// Resumability: anything interrupted mid-generation comes back as failed so it can be retried.
+function settle(s) {
+  {
     Object.values(s.projects).forEach(p => {
       p.ingesting = false;
       if (p.script && p.script.generating) p.script = { error: 'Writing was interrupted when the page closed.' };
@@ -933,8 +996,27 @@ function load() {
     });
     s.jobs = []; s.toasts = [];
     return s;
-  } catch (e) { return null; }
+  }
 }
+// Live mode keeps a copy of every project on the server: per project, the newer copy wins; deleted projects stay deleted.
+function mergeStates(local, remote) {
+  const out = clone(local); const deleted = new Set([...(local.deleted || []), ...(remote.deleted || [])]);
+  out.deleted = [...deleted];
+  Object.entries(remote.projects || {}).forEach(([id, rp]) => { const lp = out.projects[id]; if (!lp || (rp.updated_at || 0) > (lp.updated_at || 0)) out.projects[id] = rp; });
+  deleted.forEach(id => { delete out.projects[id]; });
+  ['customStyles', 'templates', 'ideaBank'].forEach(k => { const have = new Set((out[k] || []).map(x => x.id)); out[k] = (out[k] || []).concat((remote[k] || []).filter(x => !have.has(x.id))); });
+  if (!out.projects[out.currentId]) out.currentId = Object.keys(out.projects)[0];
+  return out;
+}
+let syncTimer = null, SYNC_READY = false;
+async function pushState() {
+  try {
+    const r = await fetch('/api/live/state', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ state: { ...STATE, jobs: [], toasts: [] }, saved_at: Date.now() }) });
+    SYNC_FAILS = r.ok ? 0 : SYNC_FAILS + 1;
+  } catch (e) { SYNC_FAILS++; }
+  if (SYNC_FAILS) { clearTimeout(syncTimer); syncTimer = setTimeout(pushState, Math.min(60000, 5000 * SYNC_FAILS)); }
+}
+let SYNC_FAILS = 0;
 let STATE = load() || seed();
 // Live mode: when this page is served by the Angle Studio server, real APIs replace the simulation.
 let LIVE = null;
@@ -942,7 +1024,7 @@ const DEFAULT_DELIVERY = 'warm, steady and conversational, like explaining somet
 async function post(path, body) {
   const r = await fetch('/api/live/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'The server could not finish this step (' + r.status + ').');
+  if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : r.status >= 502 ? 'The server is restarting or busy (' + r.status + '). Wait a minute and try again.' : 'The server could not finish this step (' + r.status + ').');
   return d;
 }
 // Starts a server job and mirrors its progress in the Jobs panel until it finishes.
@@ -952,10 +1034,20 @@ async function liveJob(pid, label, path, body, stages) {
   const setJob = fn => update(s => { const x = s.jobs.find(x => x.id === id); if (x) fn(x); });
   try {
     const { id: jid } = await post(path, body);
+    let misses = 0;
     for (;;) {
       await sleep(1500);
-      const r = await fetch('/api/live/jobs/' + jid); const j = await r.json();
-      if (!r.ok) throw new Error(j.detail || 'Lost track of the job.');
+      // A deploy or restart answers with an HTML error page for a while: wait for the server instead of failing.
+      let r = null, j = null;
+      try { r = await fetch('/api/live/jobs/' + jid); j = await r.json(); } catch (e) { j = null; }
+      if (r && r.status === 404 && j) throw new Error('The server restarted while this was running, so this step stopped. Start it again; finished work is kept.');
+      if (!r || !r.ok || !j) {
+        misses++;
+        if (misses === 3) setJob(x => { x.stages.splice(x.stage + 1, 0, 'Waiting for the server to answer'); x.stage += 1; });
+        if (misses > 120) throw new Error('The server has not answered for 3 minutes. It may be restarting or out of memory. Try again in a minute.');
+        continue;
+      }
+      misses = 0;
       if (j.stage) setJob(x => { let k = x.stages.indexOf(j.stage); if (k < 0) { x.stages.splice(x.stage + 1, 0, j.stage); k = x.stage + 1; } x.stage = Math.max(x.stage, k); });
       if (j.status === 'done') { setJob(x => { x.stage = x.stages.length; x.status = 'done'; }); return j.result; }
       if (j.status === 'failed') throw new Error(j.error || 'The step failed.');
@@ -968,7 +1060,13 @@ async function detectLive() {
     const r = await fetch('/api/live/status'); if (!r.ok) return;
     const d = await r.json(); if (!d.live) return;
     LIVE = d;
-    if (!STATE.live_init) {
+    let remote = null;
+    try { const rs = await fetch('/api/live/state'); if (rs.ok) remote = (await rs.json()).state; } catch (e) { remote = null; }
+    if (remote && remote.projects && remote.version === 1) {
+      remote = settle({ ...remote, jobs: [], toasts: [] });
+      STATE = STATE.live_init ? mergeStates(STATE, remote) : remote;
+      STATE.live_init = true;
+    } else if (!STATE.live_init) {
       // First visit in live mode: start clean instead of with the demo's sample project.
       const fresh = seed(); fresh.live_init = true; fresh.intro = false; fresh.cache = {};
       fresh.settings.defaults.writer = d.writer || fresh.settings.defaults.writer;
@@ -976,6 +1074,7 @@ async function detectLive() {
       const pj = newProject(); pj.audio.music_path = 'none';
       fresh.projects = { [pj.id]: pj }; fresh.currentId = pj.id;
     }
+    SYNC_READY = true;
     update(s => { s.settings.keys = { ...s.settings.keys, ...d.providers }; if (!s.analyst_v2) { s.settings.analyst = 'gemini-flash'; s.analyst_v2 = true; } });
   } catch (e) { /* not served by the Angle Studio server: demo mode */ }
 }
@@ -984,6 +1083,7 @@ let saveTimer = null;
 function persist() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify({ ...STATE, jobs: [], toasts: [] })); } catch (e) {} }, 250);
+  if (LIVE && SYNC_READY) { clearTimeout(syncTimer); syncTimer = setTimeout(pushState, 2000); }
 }
 function update(fn) { const next = clone(STATE); fn(next); STATE = next; persist(); listeners.forEach(l => l()); }
 function updateP(pid, fn) { update(s => { const p = s.projects[pid]; if (p) { fn(p, s); p.updated_at = Date.now(); } }); }
@@ -1089,7 +1189,7 @@ async function checkMedia(pid) {
 }
 async function liveRender(pid, final) {
   try { const m = await checkMedia(pid); if (m.lines.length || m.scenes.length) { toast('Some files were lost on the server. Make them again, then render.'); return; } } catch (e) { /* the render itself reports anything still missing */ }
-  const p = STATE.projects[pid];
+  const p = STATE.projects[pid]; const sig = capsSig(p);
   updateP(pid, q => { q.rendering = final ? 'final' : 'draft'; q.render_error = null; });
   // Each scene lists its sentences, so the server can time every image to exactly those sentences' audio.
   const index = {}; p.script.lines.forEach((l, i) => { index[l.id] = i; });
@@ -1099,7 +1199,7 @@ async function liveRender(pid, final) {
   try {
     const r = await liveJob(pid, final ? 'Rendering final MP4' : 'Building draft', 'render', { final, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines },
       ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
-    updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; } });
+    updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); } });
     toast(final ? 'Final video rendered.' : 'Draft ready. Play it before rendering the final file.');
   } catch (e) { updateP(pid, q => { q.rendering = null; q.render_error = e.message; }); toast(e.message); }
 }
@@ -1278,7 +1378,7 @@ const api = {
     } catch (e) { updateP(pid, p => { p.channels = { error: e.message }; }); toast(e.message); }
   },
   async channelArt(pid, i, kind) {
-    const p0 = STATE.projects[pid]; const c = p0.channels.list[i]; const st = styleById(p0.style); const key = kind + '_img';
+    const p0 = STATE.projects[pid]; const c = p0.channels.list[i]; const st = projStyle(p0); const key = kind + '_img';
     updateP(pid, p => { p.channels.list[i][key] = { status: 'generating' }; });
     try {
       if (!LIVE) { await sleep(700); updateP(pid, p => { p.channels.list[i][key] = { status: 'ready', seed: randSeed() }; }); return; }
@@ -1290,7 +1390,7 @@ const api = {
     } catch (e) { updateP(pid, p => { p.channels.list[i][key] = { status: 'failed', error: e.message }; }); toast(e.message); }
   },
   async makeThumb(pid, i) {
-    const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = styleById(p0.style);
+    const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = projStyle(p0);
     updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; p.kit.thumbnails[i].error = null; });
     try {
       const prompt = st.prefix + '. A video thumbnail: ' + t.concept + '. Print this text large, bold and easy to read at small size: "' + t.text + '". High contrast, one clear focal point, uncluttered background.';
@@ -1310,8 +1410,8 @@ const api = {
         if (stop) break;
         const p = STATE.projects[pid]; const l = p.script.lines.find(x => x.id === id); if (!l) continue;
         try {
-          const r = await post('tts', { text: l.text, voice: lineVoice(p, l), model: p.models.voice, delivery: p.audio.delivery || DEFAULT_DELIVERY });
-          updateP(pid, q => { const x = q.script.lines.find(x => x.id === id); if (!x) return; Object.assign(x, { audio_status: 'ready', duration: r.duration, audio_url: r.url, voice_used: lineVoice(q, x), voice_model: q.models.voice, wave: randSeed() }); addCost(q, r.cost || 0); });
+          const r = await post('tts', { text: l.text, voice: lineVoice(p, l), model: p.models.voice, delivery: lineDelivery(p, l), speed: p.audio.speed || 1, pitch: p.audio.pitch || 0 });
+          updateP(pid, q => { const x = q.script.lines.find(x => x.id === id); if (!x) return; Object.assign(x, { audio_status: 'ready', duration: r.duration, audio_url: r.url, voice_used: lineVoice(q, x), voice_model: q.models.voice, wave: randSeed(), sig: lineSig(q, x), error: null }); addCost(q, r.cost || 0); });
         } catch (e) {
           failed++; updateP(pid, q => { const x = q.script.lines.find(x => x.id === id); if (x) { x.audio_status = 'failed'; x.error = e.message; } });
           if (/quota|billing|free tier|not set|refused/i.test(e.message)) stop = e.message;
@@ -1331,7 +1431,7 @@ const api = {
       updateP(pid, p => {
         const l = p.script.lines.find(l => l.id === id); if (!l) return;
         const v = voiceById(lineVoice(p, l));
-        l.audio_status = 'ready'; l.duration = estSecs(l.text, v.speed); l.voice_used = v.id; l.voice_model = p.models.voice; l.wave = randSeed();
+        l.audio_status = 'ready'; l.duration = estSecs(l.text, (v.speed || 1) * (p.audio.speed || 1)); l.voice_used = v.id; l.sig = lineSig(p, l); l.voice_model = p.models.voice; l.wave = randSeed();
         addCost(p, l.text.length / 1000 * modelOf(p, 'voice').cost);
       });
     }
@@ -1391,7 +1491,7 @@ const api = {
       const p0 = STATE.projects[pid]; const sc0 = p0.scenes.find(x => x.id === sceneId); if (!sc0) return;
       updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (x) { x.image_status = 'generating'; x.error = null; } });
       const chars = p0.characters.filter(c => sc0.character_ids.includes(c.id)).map(c => c.name + ', ' + c.description).join('; ');
-      const st = styleById(p0.style);
+      const st = projStyle(p0);
       const prompt = imagePrompt(st, (sc0.image_prompt || sc0.description) + (chars ? '. Characters: ' + chars : ''));
       const anchor = lookAnchor(p0, sceneId);
       const refs = (st.refs || []).concat(anchor ? [anchor] : []);
@@ -1483,7 +1583,7 @@ function reopen(pid, stepId) {
    Icons
    ====================================================================== */
 const ICONS = {
-  check: 'M4 10.5l4 4 8-9', lock: 'M6 9V7a4 4 0 018 0v2M5 9h10v8H5z', play: 'M6 4l10 6-10 6z', pause: 'M6 4h3v12H6zM11 4h3v12h-3z',
+  check: 'M4 10.5l4 4 8-9', edit: 'M4 16l1-4 8-8 3 3-8 8-4 1zM11 6l3 3', lock: 'M6 9V7a4 4 0 018 0v2M5 9h10v8H5z', play: 'M6 4l10 6-10 6z', pause: 'M6 4h3v12H6zM11 4h3v12h-3z',
   redo: 'M15 4v4h-4M15 8a6 6 0 10.9 5', bookmark: 'M6 3h8v14l-4-3-4 3z', up: 'M10 15V5M5 10l5-5 5 5', down: 'M10 5v10M5 10l5 5 5-5',
   trash: 'M5 6h10M8 6V4h4v2M6 6l1 11h6l1-11', plus: 'M10 4v12M4 10h12', copy: 'M7 7h9v9H7zM4 13V4h9', upload: 'M10 14V4M6 8l4-4 4 4M4 16h12',
   merge: 'M5 4v4a4 4 0 004 4h6M12 9l3 3-3 3', split: 'M10 3v14M6 7l-3 3 3 3M14 7l3 3-3 3', speaker: 'M4 8h3l4-3v10l-4-3H4zM14 7a4 4 0 010 6',
@@ -1974,8 +2074,9 @@ function StyleScreen({ p, s }) {
           <div className="row" style=${{ justifyContent: 'space-between' }}><h2>${st.name}</h2><span className="swatches">${st.palette.map(c => html`<i key=${c} style=${{ background: c, width: 16, height: 16 }} />`)}</span></div>
           <div><div className="eyebrow">Recipe added to every scene image</div><p className="prompt" style=${{ fontSize: 12.5, marginTop: 2 }}>${st.prefix}</p></div>
           <div><div className="eyebrow">Kept out</div><p className="note">${st.avoid}</p></div>
+          <${StyleIdea} p=${p} st=${st} locked=${locked} />
           <label className="switch"><input id="lock-look" type="checkbox" checked=${p.style_lock !== false} disabled=${locked} onChange=${e => updateP(p.id, q => { q.style_lock = e.target.checked; })} /><span><strong>Lock the look from scene 1.</strong> Scene 1 is made first, then sent as a style reference with every other scene so the whole video matches.</span></label>
-          ${st.custom ? html`<div className="row"><span className="note">Your reference images are sent with every scene image.</span><button type="button" className="btn sm ghost danger" disabled=${locked} onClick=${() => { update(x => { x.customStyles = (x.customStyles || []).filter(c => c.id !== st.id); }); updateP(p.id, q => { q.style = 'photoreal'; }); }}><${Icon} n="trash" />Delete template</button></div>` : null}
+          ${st.custom ? html`<div className="row"><span className="note">${st.refs ? 'Your reference images are sent with every scene image.' : 'Your own version of ' + styleById(st.base).name + ', with your idea: \u201c' + (st.idea || '') + '\u201d.'}</span><button type="button" className="btn sm ghost danger" disabled=${locked} onClick=${() => { update(x => { x.customStyles = (x.customStyles || []).filter(c => c.id !== st.id); }); updateP(p.id, q => { q.style = 'photoreal'; }); }}><${Icon} n="trash" />Delete template</button></div>` : null}
         </div>
       </div>
     </section>
@@ -1995,6 +2096,28 @@ function StyleScreen({ p, s }) {
     <${ApproveBar} p=${p} step="style" ready=${!!cur} label=${'Approve ' + st.name} onApprove=${() => { updateP(p.id, q => { q.style = cur; }); approve(p.id, 'style'); }} />
   </${Fragment}>`;
 }
+// Add your own idea to a template: for this video only, or saved as a new template of your own.
+function StyleIdea({ p, st, locked }) {
+  const forThis = p.style === st.id;
+  const [idea, setIdea] = useState(forThis ? p.style_note || '' : ''); const [name, setName] = useState('');
+  useEffect(() => { setIdea(p.style === st.id ? p.style_note || '' : ''); }, [st.id]);
+  const save = () => {
+    const id = uid('custom'); const nm = name.trim() || st.name + ' (mine)';
+    update(x => { x.customStyles = (x.customStyles || []).concat({ ...clone(st), id, name: nm, prefix: st.prefix + '. Also: ' + idea.trim(), idea: idea.trim(), base: st.id, img_id: st.img_id || st.id, custom: true, best: 'Your own version of ' + st.name }); });
+    if (!locked) updateP(p.id, q => { q.style = id; q.style_note = ''; });
+    setName(''); toast('Saved \u201c' + nm + '\u201d' + (locked ? '.' : ' and chose it for this video.'));
+  };
+  return html`<div className="stack idea-box" style=${{ gap: 8 }}>
+    <label className="field" htmlFor=${'idea-' + st.id}><strong>Add your idea to this look</strong><span className="note">Added to every image prompt, e.g. \u201ccharacters wear colourful Ankara fabrics\u201d or \u201cevery scene at golden hour\u201d.</span>
+      <textarea id=${'idea-' + st.id} className="textarea" rows="2" value=${idea} onChange=${e => setIdea(e.target.value)} placeholder="Your idea for this template"></textarea></label>
+    <div className="row">
+      <button type="button" className="btn sm" disabled=${locked || (forThis && idea.trim() === (p.style_note || '').trim())} onClick=${() => { updateP(p.id, q => { q.style = st.id; q.style_note = idea.trim(); }); toast(idea.trim() ? 'Your idea is added to every image in this video.' : 'Idea removed.'); }}>${forThis && p.style_note ? 'Update for this video' : 'Use for this video'}</button>
+      <input className="input" style=${{ maxWidth: 220 }} placeholder=${'Name, e.g. ' + st.name + ' (mine)'} value=${name} onChange=${e => setName(e.target.value)} aria-label="Template name" />
+      <button type="button" className="btn sm primary" disabled=${!idea.trim()} onClick=${save}><${Icon} n="plus" />Save as my template</button>
+    </div>
+    ${forThis && p.style_note ? html`<p className="note">In use for this video: \u201c${p.style_note}\u201d. Images already made keep their look; regenerate a scene to apply it.</p>` : null}
+  </div>`;
+}
 function hashSeed(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) % 100000; }
 function applyTemplate(pid, t) { updateP(pid, q => { q.style = t.style; q.audio.voice_id = t.voice_id; q.audio.caption_style = t.caption_style; q.audio.music_path = t.music; q.format.aspect_ratio = t.aspect; q.template_id = t.id; }); }
 
@@ -2010,13 +2133,76 @@ function PreviewBtn({ text, voice }) {
   const play = async e => {
     e.stopPropagation(); setOn(true);
     if (LIVE && !voice.clone) {
-      const p = STATE.projects[STATE.currentId]; const key = voice.id + '|' + p.models.voice + '|' + text;
-      try { previewCache[key] = previewCache[key] || await post('tts', { text, voice: voice.id, model: p.models.voice, delivery: p.audio.delivery || DEFAULT_DELIVERY }); new Audio(previewCache[key].url).play(); }
+      const p = STATE.projects[STATE.currentId]; const key = voice.id + '|' + p.models.voice + '|' + deliveryOf(p) + '|' + (p.audio.speed || 1) + '|' + (p.audio.pitch || 0) + '|' + text;
+      try { previewCache[key] = previewCache[key] || await post('tts', { text, voice: voice.id, model: p.models.voice, delivery: deliveryOf(p), speed: p.audio.speed || 1, pitch: p.audio.pitch || 0 }); new Audio(previewCache[key].url).play(); }
       catch (err) { toast(err.message); }
     } else speak(text, voice);
     setTimeout(() => setOn(false), 2500);
   };
   return html`<button type="button" className="btn sm" onClick=${play}><${Icon} n=${on ? 'speaker' : 'play'} />${on ? 'Playing' : 'Preview'}</button>`;
+}
+function VoicePicker({ p, list, firstLine }) {
+  const [range, setRange] = useState('all'); const [q, setQ] = useState('');
+  const shown = list.filter(v => (range === 'all' || v.range === range || v.clone) && (!q || (v.name + ' ' + v.desc).toLowerCase().includes(q.toLowerCase())));
+  const cur = voiceById(p.audio.voice_id);
+  return html`<div className="stack" style=${{ gap: 8 }}>
+    <div className="row" style=${{ justifyContent: 'space-between' }}>
+      <div className="row"><${Seg} label="Voice range" value=${range} onChange=${setRange} options=${[{ value: 'all', label: 'All ' + list.length }, { value: 'h', label: 'Higher' }, { value: 'l', label: 'Lower' }]} />
+        <input className="input" style=${{ width: 160 }} placeholder="Search: warm, clear\u2026" aria-label="Search voices" value=${q} onChange=${e => setQ(e.target.value)} /></div>
+      <span className="note">Selected: <strong style=${{ color: 'var(--ink)' }}>${cur.name}</strong> \u00b7 ${cur.desc}</span>
+    </div>
+    <div className="voices" role="radiogroup" aria-label="Voice">${shown.map(v => html`<div key=${v.id} className="voice" role="radio" tabIndex="0" aria-checked=${p.audio.voice_id === v.id} onClick=${() => updateP(p.id, q => { q.audio.voice_id = v.id; })} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateP(p.id, q => { q.audio.voice_id = v.id; }); } }}>
+      <span className="rail-num" style=${{ width: 18, height: 18 }}>${p.audio.voice_id === v.id ? html`<${Icon} n="check" />` : ''}</span>
+      <div style=${{ minWidth: 0 }}><strong>${v.name}</strong> <span className="note">${v.desc}${v.range ? ' \u00b7 ' + (v.range === 'h' ? 'higher' : 'lower') : ''}</span></div>
+      <${PreviewBtn} text=${firstLine} voice=${v} />
+    </div>`)}</div>
+  </div>`;
+}
+function VoiceTuning({ p }) {
+  const a = p.audio; const set = fn => updateP(p.id, q => { if (!q.audio.tone) q.audio.tone = 'warm'; fn(q.audio); });
+  return html`<details className="meta-d tune" open=${!!a.tone}>
+    <summary><strong>Tune the voice</strong> <span className="note">tone, pace, energy, accent, speed and pitch</span></summary>
+    <div className="tune-grid">
+      <label className="field">Tone<select className="select" value=${a.tone || 'warm'} onChange=${e => set(x => { x.tone = e.target.value; })}>${TONES.map(t => html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}</select></label>
+      <div className="field">Pace<${Seg} label="Pace" value=${a.pace || 'normal'} onChange=${v => set(x => { x.pace = v; })} options=${[{ value: 'slow', label: 'Slow' }, { value: 'normal', label: 'Normal' }, { value: 'fast', label: 'Fast' }]} /></div>
+      <div className="field">Energy<${Seg} label="Energy" value=${a.energy || 'medium'} onChange=${v => set(x => { x.energy = v; })} options=${[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} /></div>
+      <label className="field">Accent (optional)<input className="input" placeholder="e.g. a light Nigerian accent" value=${a.accent || ''} onChange=${e => set(x => { x.accent = e.target.value; })} /></label>
+      <label className="field">Exact speed <span className="mono muted">${(a.speed || 1).toFixed(2)}\u00d7</span><input type="range" min="0.8" max="1.3" step="0.05" value=${a.speed || 1} onChange=${e => set(x => { x.speed = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
+      <label className="field">Pitch <span className="mono muted">${(a.pitch || 0) > 0 ? '+' : ''}${a.pitch || 0} semitones</span><input type="range" min="-4" max="4" step="1" value=${a.pitch || 0} onChange=${e => set(x => { x.pitch = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
+      <label className="field" style=${{ gridColumn: '1 / -1' }}>Anything else about how it should sound (optional)<input className="input" placeholder="e.g. smile on the jokes, slow down on numbers" value=${a.notes || ''} onChange=${e => set(x => { x.notes = e.target.value; })} /></label>
+    </div>
+    <p className="note">Sent with every sentence: \u201c${deliveryOf(p)}\u201d. Speed and pitch are applied exactly after the voice is made. Preview a voice to hear the settings; changes apply to sentences you generate or regenerate.</p>
+  </details>`;
+}
+function LineRow({ p, l, i }) {
+  const [edit, setEdit] = useState(false); const [text, setText] = useState(l.text); const [note, setNote] = useState(l.note || '');
+  const isChar = p.video_type === 'character'; const v = voiceById(lineVoice(p, l)); const ch = isChar && p.characters.find(c => c.id === l.speaker);
+  const old = isOutdated(p, l); const busy = l.audio_status === 'generating';
+  const save = regen => {
+    const t = text.trim(); if (!t) return;
+    updateP(p.id, q => {
+      const x = q.script.lines.find(y => y.id === l.id); if (!x) return;
+      if (x.text !== t) { if (q.script.story.includes(x.text)) q.script.story = q.script.story.replace(x.text, t); x.text = t; if (x.audio_status === 'ready') x.audio_status = 'pending'; }
+      x.note = note.trim();
+    });
+    setEdit(false); if (regen) api.generateAudio(p.id, [l.id]);
+  };
+  return html`<div className=${'aline' + (edit ? ' editing' : '')}>
+    <span className="mono muted">${i + 1}</span>
+    <span style=${{ minWidth: 0 }}>${ch ? html`<b style=${{ color: 'var(--accent)' }}>${ch.name}: </b>` : null}${l.text}${l.note ? html`<span className="note"> \u00b7 say it: ${l.note}</span>` : null}${old ? html`<span className="note" style=${{ color: 'var(--warn)' }}> \u00b7 older settings</span>` : null}${l.audio_status === 'failed' && l.error ? html`<span className="note" style=${{ color: 'var(--fail)', display: 'block' }}>${l.error}</span>` : null}</span>
+    <${Wave} seed=${l.wave || i + 3} on=${l.audio_status === 'ready'} n=${18} />
+    <span className="mono muted secs">${l.audio_status === 'ready' && l.duration ? l.duration.toFixed(1) + 's' : '\u2013'}</span>
+    <span className="row" style=${{ gap: 4, justifyContent: 'flex-end' }}><${Pill} status=${l.audio_status || 'pending'} />
+      <button type="button" className="btn ghost sm" disabled=${busy} aria-label=${'Edit sentence ' + (i + 1)} onClick=${() => { setText(l.text); setNote(l.note || ''); setEdit(!edit); }}><${Icon} n="edit" />Edit</button>
+      ${l.audio_status !== 'pending' || l.audio_url ? html`<button type="button" className="btn ghost sm" disabled=${busy} aria-label=${'Regenerate sentence ' + (i + 1)} title="Regenerate this sentence" onClick=${() => api.generateAudio(p.id, [l.id])}><${Icon} n="redo" /></button>` : null}
+      ${l.audio_status === 'ready' ? html`<button type="button" className="btn ghost sm" aria-label="Play line" onClick=${() => playLine(l, v)}><${Icon} n="play" /></button>` : null}</span>
+    ${edit ? html`<div className="line-edit">
+      <label className="field">Words<textarea className="textarea" rows="2" value=${text} onChange=${e => setText(e.target.value)}></textarea></label>
+      <label className="field">How to say this sentence (optional)<input className="input" placeholder="e.g. excited, whisper, pause before the last word" value=${note} onChange=${e => setNote(e.target.value)} /></label>
+      <div className="row"><button type="button" className="btn primary sm" disabled=${!text.trim()} onClick=${() => save(true)}><${Icon} n="redo" />Save and regenerate</button><button type="button" className="btn sm" disabled=${!text.trim()} onClick=${() => save(false)}>Save only</button><button type="button" className="btn ghost sm" onClick=${() => setEdit(false)}>Cancel</button>
+        ${text.trim() !== l.text ? html`<span className="note">The story and this scene\u2019s caption change too.</span>` : null}</div>
+    </div>` : null}
+  </div>`;
 }
 function VoiceScreen({ p, s }) {
   const locked = p.checkpoints.voice; const isChar = p.video_type === 'character';
@@ -2031,6 +2217,7 @@ function VoiceScreen({ p, s }) {
   const firstLine = lines[0] ? lines[0].text : 'Hello';
   const usedVoices = isChar ? p.characters : null;
   const voiceList = VOICES.filter(v => !v.clone || canClone);
+  const outdated = lines.filter(l => isOutdated(p, l));
   return html`<${Fragment}>
     <${StepHead} title=${isChar ? 'Characters and voices' : 'Voice'} sub=${isChar ? 'Give each character a look and a voice. Each dialogue line is spoken in its character’s voice.' : 'Preview a voice on the first line, then generate the narration. Audio length sets each scene’s length.'} />
     ${isChar ? html`<section className="panel stack">
@@ -2047,24 +2234,16 @@ function VoiceScreen({ p, s }) {
       <p className="note">Character voices come from the voice model’s library or your own cloned voice, never an imitation of a real person.</p>
     </section>` : html`<section className="panel stack">
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Voices in ${vm.name}</h2><span className="note">${LIVE ? 'Preview reads the first sentence with the real voice (about a cent).' : 'Previewing uses your browser\u2019s voice as a stand-in.'}</span></div>
-      <div className="voices" role="radiogroup" aria-label="Voice">${voiceList.map(v => html`<div key=${v.id} className="voice" role="radio" tabIndex="0" aria-checked=${p.audio.voice_id === v.id} onClick=${() => !locked && updateP(p.id, q => { q.audio.voice_id = v.id; q.script.lines.forEach(l => { l.audio_status = l.audio_status === 'ready' ? 'pending' : l.audio_status; }); })} onKeyDown=${e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); !locked && updateP(p.id, q => { q.audio.voice_id = v.id; }); } }}>
-        <span className="rail-num" style=${{ width: 18, height: 18 }}>${p.audio.voice_id === v.id ? html`<${Icon} n="check" />` : ''}</span>
-        <div style=${{ minWidth: 0 }}><strong>${v.name}</strong> <span className="note">${v.desc}</span></div>
-        <${PreviewBtn} text=${firstLine} voice=${v} />
-      </div>`)}</div>
-      <label className="field" htmlFor="delivery">Delivery (sent with every sentence so the voice stays consistent)<input id="delivery" className="input" disabled=${locked} value=${p.audio.delivery || DEFAULT_DELIVERY} onChange=${e => updateP(p.id, q => { q.audio.delivery = e.target.value; })} /></label>
+      <${VoicePicker} p=${p} locked=${false} list=${voiceList} firstLine=${firstLine} />
+      <${VoiceTuning} p=${p} />
       ${voiceById(p.audio.voice_id).clone ? html`<label className="switch warnbox"><input id="consent" type="checkbox" checked=${p.audio.consent} disabled=${locked} onChange=${e => updateP(p.id, q => { q.audio.consent = e.target.checked; })} /> This is my own voice and I consent to cloning it for my videos.</label>` : null}
       ${!canClone ? html`<p className="note">${vm.name} can\u2019t clone voices. To narrate in your own voice, switch the voiceover model to ElevenLabs in the top bar (add its key in Settings first).</p>` : null}
     </section>`}
     <section className="panel stack">
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>${isChar ? 'Dialogue audio' : 'Narration'}</h2><span className="note mono">${lines.filter(l => l.audio_status === 'ready').length}/${lines.length} ready · ${fmtT(scriptSecs(p))}</span></div>
-      <div className="audiolist">${lines.map((l, i) => { const v = voiceById(lineVoice(p, l)); const ch = isChar && p.characters.find(c => c.id === l.speaker); return html`<div key=${l.id} className="aline">
-        <span className="mono muted">${i + 1}</span>
-        <span style=${{ minWidth: 0 }}>${ch ? html`<b style=${{ color: 'var(--accent)' }}>${ch.name}: </b>` : null}${l.text}</span>
-        <${Wave} seed=${l.wave || i + 3} on=${l.audio_status === 'ready'} n=${18} />
-        <span className="mono muted secs">${l.audio_status === 'ready' ? l.duration.toFixed(1) + 's' : '–'}</span>
-        <span className="row" style=${{ gap: 4, justifyContent: 'flex-end' }}><${Pill} status=${l.audio_status || 'pending'} />${l.audio_status === 'ready' || l.audio_status === 'failed' ? html`<button type="button" className="btn ghost sm" disabled=${locked} aria-label="Regenerate this line" title="Regenerate this line" onClick=${() => api.generateAudio(p.id, [l.id])}><${Icon} n="redo" /></button>` : null}${l.audio_status === 'ready' ? html`<button type="button" className="btn ghost sm" aria-label="Play line" onClick=${() => playLine(l, v)}><${Icon} n="play" /></button>` : null}</span>
-      </div>`; })}</div>
+      ${outdated.length && !generating ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>${outdated.length} sentence${outdated.length > 1 ? 's were' : ' was'} made with earlier voice settings.</span><${CostGate} p=${p} label=${'Regenerate ' + outdated.length + ' with the new settings'} cost=${outdated.reduce((n, l) => n + l.text.length, 0) / 1000 * vm.cost} rows=${[[vm.name, outdated.length + ' sentences']]} onGo=${() => api.generateAudio(p.id, outdated.map(l => l.id))} /></div>` : null}
+      <p className="note">Click <b>Edit</b> on any sentence to change its words or how it is said, then regenerate just that sentence${LIVE ? ' (under a cent each)' : ''}.</p>
+      <div className="audiolist">${lines.map((l, i) => html`<${LineRow} key=${l.id} p=${p} l=${l} i=${i} />`)}</div>
       ${!allReady && !locked ? html`<div className="row">${generating ? html`<span className="row note"><span className="spinner"></span> Generating with ${vm.name}</span>` : html`<${CostGate} p=${p} label=${pending.length === lines.length ? 'Generate ' + (isChar ? 'dialogue' : 'narration') : 'Generate ' + pending.length + ' remaining line' + (pending.length > 1 ? 's' : '')} cost=${pendingCost} disabled=${!voiceOk} rows=${[[vm.name, fmt$(vm.cost) + vm.unit], ['Characters to speak', pending.reduce((n, l) => n + l.text.length, 0).toLocaleString()]]} onGo=${() => api.generateAudio(p.id, pending.map(l => l.id))} />`}</div>` : null}
     </section>
     <${ApproveBar} p=${p} step="voice" ready=${allReady} hint="Generate audio for every line first." label="Approve voice" onApprove=${() => approve(p.id, 'voice')} />
@@ -2312,9 +2491,29 @@ function AnimateScreen({ p, s }) {
 /* ======================================================================
    Player: draft and final preview (ASM-1, ASM-2, ASM-4)
    ====================================================================== */
+// Caption signature: when it differs from the one a video was rendered with, that video's captions are out of date.
+const capsSig = p => p.audio.caption_style + '|' + (p.audio.caption_style === 'none' ? '' : p.scenes.map(sc => captionOf(p, sc)).join('\u00a6'));
+// Live preview sound: plays each sentence's real voice clip in step with the preview clock.
+function useNarration(p, playing, t, onSeekRef) {
+  const ref = useRef({ audio: null, idx: -1 });
+  const lines = (p.script && p.script.lines) || [];
+  const can = !!LIVE && lines.length && lines.every(l => l.audio_url && l.duration);
+  const starts = []; let acc = 0; lines.forEach(l => { starts.push(acc); acc += l.duration || 0; });
+  const stop = () => { const a = ref.current.audio; if (a) { a.onended = null; a.pause(); } ref.current = { audio: null, idx: -1 }; };
+  const startAt = time => {
+    stop(); if (!can) return;
+    let i = starts.findIndex((s0, k) => time < s0 + lines[k].duration); if (i < 0) return;
+    const playFrom = (k, off) => { if (k >= lines.length) return; const a = new Audio(lines[k].audio_url); ref.current = { audio: a, idx: k }; a.currentTime = Math.max(0, off); a.onended = () => playFrom(k + 1, 0); a.play().catch(() => {}); };
+    playFrom(i, time - starts[i]);
+  };
+  onSeekRef.current = startAt;
+  useEffect(() => { if (playing) startAt(t); else stop(); return stop; }, [playing]);
+  return can;
+}
 function Player({ p, mode }) {
   const scenes = p.scenes; const durs = scenes.map(sc => sceneSecs(p, sc)); const total = durs.reduce((a, b) => a + b, 0) || 1;
   const [t, setT] = useState(0); const [playing, setPlaying] = useState(false);
+  const seekRef = useRef(null); const withSound = useNarration(p, playing, t, seekRef);
   useEffect(() => {
     if (!playing) return; let last = performance.now(), raf;
     const tick = now => { const dt = (now - last) / 1000; last = now; setT(x => { const n = x + dt; if (n >= total) { setPlaying(false); return total; } return n; }); raf = requestAnimationFrame(tick); };
@@ -2356,7 +2555,7 @@ function Player({ p, mode }) {
     </div>
     <div className="controls">
       <button type="button" className="btn sm" aria-label=${playing ? 'Pause' : 'Play'} onClick=${() => { if (t >= total) setT(0); setPlaying(!playing); }}><${Icon} n=${playing ? 'pause' : 'play'} /></button>
-      <input type="range" min="0" max=${total} step="0.05" value=${t} aria-label="Scrub" onChange=${e => { setT(+e.target.value); }} />
+      <input type="range" min="0" max=${total} step="0.05" value=${t} aria-label="Scrub" onChange=${e => { setT(+e.target.value); if (playing && seekRef.current) seekRef.current(+e.target.value); }} />
       <span className="mono muted" style=${{ fontSize: 12 }}>${fmtT(t)}/${fmtT(total)}</span>
     </div>
     <div className="note" style=${{ fontSize: 12 }}>Scene ${idx + 1} of ${scenes.length} · ${clip ? 'animated clip' : 'zoom and pan'}${music && music.id !== 'none' ? ' · music: ' + music.name + ' ' + Math.round(p.audio.music_volume * 100) + '%' + (p.audio.duck ? ', ducked' : '') : ''}</div>
@@ -2402,6 +2601,12 @@ function MissingPanel({ p }) {
 }
 function CompileScreen({ p, s }) {
   useEffect(() => { if (LIVE && !p.rendering && !p.recovering) checkMedia(p.id).catch(() => {}); }, [p.id, !!LIVE]);
+  // Videos rendered before captions were tracked count as matching the current captions.
+  useEffect(() => { if (p.render.draft_path && p.render.draft_caps == null) updateP(p.id, q => { q.render.draft_caps = capsSig(q); }); }, [p.id]);
+  const finalNewer = !!p.render.final_path && (!p.render.draft_path || (p.render.final_at || 1) >= (p.render.draft_at || 0));
+  const videoUrl = finalNewer ? p.render.final_path : p.render.draft_path;
+  const shown = finalNewer ? (p.render.final_caps != null ? p.render.final_caps : p.render.draft_caps) : p.render.draft_caps;
+  const capsStale = !!LIVE && !!videoUrl && shown != null && shown !== capsSig(p) && !p.rendering;
   const anim = p.scenes.filter(sc => sc.animate).length;
   const draftJob = p.rendering === 'draft'; const finalJob = p.rendering === 'final';
   const job = s.jobs.find(j => j.pid === p.id && j.status === 'running' && /draft|final/i.test(j.label));
@@ -2416,7 +2621,7 @@ function CompileScreen({ p, s }) {
   return html`<${Fragment}>
     <${StepHead} title="Compile" sub="Scenes, voice, captions and music come together here. Watch the draft, go back and redo any single scene if needed, then render the final file." />
     <div className="compile-grid">
-      ${LIVE && (p.render.final_path || p.render.draft_path) ? html`<${VideoBox} p=${p} url=${p.render.final_path || p.render.draft_path} />` : html`<${Player} p=${p} mode=${p.render.final_path ? 'final' : 'draft'} key=${'pl' + p.scenes.map(x => x.id + x.image_index + x.clip_index).join()} />`}
+      ${capsStale ? html`<div className="stack" style=${{ gap: 8 }}><div className="okbox stack" style=${{ gap: 6 }}><span><strong>Showing your caption changes.</strong> This preview uses your images${LIVE ? ' and voice' : ''} with the edited captions. Update the video to put them in the file.</span><div><button type="button" className="btn sm primary" disabled=${!!p.rendering || !!p.missing} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />Update the video<span className="tag">free</span></button></div></div><${Player} p=${p} mode="draft" /></div>` : LIVE && videoUrl ? html`<${VideoBox} p=${p} url=${videoUrl} />` : html`<${Player} p=${p} mode=${p.render.final_path ? 'final' : 'draft'} key=${'pl' + p.scenes.map(x => x.id + x.image_index + x.clip_index).join()} />`}
       
       <div className="stack">
         <section className="panel stack"><h2>What goes in</h2>
@@ -2555,6 +2760,7 @@ function ExportScreen({ p, s }) {
         ${LIVE && (p.render.final_srt) ? html`<div className="row"><a className="btn" href=${p.render.final_srt} download=${fname.replace('.mp4', '.srt')}><${Icon} n="download" />Captions file (.srt)</a><span className="note">For uploading captions separately.</span></div>` : null}
       </div>
     </div>
+    ${LIVE && p.render.final_path && p.render.final_caps != null && p.render.final_caps !== capsSig(p) ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Captions changed after this final video was rendered.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Update it on Compile</button></div>` : null}
     <${PublishKit} p=${p} />
     <${ChannelKit} p=${p} />
     <section className="panel row">
@@ -2578,7 +2784,7 @@ function ProjectsView({ s }) {
       <div className="grow" style=${{ minWidth: 0 }}><strong>${p.title}</strong><div className="note">${p.video_type === 'character' ? 'Character video' : 'Voiceover video'} · at ${st.label} · ${done} of ${STEPS.length} steps · spent ${fmt$(p.render.cost_actual)}</div></div>
       ${p.status === 'rendered' ? html`<span className="pill ready">Rendered</span>` : html`<span className="pill pending">In progress</span>`}
       <button type="button" className="btn" onClick=${() => openProject(p.id)}>${p.id === s.currentId ? 'Continue' : 'Open'}</button>
-      ${Object.keys(s.projects).length > 1 ? html`<button type="button" className="btn ghost sm danger" aria-label="Delete project" onClick=${() => update(x => { delete x.projects[p.id]; if (x.currentId === p.id) x.currentId = Object.keys(x.projects)[0]; })}><${Icon} n="trash" /></button>` : null}
+      ${Object.keys(s.projects).length > 1 ? html`<button type="button" className="btn ghost sm danger" aria-label="Delete project" onClick=${() => update(x => { x.deleted = (x.deleted || []).concat(p.id); delete x.projects[p.id]; if (x.currentId === p.id) x.currentId = Object.keys(x.projects)[0]; })}><${Icon} n="trash" /></button>` : null}
     </div>`; })}</div>
   </${Fragment}>`;
 }
@@ -2624,6 +2830,7 @@ function TemplatesView({ s }) {
           <p className="note">${st.mood}. Best for: ${st.best}.</p>
           <div><div className="eyebrow">Recipe added to every scene image</div><p className="prompt" style=${{ fontSize: 12.5, marginTop: 2 }}>${st.prefix}</p></div>
           <div><div className="eyebrow">Kept out</div><p className="note">${st.avoid}</p></div>
+          <${StyleIdea} p=${p} st=${st} locked=${locked} />
           <div className="row">
             <button type="button" className="btn primary" disabled=${locked || p.style === st.id} onClick=${() => use(st.id)}>${p.style === st.id ? 'In use for “' + p.title + '”' : 'Use for “' + p.title + '”'}</button>
             ${locked ? html`<span className="note">This project’s style is approved. Reopen its Visual style step to change it.</span>` : null}

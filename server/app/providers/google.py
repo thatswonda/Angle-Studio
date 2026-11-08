@@ -35,7 +35,11 @@ MODELS = {
 TOKEN_PRICES = {"pro": (2.0, 12.0), "flash": (0.30, 2.50)}
 IMAGE_PRICES = {"nano-banana-2": 0.07, "nano-banana-pro": 0.14, "nano-banana-2-lite": 0.03}
 TTS_PRICES_PER_1K_CHARS = {"gemini-tts-flash": 0.01, "gemini-tts-pro": 0.02}
-VOICE_NAMES = {"v-aoede": "Aoede", "v-kore": "Kore", "v-charon": "Charon", "v-puck": "Puck", "v-fenrir": "Fenrir"}
+# Gemini TTS prebuilt voices; the app's ids are "v-" + the lowercase name.
+VOICE_NAMES = {"v-" + n.lower(): n for n in (
+    "Aoede", "Kore", "Charon", "Puck", "Fenrir", "Zephyr", "Leda", "Orus", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus",
+    "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar",
+    "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat")}
 
 _sem = asyncio.Semaphore(int(os.getenv("GEMINI_CONCURRENCY", "4")))
 

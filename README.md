@@ -62,7 +62,7 @@ Vercel cannot run this app: it needs a server that stays on, FFmpeg, background 
 3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `YOUTUBE_API_KEY`.
 4. Deploy. The first build takes a few minutes. Open the `onrender.com` link, type any user name and your `APP_PASSWORD`.
 
-The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB persistent disk (about $1.25 a month) mounted at `/app/server/data`. Voice clips, images, videos and the analysis cache live there; without the disk every redeploy deletes them. If files are lost anyway, the Compile step lists them and offers to make only those again.
+The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB persistent disk (about $1.25 a month) mounted at `/app/server/data`. Voice clips, images, videos and the analysis cache live there; without the disk every redeploy deletes them. If files are lost anyway, the Compile step lists them and offers to make only those again. Projects (story, scenes, settings) are saved in the browser and backed up to the server's disk, so a cleared browser or another device gets them back. Renders are kept under 300 MB of memory so they fit Render's Starter plan.
 
 ## What is live
 
@@ -72,12 +72,13 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | Stats and comments | YouTube Data API | Questions and requests are picked out of the top 100 comments |
 | Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
 | Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
-| Voice | Gemini TTS | Director's-notes prompt keeps the delivery consistent without reading it aloud |
+| Voice | Gemini TTS | 30 voices (filter higher or lower, search). Tune tone, pace, energy, accent and notes (director's-notes prompt, never read aloud), plus exact speed and pitch applied with FFmpeg. Edit any sentence's words or how it is said and regenerate just that one; sentences made with older settings are flagged |
 | Images | Nano Banana 2 / Pro / 2 Lite | 18 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
+| Your idea on a template | - | Add your own idea to any visual template (added to every image prompt) for one video, or save it as your own template |
 | Story edits | The writer | "Add an idea" rewrites the story with your idea and keeps the length; Undo restores the previous version |
 | Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from |
 | Channel ideas | The writer + Nano Banana | Optional, on Export: reads the story type and visual style and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
-| Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional (On/Off on the Format and Compile steps), come in 9 styles (Bold pop, One word, Karaoke, Highlight box, Comic, Neon glow, Typewriter, Clean bar, Minimal) and are editable per scene; a .srt captions file is saved with every render |
+| Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional (On/Off on the Format and Compile steps; after a render, edits show at once in the preview and "Update the video" re-renders for free), come in 9 styles (Bold pop, One word, Karaoke, Highlight box, Comic, Neon glow, Typewriter, Clean bar, Minimal) and are editable per scene; a .srt captions file is saved with every render |
 | Animated clips | Not yet | The Gemini key has no Veo models, so scenes use zoom and pan |
 | Music | Not yet | Narration only |
 

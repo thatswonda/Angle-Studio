@@ -13,6 +13,10 @@ from typing import Callable
 from .providers.google import ProviderError, clean_pcm, write_wav
 
 FPS = 30
+# Keeps each FFmpeg run well under 512 MB (Render Starter): few encoder threads and a short lookahead.
+# Measured on a 1080x1920 render: about 270 MB peak (it was about 680 MB with default threads).
+LOWMEM_CLIP = ["-threads", "2", "-filter_threads", "1", "-x264-params", "rc-lookahead=10:threads=2"]
+LOWMEM = ["-threads", "1", "-filter_threads", "1", "-x264-params", "rc-lookahead=8:threads=1"]
 
 
 def _run(args: list[str], cwd: Path) -> None:
@@ -229,7 +233,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         vf = f"scale={big_w}:{big_h}:force_original_aspect_ratio=increase,crop={big_w}:{big_h},{zp}:d={frames}:s={w}x{h}:fps={FPS},format=yuv420p"
         seg = f"seg{i:04d}.mp4"
         _run(["-i", str(local(sc.get("image", ""), f"img{i}")), "-vf", vf, "-frames:v", str(frames),
-              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20" if final else "28", "-r", str(FPS), seg], work)
+              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20" if final else "28", "-r", str(FPS), *LOWMEM_CLIP, seg], work)
         seg_list.append(seg)
     (work / "video.txt").write_text("".join(f"file '{s}'\n" for s in seg_list))
     _run(["-f", "concat", "-safe", "0", "-i", "video.txt", "-c", "copy", "video.mp4"], work)
@@ -246,10 +250,14 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         progress("Burning in captions")
         (work / "captions.ass").write_text(captions_ass(cues, style, w, h))
         vf_caps = ["-vf", "ass=captions.ass"]
-    progress("Normalizing loudness and encoding" if final else "Encoding the draft")
-    af = ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"] if final else []
-    _run(["-i", "video.mp4", "-i", "narration.wav", *vf_caps, *af,
-          "-c:v", "libx264", "-preset", "medium" if final else "veryfast", "-crf", "20" if final else "28",
+    voice = "narration.wav"
+    if final:  # loudness in its own audio-only pass, so the video encode stays light
+        progress("Normalizing loudness")
+        _run(["-i", "narration.wav", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-c:a", "pcm_s16le", "voice_norm.wav"], work)
+        voice = "voice_norm.wav"
+    progress("Encoding the final video" if final else "Encoding the draft")
+    _run(["-i", "video.mp4", "-i", voice, *vf_caps,
+          "-c:v", "libx264", "-preset", "faster" if final else "veryfast", "-crf", "20" if final else "28", *LOWMEM,
           "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", f"../{stem}.mp4"], work)
     for f in work.iterdir():
         f.unlink()

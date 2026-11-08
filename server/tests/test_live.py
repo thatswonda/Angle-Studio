@@ -230,3 +230,27 @@ def test_media_check_reports_lost_files():
         assert r["missing"] == ["/media/audio/gone.wav", "/media/../app/main.py"]
     finally:
         kept.unlink()
+
+
+def test_projects_are_backed_up_on_the_server(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    monkeypatch.setattr(live, "STATE_FILE", tmp_path / "app_state.json")
+    c = TestClient(app)
+    assert c.get("/api/live/state").json()["state"] is None
+    c.put("/api/live/state", json={"state": {"projects": {"p1": {"title": "One"}}}, "saved_at": 1})
+    c.put("/api/live/state", json={"state": {"projects": {"p1": {"title": "Two"}}}, "saved_at": 2})
+    got = c.get("/api/live/state").json()
+    assert got["saved_at"] == 2 and got["state"]["projects"]["p1"]["title"] == "Two"
+    assert (tmp_path / "app_state.prev.json").exists()  # the earlier save is kept
+
+
+def test_voice_speed_and_pitch_are_exact(tmp_path):
+    from app import live
+    from app.providers import google
+    clip = tmp_path / "v.wav"
+    _tone(clip, 2.0)
+    assert abs(live.tune_voice(clip, 1.0, 0) - 2.0) < 0.01  # untouched
+    assert abs(live.tune_voice(clip, 1.25, 2) - 1.6) < 0.05  # 25% faster, pitch up, length follows speed only
+    assert len(google.VOICE_NAMES) == 30 and google.VOICE_NAMES["v-sulafat"] == "Sulafat"
