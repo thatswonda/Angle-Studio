@@ -72,28 +72,58 @@ def caption_cues(scenes: list[dict], line_texts: list[str], line_times: list[tup
     return cues
 
 
-def captions_ass(cues: list[tuple[float, float, list[str]]], style: str, w: int, h: int) -> str:
+# Words per caption chunk for each style.
+CAPTION_WORDS = {"bold": 3, "clean": 12, "karaoke": 7, "word": 1, "boxed": 3, "neon": 4, "comic": 2, "typewriter": 6, "minimal": 10}
+CAPTION_STYLE_IDS = set(CAPTION_WORDS) | {"none"}
+
+
+def _style_line(style: str, w: int, h: int) -> str:
     base = min(w, h)
-    if style == "clean":
-        st = f"Style: Default,DejaVu Sans,{int(base * 0.042)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H99000000,0,0,0,0,100,100,0,0,3,10,0,2,60,60,{int(h * 0.07)},1"
-    elif style == "karaoke":
-        st = f"Style: Default,DejaVu Sans,{int(base * 0.05)},&H005CE4FF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,4,1,2,60,60,{int(h * 0.16)},1"
-    else:
-        st = f"Style: Default,DejaVu Sans,{int(base * 0.075)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,2,2,60,60,{int(h * 0.18)},1"
+    f = "Style: Default,{font},{size},{primary},{secondary},{outline},{back},{bold},0,0,0,100,100,{spacing},{angle},{border},{ol},{sh},{align},60,60,{mv},1"
+    styles = {
+        "clean": dict(font="DejaVu Sans", size=int(base * 0.042), primary="&H00FFFFFF", outline="&H00000000", back="&H99000000", bold=0, spacing=0, angle=0, border=3, ol=10, sh=0, align=2, mv=int(h * 0.07)),
+        "karaoke": dict(font="DejaVu Sans", size=int(base * 0.05), primary="&H005CE4FF", outline="&H00000000", back="&H00000000", bold=1, spacing=0, angle=0, border=1, ol=4, sh=1, align=2, mv=int(h * 0.16)),
+        "word": dict(font="DejaVu Sans", size=int(base * 0.11), primary="&H00FFFFFF", outline="&H00000000", back="&H80000000", bold=1, spacing=0, angle=0, border=1, ol=7, sh=3, align=5, mv=0),
+        "boxed": dict(font="DejaVu Sans", size=int(base * 0.058), primary="&H00141414", outline="&H005CE4FF", back="&H005CE4FF", bold=1, spacing=0, angle=0, border=3, ol=14, sh=0, align=2, mv=int(h * 0.17)),
+        "neon": dict(font="DejaVu Sans", size=int(base * 0.066), primary="&H00FFFFFF", outline="&H00FFF22E", back="&H00000000", bold=1, spacing=1, angle=0, border=1, ol=6, sh=0, align=2, mv=int(h * 0.16)),
+        "comic": dict(font="DejaVu Sans", size=int(base * 0.085), primary="&H0000E5FF", outline="&H00000000", back="&H00000000", bold=1, spacing=1, angle=4, border=1, ol=8, sh=5, align=2, mv=int(h * 0.2)),
+        "typewriter": dict(font="DejaVu Sans Mono", size=int(base * 0.046), primary="&H00FFFFFF", outline="&H40000000", back="&H40000000", bold=0, spacing=0, angle=0, border=3, ol=12, sh=0, align=2, mv=int(h * 0.1)),
+        "minimal": dict(font="DejaVu Sans", size=int(base * 0.038), primary="&H00FFFFFF", outline="&H00000000", back="&H64000000", bold=0, spacing=1, angle=0, border=1, ol=0, sh=2, align=2, mv=int(h * 0.06)),
+    }
+    bold = dict(font="DejaVu Sans", size=int(base * 0.075), primary="&H00FFFFFF", outline="&H00000000", back="&H00000000", bold=1, spacing=0, angle=0, border=1, ol=6, sh=2, align=2, mv=int(h * 0.18))
+    st = styles.get(style, bold)
+    return f.format(secondary="&H00FFFFFF" if style == "karaoke" else st["primary"], **st)
+
+
+def captions_ass(cues: list[tuple[float, float, list[str]]], style: str, w: int, h: int) -> str:
     out = ["[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {h}", "WrapStyle: 0", "",
            "[V4+ Styles]",
            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, "
            "StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-           st, "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
+           _style_line(style, w, h), "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
+
+    def ev(a: float, b: float, text: str) -> None:
+        out.append(f"Dialogue: 0,{_ts(a)},{_ts(b)},Default,,0,0,0,,{text}")
+
     for a, b, ch in cues:
+        words = [_ass_text(x) for x in ch]
         if style == "karaoke":
             k = max(1, int((b - a) * 100 / len(ch)))
-            text = "".join("{\\k%d}%s " % (k, _ass_text(x)) for x in ch).strip()
-        elif style == "bold":
-            text = _ass_text(" ".join(ch).upper())
+            ev(a, b, "".join("{\\k%d}%s " % (k, x) for x in words).strip())
+        elif style == "typewriter":  # words appear one by one
+            step = (b - a) / len(words)
+            for i in range(len(words)):
+                ev(a + i * step, a + (i + 1) * step if i < len(words) - 1 else b, " ".join(words[:i + 1]))
+        elif style == "word":
+            ev(a, b, "{\\fscx135\\fscy135\\t(0,140,\\fscx100\\fscy100)}" + " ".join(words).upper())
+        elif style == "neon":
+            ev(a, b, "{\\blur9}" + " ".join(words))
+        elif style in ("bold", "comic"):
+            ev(a, b, " ".join(words).upper())
+        elif style == "minimal":
+            ev(a, b, " ".join(words).lower())
         else:
-            text = _ass_text(" ".join(ch))
-        out.append(f"Dialogue: 0,{_ts(a)},{_ts(b)},Default,,0,0,0,,{text}")
+            ev(a, b, " ".join(words))
     return "\n".join(out) + "\n"
 
 
@@ -206,7 +236,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
 
     stem = f"{'final' if final else 'draft'}_{uuid.uuid4().hex[:8]}"
     cues = caption_cues(scenes, [l.get("text", "") for l in lines], line_times, starts, durs,
-                        {"bold": 3, "clean": 12, "karaoke": 7}.get(style, 6))
+                        CAPTION_WORDS.get(style, 6))
     srt_url = None
     if cues:
         (media / "renders" / f"{stem}.srt").write_text(captions_srt(cues))

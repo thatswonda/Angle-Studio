@@ -56,7 +56,7 @@ def test_render_matches_audio(tmp_path):
     png = base64.b64encode(bytes.fromhex(
         "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode()
     img = "data:image/png;base64," + png
-    for style in ("clean", "none"):
+    for style in ("clean", "none", "typewriter", "word", "neon", "boxed", "comic", "minimal", "karaoke"):
         out = render.render({"final": False, "aspect": "1:1", "caption_style": style,
                              "scenes": [{"image": img, "lines": [0], "caption": "hello there"},
                                         {"image": img, "lines": [1], "caption": "and goodbye"}],
@@ -205,3 +205,13 @@ def test_story_from_own_idea_and_visuals_for_pasted_story(monkeypatch):
     assert "opens the moon" in seen[-1] and "Reference video" not in seen[-1]
     v = _run_job(c, "/api/live/visuals", {"writer": "gemini-flash-writer", "story": "A fox found a key. It glowed."})
     assert v["status"] == "done" and v["result"]["visuals"][0]["visual"].startswith("a fox")
+
+
+def test_every_caption_style_writes_valid_events():
+    cues = [(0.0, 1.5, ["one", "two", "three"]), (1.5, 2.0, ["four"])]
+    for style in render.CAPTION_WORDS:
+        ass = render.captions_ass(cues, style, 1080, 1920)
+        events = [l for l in ass.splitlines() if l.startswith("Dialogue:")]
+        assert events and ass.count("Style: Default,") == 1, style
+    tw = [l for l in render.captions_ass(cues, "typewriter", 1080, 1920).splitlines() if l.startswith("Dialogue:")]
+    assert len(tw) == 4 and tw[2].endswith("one two three")  # words appear one at a time

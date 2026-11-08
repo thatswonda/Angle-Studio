@@ -283,7 +283,11 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .aspect { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
 .aspect[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .aspect i { display: block; background: var(--sunk); border: 2px solid var(--muted); border-radius: 4px; }
-.capopts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.capopts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+.fmt-caps { grid-column: 1 / -1; }
+.capopt { container-type: inline-size; }
+.capopt .caption { white-space: nowrap; }
+.capopt .caption.minimal, .capopt .caption.bold { white-space: normal; }
 .capopt { border: 1px solid var(--line); border-radius: var(--r); background: var(--frame); color: #fff; height: 86px; display: flex; align-items: flex-end; justify-content: center; padding: 8px; cursor: pointer; position: relative; overflow: hidden; }
 .capopt[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--accent); }
 .capopt span.lbl { position: absolute; top: 6px; left: 8px; font-size: 11px; color: rgba(255,255,255,0.7); }
@@ -357,6 +361,17 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .caption.karaoke { font-weight: 600; font-size: clamp(12px, 5cqw, 17px); line-height: 1.3; text-shadow: 0 1px 3px #000; }
 .caption.karaoke span { color: rgba(255,255,255,0.55); }
 .caption.karaoke span.past { color: var(--cap); }
+.caption.word { top: 44%; bottom: auto; font-family: var(--f-display); font-weight: 800; font-size: clamp(20px, 11cqw, 40px); letter-spacing: 0.01em; -webkit-text-stroke: 1.5px #000; text-shadow: 0 3px 0 #000, 0 0 10px rgba(0,0,0,0.7); animation: cappop .16s ease-out; }
+@keyframes cappop { from { transform: scale(1.35); } to { transform: scale(1); } }
+.caption.boxed span { background: #FFE45C; color: #141414; font-weight: 700; font-size: clamp(12px, 5.4cqw, 19px); padding: 3px 8px; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; line-height: 1.6; }
+.caption.comic { color: #FFE500; font-family: var(--f-display); font-weight: 800; font-size: clamp(16px, 8cqw, 28px); -webkit-text-stroke: 1.5px #000; text-shadow: 3px 3px 0 #000; transform: rotate(-4deg); bottom: 20%; }
+.caption.neon { color: #fff; font-weight: 700; font-size: clamp(13px, 6cqw, 21px); letter-spacing: 0.02em; text-shadow: 0 0 4px #2EF2FF, 0 0 10px #2EF2FF, 0 0 18px #2EF2FF; }
+.caption.typewriter { font-family: var(--f-mono); font-size: clamp(11px, 4.6cqw, 15px); background: rgba(0,0,0,0.72); padding: 5px 9px; border-radius: 3px; left: 50%; right: auto; transform: translateX(-50%); max-width: 88%; bottom: 10%; }
+.caption.typewriter .cursor { animation: blink 1s steps(1) infinite; margin-left: 1px; }
+@keyframes blink { 50% { opacity: 0; } }
+.caption.minimal { font-size: clamp(10px, 3.8cqw, 13px); letter-spacing: 0.03em; text-shadow: 0 1px 4px rgba(0,0,0,0.8); bottom: 6%; opacity: 0.95; }
+.capopt .caption.typewriter { transform: none; }
+@media (prefers-reduced-motion: reduce) { .caption.word, .caption.typewriter .cursor { animation: none; } }
 .frame { container-type: inline-size; }
 .speaker { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 99px; }
 .drafttag { position: absolute; right: 8px; top: 8px; font-family: var(--f-mono); font-size: 10px; background: var(--rec); color: #fff; padding: 2px 6px; border-radius: 4px; }
@@ -424,6 +439,7 @@ details.meta-d[open] summary { margin-bottom: 6px; }
   .aline { grid-template-columns: 22px minmax(0, 1fr) auto; }
   .aline .wave, .aline .secs { display: none; }
   .capopts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .capopt .caption { white-space: normal; }
   .paces { grid-template-columns: minmax(0, 1fr); }
   .proj-title { display: none; }
   .kv { grid-template-columns: minmax(0, 1fr); }
@@ -525,11 +541,18 @@ const MUSIC = [
   { id: 'm-wire', name: 'Tension Wire', mood: 'Pulse · 120 bpm' },
 ];
 const CAPTIONS = [
-  { id: 'bold', name: 'Bold pop' },
-  { id: 'clean', name: 'Clean bar' },
-  { id: 'karaoke', name: 'Karaoke' },
+  { id: 'bold', name: 'Bold pop', per: 3 },
+  { id: 'word', name: 'One word', per: 1 },
+  { id: 'karaoke', name: 'Karaoke', per: 7 },
+  { id: 'boxed', name: 'Highlight box', per: 3 },
+  { id: 'comic', name: 'Comic', per: 2 },
+  { id: 'neon', name: 'Neon glow', per: 4 },
+  { id: 'typewriter', name: 'Typewriter', per: 6 },
+  { id: 'clean', name: 'Clean bar', per: 12 },
+  { id: 'minimal', name: 'Minimal', per: 10 },
   { id: 'none', name: 'No captions' },
 ];
+const capById = id => CAPTIONS.find(c => c.id === id) || CAPTIONS[0];
 // A scene's caption: your edit if you made one, otherwise its words from the story.
 const captionOf = (p, sc) => sc.caption_text != null ? sc.caption_text : sceneText(p, sc);
 // Frame shapes. Chosen on the Visual style step, before any image is made.
@@ -2016,11 +2039,19 @@ function VoiceScreen({ p, s }) {
    6. Format (aspect, animated or static, captions, music)
    ====================================================================== */
 function CapSample({ id }) {
-  if (id === 'bold') return html`<div className="caption bold" style=${{ position: 'static' }}><span>Three</span><span className="on">hours</span><span>of sun</span></div>`;
-  if (id === 'clean') return html`<div className="caption clean" style=${{ position: 'static' }}>Three hours of sun.</div>`;
-  if (id === 'none') return html`<div className="caption clean" style=${{ position: 'static', background: 'transparent', color: 'rgba(255,255,255,0.55)' }}>Off</div>`;
-  return html`<div className="caption karaoke" style=${{ position: 'static' }}><span className="past">Three </span><span className="past">hours </span><span>of sun</span></div>`;
+  const st = { position: 'static' };
+  if (id === 'bold') return html`<div className="caption bold" style=${st}><span>Three</span><span className="on">hours</span><span>of sun</span></div>`;
+  if (id === 'clean') return html`<div className="caption clean" style=${st}>Three hours of sun.</div>`;
+  if (id === 'karaoke') return html`<div className="caption karaoke" style=${st}><span className="past">Three </span><span className="past">hours </span><span>of sun</span></div>`;
+  if (id === 'word') return html`<div className="caption word" style=${{ ...st, alignSelf: 'center', marginBottom: 14 }}>HOURS</div>`;
+  if (id === 'boxed') return html`<div className="caption boxed" style=${st}><span>Three hours of</span></div>`;
+  if (id === 'comic') return html`<div className="caption comic" style=${st}>THREE HOURS</div>`;
+  if (id === 'neon') return html`<div className="caption neon" style=${st}>Three hours of sun</div>`;
+  if (id === 'typewriter') return html`<div className="caption typewriter" style=${st}>Three hours of<span className="cursor">▌</span></div>`;
+  if (id === 'minimal') return html`<div className="caption minimal" style=${st}>three hours of sun is all it takes</div>`;
+  return html`<div className="caption clean" style=${{ ...st, background: 'transparent', color: 'rgba(255,255,255,0.55)' }}>Off</div>`;
 }
+const setCaptions = (q, on) => { if (on) q.audio.caption_style = q.audio.prev_caption && q.audio.prev_caption !== 'none' ? q.audio.prev_caption : 'bold'; else { if (q.audio.caption_style !== 'none') q.audio.prev_caption = q.audio.caption_style; q.audio.caption_style = 'none'; } q.scenes.forEach(sc => { sc.caption_style = q.audio.caption_style; }); };
 function FormatScreen({ p, s }) {
   const locked = p.checkpoints.format; const est = estimate(p); const im = modelOf(p, 'image'); const vm = modelOf(p, 'video');
   const nScenes = p.script.lines.length; const imgCost = nScenes * im.cost;
@@ -2038,8 +2069,12 @@ function FormatScreen({ p, s }) {
         ${LIVE && !LIVE.video_models ? html`<p className="note">Every scene uses zoom and pan. Animated clips need Veo, which your Gemini key doesn\u2019t include yet.</p>` : html`<${Seg} label="Scene motion" value=${p.format.animated ? 'a' : 's'} onChange=${v => set(q => { q.format.animated = v === 'a'; q.scenes.forEach(sc => { sc.animate = v === 'a'; }); })} options=${[{ value: 's', label: 'Static: zoom and pan' }, { value: 'a', label: 'Animated clips' }]} />`}
         <p className="note" hidden=${!!(LIVE && !LIVE.video_models)}>${p.format.animated ? 'Each scene image becomes a clip with ' + vm.name + ' (about ' + fmt$(vm.cost) + ' per second). You can still mark single scenes static later.' : 'Images move with zoom and pan in the compile step. No video model cost, and the Animate step is skipped.'}</p>
       </section>
-      <section className="panel stack"><h3>Captions</h3>
-        <div className="capopts">${CAPTIONS.map(c => html`<button key=${c.id} type="button" className="capopt" aria-pressed=${p.audio.caption_style === c.id} disabled=${locked} onClick=${() => set(q => { q.audio.caption_style = c.id; q.scenes.forEach(sc => { sc.caption_style = c.id; }); })}><span className="lbl">${c.name}</span><${CapSample} id=${c.id} /></button>`)}</div>
+      <section className="panel stack fmt-caps">
+        <div className="panel-h" style=${{ marginBottom: 0 }}><h3>Captions</h3><${Seg} label="Captions on or off" value=${p.audio.caption_style === 'none' ? 'off' : 'on'} onChange=${v => !locked && set(q => setCaptions(q, v === 'on'))} options=${[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} /></div>
+        ${p.audio.caption_style === 'none' ? html`<p className="note">No captions on the video. A captions file (.srt) is still saved with each render, in case you want to upload it separately.</p>` : html`<${Fragment}>
+          <div className="capopts">${CAPTIONS.filter(c => c.id !== 'none').map(c => html`<button key=${c.id} type="button" className="capopt" aria-pressed=${p.audio.caption_style === c.id} disabled=${locked} onClick=${() => set(q => { q.audio.caption_style = c.id; q.scenes.forEach(sc => { sc.caption_style = c.id; }); })}><span className="lbl">${c.name}</span><${CapSample} id=${c.id} /></button>`)}</div>
+          <p className="note">You can also change the style, edit the words, or turn captions off on the Compile step.</p>
+        </${Fragment}>`}
       </section>
       <section className="panel stack"><h3>Music</h3>
         ${LIVE ? html`<p className="note">Background music isn\u2019t connected yet, so the video has narration only.</p>` : null}
@@ -2266,6 +2301,13 @@ function Player({ p, mode }) {
   if (cap === 'none') caption = null;
   else if (cap === 'bold') { const start = Math.floor(wi / 3) * 3; caption = html`<div className="caption bold">${ws.slice(start, start + 3).map((w, k) => html`<span key=${k} className=${start + k === wi ? 'on' : ''}>${w}</span>`)}</div>`; }
   else if (cap === 'clean') caption = html`<div className="caption clean">${text}</div>`;
+  else if (cap !== 'karaoke') {
+    const per = capById(cap).per || 4; const start = Math.floor(Math.max(0, wi) / per) * per; const chunk = ws.slice(start, start + per);
+    if (cap === 'typewriter') caption = html`<div className="caption typewriter">${ws.slice(start, wi + 1).join(' ')}<span className="cursor">▌</span></div>`;
+    else if (cap === 'boxed') caption = html`<div className="caption boxed"><span>${chunk.join(' ')}</span></div>`;
+    else if (cap === 'minimal') caption = html`<div className="caption minimal">${chunk.join(' ').toLowerCase()}</div>`;
+    else caption = html`<div key=${start} className=${'caption ' + cap}>${['word', 'comic'].includes(cap) ? chunk.join(' ').toUpperCase() : chunk.join(' ')}</div>`;
+  }
   else caption = html`<div className="caption karaoke">${ws.map((w, k) => html`<span key=${k} className=${k <= wi ? 'past' : ''}>${w + ' '}</span>`)}</div>`;
   const music = MUSIC.find(m => m.id === p.audio.music_path);
   return html`<div className=${'player' + frameCls(p)}>
@@ -2294,12 +2336,12 @@ function VideoBox({ p, url }) {
 }
 function CaptionEditor({ p }) {
   const on = p.audio.caption_style !== 'none';
-  const setOn = v => updateP(p.id, q => { if (v) q.audio.caption_style = q.audio.prev_caption || 'bold'; else { q.audio.prev_caption = q.audio.caption_style; q.audio.caption_style = 'none'; } });
+  const setOn = v => updateP(p.id, q => setCaptions(q, v));
   const edited = p.scenes.filter(sc => sc.caption_text != null).length;
   return html`<section className="panel stack">
     <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Captions</h2><${Seg} label="Captions" value=${on ? 'on' : 'off'} onChange=${v => setOn(v === 'on')} options=${[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} /></div>
     ${on ? html`<${Fragment}>
-      <div className="row"><span className="note">Style</span><${Seg} label="Caption style" value=${p.audio.caption_style} onChange=${v => updateP(p.id, q => { q.audio.caption_style = v; })} options=${CAPTIONS.filter(c => c.id !== 'none').map(c => ({ value: c.id, label: c.name }))} /></div>
+      <label className="row note" htmlFor="cap-style">Style <select id="cap-style" className="select" style=${{ width: 'auto' }} value=${p.audio.caption_style} onChange=${e => updateP(p.id, q => { q.audio.caption_style = e.target.value; q.scenes.forEach(sc => { sc.caption_style = e.target.value; }); })}>${CAPTIONS.filter(c => c.id !== 'none').map(c => html`<option key=${c.id} value=${c.id}>${c.name}</option>`)}</select></label>
       <p className="note">Edit any scene\u2019s caption. Untouched captions follow the narration word by word. ${edited ? edited + ' edited.' : ''} Rebuild the draft to see changes.</p>
       <div className="caplist">${p.scenes.map((sc, i) => html`<div key=${sc.id} className="capline">
         <span className="idx">${i + 1}</span>
@@ -2316,7 +2358,7 @@ function CompileScreen({ p, s }) {
   const checks = [
     [p.scenes.length + ' scenes with images', true], [anim ? anim + ' animated, ' + (p.scenes.length - anim) + ' zoom and pan' : 'All scenes zoom and pan', true],
     [(p.video_type === 'character' ? 'Dialogue' : 'Narration') + ' audio, ' + fmtT(scriptSecs(p)), p.script.lines.every(l => l.audio_status === 'ready')],
-    [p.audio.caption_style === 'none' ? 'No captions' : 'Captions: ' + CAPTIONS.find(c => c.id === p.audio.caption_style).name + (p.scenes.some(sc => sc.caption_text != null) ? ', with your edits' : ''), p.audio.caption_style !== 'none'],
+    [p.audio.caption_style === 'none' ? 'No captions' : 'Captions: ' + capById(p.audio.caption_style).name + (p.scenes.some(sc => sc.caption_text != null) ? ', with your edits' : ''), p.audio.caption_style !== 'none'],
     ['Each image stays on screen exactly as long as its sentences are spoken', true],
     [p.audio.music_path === 'none' ? 'No background music' : 'Music: ' + MUSIC.find(m => m.id === p.audio.music_path).name + (p.audio.duck ? ', ducked under voice' : ''), p.audio.music_path !== 'none'],
     [p.format.aspect_ratio + ' at 1080p, MP4', true],
@@ -2543,7 +2585,7 @@ function TemplatesView({ s }) {
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Channel looks</h2><span className="note">Save one from the Export step after a video you like</span></div>
       <div className="list">${s.templates.map(t => html`<div key=${t.id} className="lrow">
         <div style=${{ width: 64, flex: 'none' }}><div className="thumb" style=${{ aspectRatio: '1' }}>${styleImg(styleById(t.style), 1) ? html`<img src=${styleImg(styleById(t.style), 1)} alt="" style=${{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />` : html`<${Art} seed=${hashSeed(t.style)} styleId=${t.style} />`}</div></div>
-        <div className="grow" style=${{ minWidth: 0 }}><strong>${t.name}</strong><div className="note">${styleById(t.style).name} · voice ${voiceById(t.voice_id).name} · ${CAPTIONS.find(c => c.id === t.caption_style).name} captions · ${MUSIC.find(m => m.id === t.music).name} · ${t.aspect}</div><div className="note">Tone: ${t.tone}. Pacing: ${t.pacing}.</div></div>
+        <div className="grow" style=${{ minWidth: 0 }}><strong>${t.name}</strong><div className="note">${styleById(t.style).name} · voice ${voiceById(t.voice_id).name} · ${capById(t.caption_style).name} captions · ${MUSIC.find(m => m.id === t.music).name} · ${t.aspect}</div><div className="note">Tone: ${t.tone}. Pacing: ${t.pacing}.</div></div>
         <button type="button" className="btn" disabled=${locked} title=${locked ? 'Reopen the Visual style step to apply a channel look' : ''} onClick=${() => { applyTemplate(p.id, t); toast('Applied to “' + p.title + '”.'); }}>Apply to current project</button>
       </div>`)}</div>
     </section>

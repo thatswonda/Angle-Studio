@@ -77,7 +77,7 @@ The blueprint uses the Starter plan (always on, about $7 a month). On the free p
 | Story edits | The writer | "Add an idea" rewrites the story with your idea and keeps the length; Undo restores the previous version |
 | Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from |
 | Channel ideas | The writer + Nano Banana | Optional, on Export: reads the story type and visual style and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
-| Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional and editable per scene; a .srt captions file is saved with every render |
+| Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional (On/Off on the Format and Compile steps), come in 9 styles (Bold pop, One word, Karaoke, Highlight box, Comic, Neon glow, Typewriter, Clean bar, Minimal) and are editable per scene; a .srt captions file is saved with every render |
 | Animated clips | Not yet | The Gemini key has no Veo models, so scenes use zoom and pan |
 | Music | Not yet | Narration only |
 
