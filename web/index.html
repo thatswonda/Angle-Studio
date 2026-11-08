@@ -1386,7 +1386,7 @@ const api = {
   async channelKit(pid) {
     const p0 = STATE.projects[pid]; const wr = modelOf(p0, 'writer'); const st = styleById(p0.style);
     const a = p0.angles.find(x => x.id === p0.selected_angle_ids[0]) || p0.angles[0] || {};
-    updateP(pid, p => { p.channels = { loading: true }; });
+    updateP(pid, p => { p.channels = { ...(p.channels && p.channels.list ? p.channels : {}), loading: true, error: null }; });
     try {
       let r;
       if (LIVE) {
@@ -1402,8 +1402,8 @@ const api = {
             { name: 'The ' + T + ' Diaries', handle: '@' + T.replace(/\W/g, '') + 'Diaries', tagline: 'Real ' + topic + ' moments, one story at a time.', about: 'Story-first videos about ' + topic + ': the wins, the mistakes and the lessons. Told in ' + look + ' visuals, new episodes every Friday.', niche: topic + ' stories', avatar: 'a friendly character holding a ' + topic + ' item', banner: 'a row of small story scenes about ' + topic },
             { name: 'Tiny ' + T + ' Lab', handle: '@Tiny' + T.replace(/\W/g, '') + 'Lab', tagline: 'We test ' + topic + ' ideas so you don\u2019t have to.', about: 'Experiments, myths and quick fixes about ' + topic + '. Each video tries one idea and shows the result. Made in ' + look + ' style. Subscribe for a new test every week.', niche: topic + ' experiments', avatar: 'a small lab flask with a ' + topic + ' item inside', banner: 'a workbench with ' + topic + ' experiments on both sides' }] };
       }
-      updateP(pid, p => { p.channels = { story_type: r.story_type, visual_type: r.visual_type, list: r.channels.map(c => ({ ...c, avatar_img: null, banner_img: null })), sel: 0 }; addCost(p, r.cost || 0); });
-    } catch (e) { updateP(pid, p => { p.channels = { error: e.message }; }); toast(e.message); }
+      updateP(pid, p => { p.channels = { story_type: r.story_type, visual_type: r.visual_type, list: r.channels.map(c => ({ ...c, avatar_img: null, banner_img: null })), sel: 0, used_idea: (p0.channel_idea || '').trim() }; addCost(p, r.cost || 0); });
+    } catch (e) { updateP(pid, p => { p.channels = { ...(p.channels && p.channels.list ? p.channels : {}), loading: false, error: e.message }; }); toast(e.message); }
   },
   async channelArt(pid, i, kind) {
     const p0 = STATE.projects[pid]; const c = p0.channels.list[i]; const st = projStyle(p0); const key = kind + '_img';
@@ -2750,22 +2750,22 @@ function ChannelArt({ p, c, i, kind }) {
   </div>`;
 }
 function ChannelKit({ p }) {
-  const ch = p.channels; const st = styleById(p.style);
-  if (!ch || ch.error) return html`<details className="panel chkit">
-    <summary><strong>Start a channel for videos like this</strong> <span className="note">optional</span></summary>
-    <div className="stack" style=${{ marginTop: 10 }}>
-      <p className="note">${p.source && !p.source.own ? 'Built from the video you analyzed (\u201c' + p.source.title + '\u201d), your story and the ' + st.name + ' look.' : 'Built from your story and the ' + st.name + ' look.'} You get 3 channels with a name, handle, bio and about text to copy. Profile photos and banners are made only when you ask.</p>
-      <label className="field" htmlFor="channel-idea">The kind of channel you want (optional)<textarea id="channel-idea" className="textarea" rows="2" placeholder="e.g. a faceless storytelling channel for Nigerian folk tales, 3 videos a week, for teens" value=${p.channel_idea || ''} onChange=${e => updateP(p.id, q => { q.channel_idea = e.target.value; })}></textarea></label>
-      ${ch && ch.error ? html`<div className="warnbox">${ch.error}</div>` : null}
-      <div><${CostGate} p=${p} label="Suggest 3 channels" cost=${modelOf(p, 'writer').perVideo * 0.1} rows=${[[modelOf(p, 'writer').name, 'story and style analysis, 3 channel ideas'], ['Profile photo and banner', 'made one at a time, only the ones you want']]} onGo=${() => api.channelKit(p.id)} /></div>
-    </div>
-  </details>`;
-  if (ch.loading) return html`<section className="panel stack"><h2>Channel ideas</h2><div className="row note"><span className="spinner"></span> Reading your story type and visual style</div></section>`;
+  const ch = p.channels; const st = styleById(p.style); const has = ch && ch.list && ch.list.length;
+  const ideaBox = html`<div className="stack" style=${{ gap: 8 }}>
+    <label className="field" htmlFor="channel-idea"><strong>The kind of channel you want</strong> <span className="note">optional: type your own idea and the 3 suggestions follow it</span>
+      <textarea id="channel-idea" className="textarea" rows="2" placeholder="e.g. a faceless storytelling channel for Nigerian folk tales, 3 videos a week, for teens" value=${p.channel_idea || ''} onChange=${e => updateP(p.id, q => { q.channel_idea = e.target.value; })}></textarea></label>
+    ${ch && ch.error ? html`<div className="warnbox">${ch.error}</div>` : null}
+    <div>${ch && ch.loading ? html`<span className="row note"><span className="spinner"></span> Reading the video, your story and your idea</span>` : html`<${CostGate} p=${p} label=${has ? 'Suggest 3 new channels' + ((p.channel_idea || '').trim() ? ' with my idea' : '') : 'Suggest 3 channels'} cost=${modelOf(p, 'writer').perVideo * 0.1} rows=${[[modelOf(p, 'writer').name, 'the analyzed video, your story, the look and your idea'], ['Profile photo and banner', 'made one at a time, only the ones you want']]} onGo=${() => api.channelKit(p.id)} />`}</div>
+  </div>`;
+  const head = html`<div className="panel-h" style=${{ marginBottom: 0 }}><h2>Start a channel for videos like this</h2><span className="note">optional</span></div>
+    <p className="note">${p.source && !p.source.own ? 'Built from the video you analyzed (\u201c' + p.source.title + '\u201d), your story and the ' + st.name + ' look.' : 'Built from your story and the ' + st.name + ' look.'} You get 3 channels with a name, handle, bio and about text to copy. Profile photos and banners are made only when you ask.</p>`;
+  if (!has) return html`<section className="panel stack chkit">${head}${ideaBox}</section>`;
   const c = ch.list[ch.sel] || ch.list[0];
   const all = 'Name: ' + c.name + '\nHandle: ' + c.handle + '\nBio: ' + c.tagline + '\n\nAbout:\n' + c.about;
-  return html`<section className="panel stack">
-    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Channel ideas</h2><button type="button" className="btn sm ghost" onClick=${() => updateP(p.id, q => { q.channels = null; })}><${Icon} n="redo" />New ideas or change my idea</button></div>
-    ${p.channel_idea ? html`<p className="note">Your idea: \u201c${p.channel_idea}\u201d</p>` : null}
+  return html`<section className="panel stack chkit">
+    ${head}
+    ${ideaBox}
+    ${ch.used_idea ? html`<p className="note">These follow your idea: \u201c${ch.used_idea}\u201d</p>` : null}
     <div className="note"><strong>Story type:</strong> ${ch.story_type}<br /><strong>Visual type:</strong> ${ch.visual_type}</div>
     <div className="chcards">${ch.list.map((x, i) => html`<button key=${i} type="button" className="chcard" aria-pressed=${ch.sel === i} onClick=${() => updateP(p.id, q => { q.channels.sel = i; })}>
       <span className="radio"></span><span style=${{ minWidth: 0 }}><strong>${x.name}</strong><span className="note mono" style=${{ display: 'block' }}>${x.handle}</span><span className="note" style=${{ display: 'block' }}>${x.tagline}</span><span className="chip" style=${{ marginTop: 4 }}>${x.niche}</span></span>
