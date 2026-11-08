@@ -880,7 +880,7 @@ function STATE_DEFAULT_MODELS() { try { return STATE.settings.defaults; } catch 
 function seed() {
   const s = {
     version: 1, view: 'flow', projects: {}, currentId: null, ideaBank: [], cache: {}, jobs: [], toasts: [], intro: true,
-    settings: { costLimit: 10, imageCap: 60, analyst: 'gemini-flash', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, openai: true, anthropic: false, higgsfield: false, elevenlabs: false } },
+    settings: { costLimit: 10, analyst: 'gemini-flash', defaults: { ...DEFAULT_MODELS }, keys: { google: true, youtube: true, openai: true, anthropic: false, higgsfield: false, elevenlabs: false } },
     templates: [{ id: 'tpl-look', name: 'My channel look', style: 'botanical', voice_id: 'v-aoede', caption_style: 'bold', music: 'm-soil', aspect: '9:16', tone: 'Friendly, practical, no filler', pacing: 'A new visual every 3 to 4 seconds' }],
   };
   const p = newProject('Balcony garden follow-up');
@@ -2086,7 +2086,6 @@ function SceneImage({ p, sc, small }) {
 }
 function PaceOptions({ p, locked, current, onChoose }) {
   const im = modelOf(p, 'image'); const pc = current || p.format.pacing || DEFAULT_PACING;
-  const cap = (STATE.settings && STATE.settings.imageCap) || 60;
   const opts = ['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: pc.compact_every || 3 }; const plan = scenePlan(p, cfg); return { m, cfg, plan, n: plan.length, every: paceEvery(cfg), st: planStats(p, cfg) }; });
   return html`<${Fragment}>
     <div className="paces">${opts.map(o => html`<button key=${o.m} type="button" className="pace" aria-pressed=${pc.mode === o.m} disabled=${locked} onClick=${() => onChoose(o.cfg)}>
@@ -2095,7 +2094,6 @@ function PaceOptions({ p, locked, current, onChoose }) {
       <span className="strip" aria-hidden="true">${o.plan.map((sp, k) => html`<i key=${k} style=${{ flex: planSecs(p, sp) }} />`)}</span>
       <span className="note">${PACING[o.m].note}</span>
       <span className="mono note">${o.st.keep ? o.st.keep + ' kept \u00b7 ' : ''}est. ${fmt$(o.st.need * im.cost)} with ${im.name}</span>
-      ${o.st.images > cap ? html`<span className="chip" style=${{ color: 'var(--warn)' }}>Over your ${cap}-image limit</span>` : null}
     </button>`)}</div>
     ${pc.mode === 'compact' ? html`<div className="row"><span className="note">Compact: one image every</span><${Seg} label="Compact interval" value=${pc.compact_every || 3} onChange=${v => onChoose({ mode: 'compact', compact_every: v })} options=${[{ value: 2, label: '2 s' }, { value: 3, label: '3 s' }]} /></div>` : null}
   </${Fragment}>`;
@@ -2130,13 +2128,12 @@ function ScenesScreen({ p, s }) {
   const todo = p.scenes.filter(sc => !sc.reuse_of && (sc.image_status === 'pending' || sc.image_status === 'failed'));
   const busy = p.scenes.some(sc => sc.image_status === 'generating');
   const ownImages = p.scenes.filter(sc => !sc.reuse_of).length;
-  const cap = s.settings.imageCap || 60; const overCap = ownImages > cap;
   const pendStats = pending ? planStats(p, pending) : null;
   const setS = (id, fn) => !locked && updateP(p.id, q => { const sc = q.scenes.find(x => x.id === id); fn(sc, q); });
   const merge = i => !locked && updateP(p.id, q => { const a = q.scenes[i], b = q.scenes[i + 1]; if (!b) return; a.line_ids = a.line_ids.concat(b.line_ids); a.description = a.description + '; ' + b.description; a.character_ids = Array.from(new Set(a.character_ids.concat(b.character_ids))); q.scenes.splice(i + 1, 1); });
   const split = i => !locked && updateP(p.id, q => { const a = q.scenes[i]; if (a.line_ids.length < 2) return; const b = clone(a); b.id = uid('sc'); const half = Math.ceil(a.line_ids.length / 2); b.line_ids = a.line_ids.slice(half); a.line_ids = a.line_ids.slice(0, half); b.image_versions = []; b.image_index = -1; b.image_status = 'pending'; b.clip_versions = []; b.clip_index = -1; b.clip_status = 'pending'; q.scenes.splice(i + 1, 0, b); });
   const upload = async (id, file) => { if (!file) return; try { const data = await readImage(file); setS(id, sc => { sc.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); sc.image_index = sc.image_versions.length - 1; sc.image_status = 'ready'; }); toast('Your image was placed in the scene.'); } catch (e) { toast('That file could not be read as an image. Try a JPG or PNG.'); } };
-  const gate = overCap && !locked ? html`<span className="warnbox">This plan needs ${ownImages} images, more than your limit of ${cap} per video. Choose Simple pacing, turn on image reuse, or raise the limit in Settings.</span>` : todo.length && !locked && !busy ? html`<${CostGate} p=${p} label=${(todo.length === p.scenes.length ? 'Generate all ' : 'Generate ') + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Style', styleById(p.style).name], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => { setShowPace(false); api.generateImages(p.id, todo.map(sc => sc.id)); }} />` : null;
+  const gate = todo.length && !locked && !busy ? html`<${CostGate} p=${p} label=${(todo.length === p.scenes.length ? 'Generate all ' : 'Generate ') + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Style', styleById(p.style).name], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => { setShowPace(false); api.generateImages(p.id, todo.map(sc => sc.id)); }} />` : null;
   return html`<${Fragment}>
     <${StepHead} title="Scenes and images" sub=${'The story is split into scenes at the pacing you choose. Check the scenes, then generate every image at once. Each card shows the scene on the left and its image on the right, made with ' + im.name + ' in the ' + styleById(p.style).name.toLowerCase() + ' style.'}>
       <span className="note mono">${p.scenes.length} scenes · ${ownImages} images · ${fmtT(total)} · ${ready}/${p.scenes.length} ready</span>
@@ -2192,7 +2189,7 @@ function ScenesScreen({ p, s }) {
         </div>` : null}
       </article>`; })}</div>
     ${p.scenes.length > 3 && gate ? html`<div className="row">${gate}</div>` : null}
-    <${ApproveBar} p=${p} step="scenes" ready=${p.scenes.length > 0 && ready === p.scenes.length && !overCap} hint=${busy ? 'Images are still generating.' : 'Generate every image to continue.'} label="Approve scenes and images" onApprove=${() => approve(p.id, 'scenes')} />
+    <${ApproveBar} p=${p} step="scenes" ready=${p.scenes.length > 0 && ready === p.scenes.length} hint=${busy ? 'Images are still generating.' : 'Generate every image to continue.'} label="Approve scenes and images" onApprove=${() => approve(p.id, 'scenes')} />
   </${Fragment}>`;
 }
 
@@ -2568,9 +2565,6 @@ function SettingsView({ s }) {
       <div className="fmt-grid">
         <label className="field">Video analysis (watches the video)<select id="analyst" className="select" value=${s.settings.analyst} onChange=${e => update(st => { st.settings.analyst = e.target.value; })}>${ANALYSTS.map(a => html`<option key=${a.id} value=${a.id}>${a.name} \u00b7 ${a.limits}</option>`)}</select></label>
         ${['writer', 'voice', 'image', 'video'].map(kind => html`<label key=${kind} className="field">${KIND_LABEL[kind]} model<select className="select" value=${s.settings.defaults[kind]} onChange=${e => update(st => { st.settings.defaults[kind] = e.target.value; })}>${MODELS[kind].filter(m => s.settings.keys[m.provider]).map(m => html`<option key=${m.id} value=${m.id}>${m.name}</option>`)}</select></label>`)}</div>
-    </section>
-    <section className="panel stack"><h2>Most images per video</h2>
-      <label className="field" htmlFor="image-cap">The Scenes page will not generate more scene images than this for one video<input id="image-cap" className="input mono" type="number" min="5" max="400" style=${{ width: 100 }} value=${s.settings.imageCap || 60} onChange=${e => update(st => { st.settings.imageCap = Math.max(5, Math.min(400, +e.target.value || 60)); })} /></label>
     </section>
     <section className="panel stack"><h2>Cost limit</h2>
       <label className="field" htmlFor="limit">Ask before a project spends more than<div className="row"><span className="mono">$</span><input id="limit" className="input mono" type="number" min="0.1" step="0.1" style=${{ width: 100 }} value=${s.settings.costLimit} onChange=${e => update(st => { st.settings.costLimit = Math.max(0.1, +e.target.value || 1); })} /></div></label>

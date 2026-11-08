@@ -121,7 +121,6 @@ Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). Th
 - **Re-planning keeps images:** changing pacing or the story keeps the image of every scene whose sentences did not change.
 - **Image reuse:** one image covers two scenes, the second with a different zoom and framing. Half the images.
 - **Image quality switch** on the Scenes page: Lite (about $0.03), Standard (about $0.07) or Pro (about $0.14).
-- **Image limit per video** (Settings, default 60), and long videos start at Moderate pacing.
 - **Thumbnails on request:** ideas are written first; each thumbnail is drawn only when you ask.
 - **Analysis cache:** analyzing the same link with the same models again costs nothing, and broken JSON is repaired with a small text-only call instead of re-watching the video.
 
