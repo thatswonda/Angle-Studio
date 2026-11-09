@@ -10,13 +10,13 @@ import httpx
 
 from .google import ProviderError
 
-# id -> (fal endpoint, extra inputs, price per image). fal bills by megapixel, rounded up,
-# so every size below stays just under 1 megapixel and costs one unit.
+# id -> (fal endpoint, extra inputs, price per image). fal bills per megapixel, rounded up. Every size below is
+# just under 2 megapixels (2 units), so a frame is sharp at 1080p instead of being stretched up from ~1 megapixel.
 MODELS = {
-    "flux-schnell": ("fal-ai/flux/schnell", {"num_inference_steps": 4}, 0.003),
-    "flux-dev": ("fal-ai/flux/dev", {"num_inference_steps": 28, "guidance_scale": 3.5}, 0.025),
+    "flux-schnell": ("fal-ai/flux/schnell", {"num_inference_steps": 4}, 0.006),
+    "flux-dev": ("fal-ai/flux/dev", {"num_inference_steps": 28, "guidance_scale": 3.5}, 0.05),
 }
-SIZES = {"9:16": (736, 1312), "16:9": (1312, 736), "1:1": (992, 992), "4:5": (880, 1104)}
+SIZES = {"9:16": (1024, 1824), "16:9": (1824, 1024), "1:1": (1360, 1360), "4:5": (1216, 1520)}
 PRESETS = {"9:16": "portrait_16_9", "16:9": "landscape_16_9", "1:1": "square_hd", "4:5": "portrait_4_3"}
 
 

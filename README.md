@@ -128,7 +128,7 @@ Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). Th
 
 ## Template example images
 
-The 80 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
+The 80 images in `web/templates` were made once with Nano Banana 2 (a template can list its own sample scenes in `subjects`). To remake missing ones after editing `web/templates/templates.json`:
 
 ```bash
 cd server && python scripts/make_template_examples.py

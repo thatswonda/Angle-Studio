@@ -44,7 +44,8 @@ async def one(style: dict, n: int, subject: str, sem: asyncio.Semaphore) -> str:
 
 async def main() -> None:
     sem = asyncio.Semaphore(4)
-    jobs = [one(st, n + 1, subj, sem) for st in DATA["styles"] for n, subj in enumerate(DATA["subjects"])]
+    # a template can show its own sample scenes (for example ancient-world templates), otherwise the shared four
+    jobs = [one(st, n + 1, subj, sem) for st in DATA["styles"] for n, subj in enumerate(st.get("subjects") or DATA["subjects"])]
     for line in await asyncio.gather(*jobs):
         print(line)
 

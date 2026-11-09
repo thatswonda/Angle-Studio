@@ -278,33 +278,45 @@
     },
     {
       "id": "cartoonexplain",
-      "name": "Cartoon explainer",
+      "name": "Ancient cartoon explainer",
       "kind": "comic",
-      "mood": "Bold, funny, easy to follow",
-      "best": "History, what-if stories, explainers, fun facts",
+      "mood": "Bold, funny, dramatic",
+      "best": "Ancient history, what-if stories, myths, fun facts",
       "palette": [
         "#2B2A28",
         "#E4B15E",
         "#2E9CC2",
         "#F2E3C2"
       ],
-      "prefix": "bold cartoon explainer illustration in the style of popular history and what-if animation channels, clean thick black ink outlines, flat bright colors with simple cel shading, expressive cartoon characters with big readable emotions and exaggerated reactions, wide compositions with deep perspective, warm sunny daylight, crisp digital comic finish",
-      "avoid": "photorealism, 3D render, muddy colors, speech bubbles, words or letters, copyrighted characters"
+      "prefix": "bold cartoon explainer illustration of the ancient world, like popular history and what-if animation channels: ancient Egyptian, Roman, Greek or Mesopotamian characters in period clothing, clean thick black ink outlines, flat bright colors with simple cel shading, slightly cartoonish faces with big readable emotions and exaggerated reactions, epic wide landscapes with deep perspective, warm sunny daylight, crisp digital comic finish",
+      "avoid": "photorealism, 3D render, muddy colors, speech bubbles, words or letters, copyrighted characters",
+      "subjects": [
+        "a pharaoh standing on a rocky desert cliff, staring in shock at something enormous in the distance",
+        "workers pulling a huge stone block on a wooden sledge toward pyramids under construction",
+        "a busy ancient marketplace with merchants selling spices, pottery and colorful fabric",
+        "an ancient Roman family sharing dinner together in their courtyard home"
+      ]
     },
     {
       "id": "historypaint",
-      "name": "Historical illustration",
+      "name": "Ancient life illustration",
       "kind": "soft",
-      "mood": "Grand, detailed, educational",
-      "best": "History, ancient civilizations, documentaries, how things were made",
+      "mood": "Grand, detailed, warm",
+      "best": "Ancient civilizations, daily life in history, how things were built",
       "palette": [
         "#5A4632",
         "#C9A36B",
         "#EADCC3",
         "#8FA6B2"
       ],
-      "prefix": "detailed historical illustration in a warm painterly digital style, semi-realistic people with accurate period clothing and tools, wide busy scenes full of figures at work, soft hazy sunlight with long shadows, sandy earth-tone palette, fine textures like an illustrated history book for museums",
-      "avoid": "cartoon outlines, modern objects, glossy 3D render, photo look, words, labels or letters"
+      "prefix": "detailed digital illustration of daily life in an ancient civilization, wide busy scenes full of people working, building, trading and living, slightly stylized cartoon-like people with simple friendly faces and period-accurate clothing and tools, clean soft linework with painterly shading, warm hazy sunlight with long shadows, sandy earth-tone palette, like an illustrated children's history book",
+      "avoid": "modern objects, photorealistic photo look, glossy 3D render, harsh black outlines, words, labels or letters, signatures",
+      "subjects": [
+        "a pharaoh standing on a rocky desert cliff, staring in shock at something enormous in the distance",
+        "workers pulling a huge stone block on a wooden sledge toward pyramids under construction",
+        "a busy ancient marketplace with merchants selling spices, pottery and colorful fabric",
+        "an ancient Roman family sharing dinner together in their courtyard home"
+      ]
     }
   ]
 }

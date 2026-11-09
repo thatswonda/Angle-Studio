@@ -331,9 +331,9 @@ def test_flux_on_fal(monkeypatch, tmp_path):
     prompt = "clay look. Scene: a fox. Avoid: photorealism, text. No words, captions, watermarks or logos in the image."
     path, cost = asyncio.run(fal.draw(prompt, "9:16", "flux-dev", tmp_path / "img"))
     url, auth, body = sent[0]
-    assert url == "https://fal.run/fal-ai/flux/dev" and auth == "Key k123" and path.read_bytes() == jpeg and cost == 0.025
+    assert url == "https://fal.run/fal-ai/flux/dev" and auth == "Key k123" and path.read_bytes() == jpeg and cost == 0.05
     assert "Avoid" not in body["prompt"] and "photorealism" not in body["prompt"]  # FLUX would draw what an avoid list names
-    assert body["image_size"]["width"] * body["image_size"]["height"] <= 1_000_000 and body["sync_mode"]
+    assert 1_800_000 < body["image_size"]["width"] * body["image_size"]["height"] <= 2_000_000 and body["sync_mode"]  # sharp at 1080p, billed as 2 MP
     monkeypatch.setattr(fal.httpx, "AsyncClient", lambda **k: real(transport=httpx.MockTransport(lambda r: httpx.Response(401, json={"detail": "no"})), **k))
     try:
         asyncio.run(fal.draw(prompt, "1:1", "flux-schnell", tmp_path / "img2"))
