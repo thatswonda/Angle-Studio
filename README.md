@@ -59,7 +59,7 @@ Vercel cannot run this app: it needs a server that stays on, FFmpeg, background 
 
 1. Sign in at render.com with GitHub and allow access to this repository.
 2. New > Blueprint, pick this repository. Render reads `render.yaml`.
-3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `YOUTUBE_API_KEY`.
+3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `YOUTUBE_API_KEY`, and `FAL_KEY` for the FLUX image models.
 4. Deploy. The first build takes a few minutes. Open the `onrender.com` link, type any user name and your `APP_PASSWORD`.
 
 The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB persistent disk (about $1.25 a month) mounted at `/app/server/data`. Voice clips, images, videos and the analysis cache live there; without the disk every redeploy deletes them. If files are lost anyway, the Compile step lists them and offers to make only those again. Projects (story, scenes, settings) are saved in the browser and backed up to the server's disk, so a cleared browser or another device gets them back. Renders are kept under 300 MB of memory and run FFmpeg at low priority, so they fit Render's Starter plan (half a CPU) without starving its health checks. Each scene is encoded once, with its captions; finished scenes are kept on disk, so an interrupted render continues where it stopped (the app retries on its own) and unchanged scenes are reused next time. Final renders come in 720p or 1080p, or you can continue with the 480p draft.
@@ -73,7 +73,7 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
 | Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
 | Voice | Gemini TTS | 30 voices (filter higher or lower, search). Tune tone, pace, energy, accent and notes (director's-notes prompt, never read aloud), plus exact speed and pitch applied with FFmpeg. Edit any sentence's words or how it is said and regenerate just that one; sentences made with older settings are flagged |
-| Images | Nano Banana 2 / Pro / 2 Lite | 18 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene. Needs Gemini billing |
+| Images | Nano Banana 2 / Pro / 2 Lite, or FLUX schnell / dev on fal.ai (`FAL_KEY`) | 20 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene (Nano Banana only; FLUX uses the template recipe alone, and thumbnails and banners stay on Nano Banana because they print words). Needs Gemini billing or fal credit |
 | Your idea on a template | - | Add your own idea to any visual template (added to every image prompt) for one video, or save it as your own template |
 | Story edits | The writer | "Add an idea" rewrites the story with your idea and keeps the length; Undo restores the previous version |
 | Publish kit | The writer + Nano Banana | After the video: 4 titles, 3 post captions with hashtags, 3 video descriptions and 3 thumbnails with bold text, to choose from, matched to the analyzed video's keywords, title style and thumbnail look so the two get recommended together |
@@ -98,7 +98,8 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | Per-scene clips, motion prompts, takes, audio-matched length (ANM-1..6) | Animate step (skipped for static videos) |
 | Draft preview, final render, polish pass (ASM-1..6) | Compile step |
 | Title, description, hashtags, thumbnail ideas, AI disclosure (ASM-5) | Export step |
-| Top-bar model selectors, only configured providers, cost and limits (MDL-1..5) | Top bar, Settings |
+| Top-bar model selectors (video analysis, writing, voice, image, video), only configured providers, cost and limits (MDL-1..5) | Top bar, Settings |
+| Every rendered video kept with its project, with play and download | Projects page |
 | Checkpoints, resume after closing, job queue, cost limit (PRJ-1..3) | Everywhere |
 
 ## Switching the writer from ChatGPT to Claude
@@ -127,7 +128,7 @@ Scene images are about 90% of the cost (about $0.07 each with Nano Banana 2). Th
 
 ## Template example images
 
-The 72 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
+The 80 images in `web/templates` were made once with Nano Banana 2. To remake missing ones after editing `web/templates/templates.json`:
 
 ```bash
 cd server && python scripts/make_template_examples.py

@@ -311,3 +311,32 @@ def test_old_cached_analysis_gets_new_angles_without_rewatching(monkeypatch, tmp
     j = _run_job(TestClient(app), "/api/live/ingest", {"url": url, "analyst": "gemini-flash", "writer": "gemini-flash-writer"})
     assert j["status"] == "done", j
     assert [a["title"] for a in j["result"]["angles"]] == ["N0", "N1", "N2", "N3"] and not watched  # no re-watching
+
+
+def test_flux_on_fal(monkeypatch, tmp_path):
+    import asyncio
+    import httpx
+    from app.providers import fal
+    jpeg = b"\xff\xd8\xff\xe0fakejpeg"
+    sent = []
+
+    def handler(req):
+        import json as _j
+        sent.append((str(req.url), req.headers.get("authorization"), _j.loads(req.content)))
+        return httpx.Response(200, json={"images": [{"url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()}], "has_nsfw_concepts": [False]})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(fal.httpx, "AsyncClient", lambda **k: real(transport=httpx.MockTransport(handler), **k))
+    monkeypatch.setenv("FAL_KEY", "k123")
+    prompt = "clay look. Scene: a fox. Avoid: photorealism, text. No words, captions, watermarks or logos in the image."
+    path, cost = asyncio.run(fal.draw(prompt, "9:16", "flux-dev", tmp_path / "img"))
+    url, auth, body = sent[0]
+    assert url == "https://fal.run/fal-ai/flux/dev" and auth == "Key k123" and path.read_bytes() == jpeg and cost == 0.025
+    assert "Avoid" not in body["prompt"] and "photorealism" not in body["prompt"]  # FLUX would draw what an avoid list names
+    assert body["image_size"]["width"] * body["image_size"]["height"] <= 1_000_000 and body["sync_mode"]
+    monkeypatch.setattr(fal.httpx, "AsyncClient", lambda **k: real(transport=httpx.MockTransport(lambda r: httpx.Response(401, json={"detail": "no"})), **k))
+    try:
+        asyncio.run(fal.draw(prompt, "1:1", "flux-schnell", tmp_path / "img2"))
+        raise AssertionError("expected an error")
+    except ProviderError as e:
+        assert "refused the API key" in str(e)

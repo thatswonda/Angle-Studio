@@ -18,13 +18,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from . import jobs, render, storage
-from .providers import google, youtube
+from .providers import fal, google, youtube
 from .providers.google import GeminiWriter, ProviderError
 from .providers.openai_writer import OpenAIWriter
 
 router = APIRouter(prefix="/api/live")
 MEDIA = storage.ROOT / "media"
-STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette"]
+STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette", "cartoonexplain", "historypaint"]
 # Ways to recreate what made the reference video go viral, so the new video is recommended beside it.
 # Never a sequel or "part 2": each one is a stand-alone video built on the same proven idea.
 ANGLE_TYPES = ["Fill a gap", "Same story, new look", "Same idea, new niche", "Similar storyline", "New perspective"]
@@ -85,7 +85,7 @@ def status():
     return {
         "live": True,
         "providers": {"google": has("GEMINI_API_KEY"), "youtube": has("YOUTUBE_API_KEY"), "openai": has("OPENAI_API_KEY"),
-                      "anthropic": False, "higgsfield": False, "elevenlabs": False},
+                      "fal": has("FAL_KEY"), "anthropic": False, "higgsfield": False, "elevenlabs": False},
         "video_models": False,  # this Gemini key has no Veo models; animation stays off
         "writer": os.getenv("ANGLE_STUDIO_WRITER", "gpt-5-5"),
     }
@@ -455,9 +455,12 @@ def load_ref(ref: str) -> tuple[bytes, str]:
 async def image(body: ImageBody):
     if body.aspect not in ("9:16", "16:9", "1:1", "4:5"):
         raise HTTPException(422, "Unsupported frame.")
-    refs = [load_ref(r) for r in body.refs[:4] if r]
     try:
-        path, cost = await google.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, refs)
+        if fal.is_fal(body.model):  # FLUX takes the text prompt only; style references are not used
+            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex)
+        else:
+            refs = [load_ref(r) for r in body.refs[:4] if r]
+            path, cost = await google.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, refs)
     except ProviderError as e:
         raise HTTPException(502, str(e))
     return {"url": media_url(path), "cost": cost}
