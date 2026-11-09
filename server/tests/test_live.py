@@ -366,3 +366,27 @@ def test_silence_between_sentences_is_trimmed(tmp_path):
     dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
                                 str(media / out["url"].removeprefix("/media/"))], capture_output=True, text=True).stdout)
     assert abs(dur - 2.2) < 0.1  # each image still lasts exactly as long as its own sentence
+
+
+def test_scene_visuals_carry_the_message(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    prompts = []
+
+    async def fake_write(writer_id, progress, prompt):
+        prompts.append(prompt)
+        return {"scenes": [{"n": 1, "visual": "a hand drops a coin into a glass jar", "text": "save money now please", "key": True}]}, 0.004, "Gemini Flash", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    j = _run_job(TestClient(app), "/api/live/scene-visuals", {"writer": "gemini-flash-writer", "scenes": [{"n": 1, "text": "Start saving a little every day."}],
+                                                               "style_name": "Stick figure", "idea": "every image shows one or two bold words"})
+    assert j["status"] == "done", j
+    r = j["result"]["scenes"]["1"]
+    assert r["visual"].startswith("a hand") and r["text"] == "save money now" and r["key"]  # at most 3 words
+    assert "follow it exactly): every image shows one or two bold words" in prompts[0] and "sound off" in prompts[0]
+
+
+def test_scene_visual_descriptions_never_carry_their_own_words():
+    from app.live import _no_words
+    assert _no_words("A man holds an empty wallet. Bold words **PAYDAY SPENT** float above.") == "A man holds an empty wallet."

@@ -10,6 +10,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Optional
@@ -352,6 +353,66 @@ async def media_check(body: MediaCheckBody):
         if root not in path.parents or not path.is_file():
             missing.append(ref)
     return {"missing": missing}
+
+
+# ---------- Image ideas that carry each scene's message
+
+class SceneVisualsBody(BaseModel):
+    writer: str = "gpt-5-5"
+    story: str = ""
+    scenes: list[dict]          # [{"n": 1, "text": "the narration this image sits under"}]
+    style_name: str = ""
+    idea: str = ""              # the creator's own rule for every image
+    characters: list[dict] = []
+
+
+def _no_words(visual: str) -> str:
+    """Drops any sentence of a picture description that asks for printed words: the words are added once, separately."""
+    parts = re.split(r"(?<=[.!?])\s+", visual.replace("**", ""))
+    keep = [x for x in parts if not re.search(r"\b(words?|text|caption|label|lettering|reads|written|sign saying)\b", x, re.I)]
+    return " ".join(keep or parts).strip()
+
+
+@router.post("/scene-visuals")
+async def scene_visuals(body: SceneVisualsBody):
+    """For each scene: a picture that makes its narration obvious at a glance, plus 1-3 words that could be printed on it."""
+    scenes = [s for s in body.scenes if str(s.get("text", "")).strip()][:400]
+    if not scenes:
+        raise HTTPException(422, "No scenes to picture.")
+
+    async def work(progress):
+        out, cost, wn, warn = {}, 0.0, WRITER_NAMES.get(body.writer, body.writer), None
+        cast = "; ".join(f"{c.get('name')}: {c.get('description')}" for c in body.characters if c.get("name"))
+        for k in range(0, len(scenes), 40):  # 40 scenes per call keeps each answer short and reliable
+            batch = scenes[k:k + 40]
+            progress(f"{wn} is picturing scenes {k + 1} to {k + len(batch)} of {len(scenes)}")
+            data, c, wn, w = await write_json(body.writer, progress, (
+                (f"The whole story, for context:\n---\n{body.story[:6000]}\n---\n" if body.story else "")
+                + f"Visual style of every image: {body.style_name}.\n"
+                + (f"Characters (describe them the same way every time they appear): {cast}\n" if cast else "")
+                + (f"The creator's rule for every image (follow it exactly): {body.idea}\n" if body.idea.strip() else "")
+                + "Each scene below is the narration heard while one image is on screen. For each, describe ONE image that "
+                "makes the meaning of that narration obvious at a glance, even with the sound off and no text: who is in it, "
+                "what they are doing, where, the key object or symbol, and the emotion on their faces. Turn abstract ideas "
+                "into a concrete visual metaphor (for example 'saving money' becomes a hand dropping a coin into a jar). One clear "
+                "focal point, no collage, no split screen, never app icons, buttons or logos. Do not put any words, signs, labels "
+                "or captions in the visual itself. Separately, give 1 to 3 words that sum up "
+                "the scene's message, and mark about one scene in three as key (where printed words would help most).\n"
+                f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600]} for s in batch])}\n"
+                'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "1-3 words", "key": true or false}]}'))
+            cost += c
+            warn = warn or w
+            if isinstance(data, list):
+                data = {"scenes": data}
+            for item in data.get("scenes") or []:
+                if isinstance(item, dict) and item.get("visual"):
+                    out[str(item.get("n"))] = {"visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).split()[:3])[:40],
+                                               "key": bool(item.get("key"))}
+        if not out:
+            raise ProviderError(f"{wn} returned no image ideas. Try again.")
+        return {"scenes": out, "written_by": wn, "cost": round(cost, 4), "warning": warn}
+
+    return _job("Picturing the scenes", work)
 
 
 class VisualsBody(BaseModel):

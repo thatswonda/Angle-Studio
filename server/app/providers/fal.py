@@ -26,8 +26,9 @@ def is_fal(model_id: str) -> bool:
 
 def flux_prompt(prompt: str) -> str:
     """FLUX has no 'avoid' input and tends to draw what an avoid list names, so that clause is dropped."""
-    p = re.sub(r"\. Avoid: .*?(?=\. No words|$)", "", prompt, flags=re.S)
-    return p.replace("No words, captions, watermarks or logos in the image.", "Clean image with no text, captions, signatures or watermarks.")
+    p = re.sub(r"[.]? Avoid: .*?(?=\. No (?:words|watermarks)|$)", "", prompt, flags=re.S)
+    p = p.replace("No words, captions, watermarks or logos in the image.", "Clean image with no text, captions, signatures or watermarks.")
+    return p.replace("No watermarks, logos or signatures.", "No watermarks or signatures.")
 
 
 def _error(r: httpx.Response) -> str:
