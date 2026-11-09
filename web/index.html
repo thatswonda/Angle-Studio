@@ -268,6 +268,13 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 /* Voice */
 .voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; max-height: 380px; overflow: auto; padding: 2px; }
 .tune summary { cursor: pointer; }
+.frame.zoomable { cursor: zoom-in; }
+.zoom-back { position: fixed; inset: 0; background: rgba(5,7,10,0.82); z-index: 80; display: grid; place-items: center; padding: 16px; }
+.zoom-box { display: grid; grid-template-columns: auto minmax(0, auto) auto minmax(220px, 300px); gap: 12px; align-items: center; background: var(--surface); border-radius: var(--r); padding: 14px; max-width: 100%; max-height: 100%; }
+.zoom-img { height: min(82vh, 900px); aspect-ratio: 9 / 16; } .zoom-img.r16x9 { height: auto; width: min(62vw, 1100px); aspect-ratio: 16 / 9; } .zoom-img.r1x1 { aspect-ratio: 1; } .zoom-img.r4x5 { aspect-ratio: 4 / 5; }
+.zoom-img .frame { width: 100%; height: 100%; }
+.zoom-nav { font-size: 28px; line-height: 1; padding: 6px 10px; }
+@media (max-width: 860px) { .zoom-box { grid-template-columns: auto minmax(0, 1fr) auto; overflow: auto; } .zoom-side { grid-column: 1 / -1; } .zoom-img { height: 60vh; } .zoom-img.r16x9 { width: 100%; height: auto; } }
 .vlib { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .vcard { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: var(--r); padding: 8px; background: var(--surface); }
 .vthumb { position: relative; width: 100%; max-height: 300px; aspect-ratio: 9 / 16; background: var(--frame); border-radius: var(--r-sm); overflow: hidden; margin: 0 auto; }
@@ -2387,15 +2394,44 @@ function readImage(file) {
     fr.onerror = rej; fr.readAsDataURL(file);
   });
 }
-function SceneImage({ p, sc, small }) {
+function SceneImage({ p, sc, small, onZoom }) {
   const v = sceneVersion(p, sc); const status = sceneStatus(p, sc);
   const h = p.format.aspect_ratio === '16:9';
-  return html`<div className=${'frame' + frameCls(p)}>
+  const zoom = onZoom && v && status !== 'generating';
+  return html`<div className=${'frame' + frameCls(p) + (zoom ? ' zoomable' : '')} onClick=${zoom ? onZoom : null} title=${zoom ? 'Click to see it larger' : null} role=${zoom ? 'button' : null} tabIndex=${zoom ? 0 : null} onKeyDown=${zoom ? e => { if (e.key === 'Enter') onZoom(); } : null}>
     ${v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload || v.url} title=${sc.description} />` : null}
     ${sc.reuse_of && v ? html`<span className="badge">Reused</span>` : null}
     ${status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>${small ? '' : 'Generating'}</div>` : null}
     ${status === 'failed' ? html`<div className="overlay"><span>Failed</span><button type="button" className="btn sm" aria-label="Retry" title="Retry" onClick=${() => api.generateImage(p.id, imageScene(p, sc).id, true)}>${small ? html`<${Icon} n="redo" />` : 'Retry'}</button></div>` : null}
     ${status === 'pending' && !v ? html`<div className="overlay">${small ? 'No image' : 'Not generated'}</div>` : null}
+  </div>`;
+}
+// A scene image shown large, with arrows to move through the scenes and Redo / Upload right there.
+function SceneZoom({ p, id, setId }) {
+  const i = p.scenes.findIndex(x => x.id === id); const sc = p.scenes[i]; const im = modelOf(p, 'image');
+  const go = d => { const j = (i + d + p.scenes.length) % p.scenes.length; setId(p.scenes[j].id); };
+  useEffect(() => { const k = e => { if (e.key === 'Escape') setId(null); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); });
+  const own = imageScene(p, sc); const busy = sceneStatus(p, sc) === 'generating';
+  const upload = async f => { if (!f) return; try { const data = await readImage(f); updateP(p.id, q => { const x = q.scenes.find(y => y.id === own.id); x.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); x.image_index = x.image_versions.length - 1; x.image_status = 'ready'; }); } catch (e) { toast('That file could not be read as an image.'); } };
+  return html`<div className="zoom-back" onClick=${e => { if (e.target === e.currentTarget) setId(null); }} role="dialog" aria-modal="true" aria-label=${'Scene ' + (i + 1) + ' image'}>
+    <div className="zoom-box">
+      <button type="button" className="btn ghost zoom-nav" aria-label="Previous scene" onClick=${() => go(-1)}>\u2039</button>
+      <div className=${'zoom-img' + frameCls(p)}><${SceneImage} p=${p} sc=${sc} /></div>
+      <button type="button" className="btn ghost zoom-nav" aria-label="Next scene" onClick=${() => go(1)}>\u203a</button>
+      <div className="zoom-side stack" style=${{ gap: 8 }}>
+        <div className="row" style=${{ justifyContent: 'space-between' }}><strong>Scene ${i + 1} of ${p.scenes.length}</strong><button type="button" className="btn ghost sm" aria-label="Close" onClick=${() => setId(null)}><${Icon} n="x" /></button></div>
+        <p style=${{ margin: 0, fontSize: 14 }}>${sceneText(p, sc)}</p>
+        <p className="note" style=${{ margin: 0 }}>${sc.description}</p>
+        ${sc.reuse_of ? html`<p className="note">This scene reuses the image of scene ${p.scenes.findIndex(x => x.id === sc.reuse_of) + 1}. Redo gives it its own image.</p>` : null}
+        ${own.error && own.image_status === 'failed' ? html`<div className="warnbox">${own.error}</div>` : null}
+        <div className="row">
+          <button type="button" className="btn primary sm" disabled=${busy} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${busy ? 'Making it\u2026' : sceneVersion(p, sc) ? 'Redo image' : 'Generate image'}${LIVE ? html`<span className="tag">${fmt$(im.cost)}</span>` : null}</button>
+          <label className="btn sm ghost"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden onChange=${e => upload(e.target.files[0])} /></label>
+        </div>
+        ${own.image_versions.length > 1 ? html`<div className="row" style=${{ gap: 4 }}><span className="note">Versions</span>${own.image_versions.map((v, k) => html`<button key=${k} type="button" className="chip btnchip" aria-pressed=${k === own.image_index} onClick=${() => updateP(p.id, q => { q.scenes.find(y => y.id === own.id).image_index = k; })}>${k + 1}</button>`)}</div>` : null}
+        <p className="note">Arrow keys move between scenes. Esc closes.</p>
+      </div>
+    </div>
   </div>`;
 }
 function PaceOptions({ p, locked, current, onChoose }) {
@@ -2444,9 +2480,12 @@ function ScenesScreen({ p, s }) {
   const ownImages = p.scenes.filter(sc => !sc.reuse_of).length;
   const pendStats = pending ? planStats(p, pending) : null;
   const setS = (id, fn) => !locked && updateP(p.id, q => { const sc = q.scenes.find(x => x.id === id); fn(sc, q); });
+  // Image changes are allowed even after approval: they do not change the video's timing.
+  const setI = (id, fn) => updateP(p.id, q => { const sc = q.scenes.find(x => x.id === id); if (sc) fn(sc, q); });
+  const [zoomId, setZoomId] = useState(null);
   const merge = i => !locked && updateP(p.id, q => { const a = q.scenes[i], b = q.scenes[i + 1]; if (!b) return; a.line_ids = a.line_ids.concat(b.line_ids); a.description = a.description + '; ' + b.description; a.character_ids = Array.from(new Set(a.character_ids.concat(b.character_ids))); q.scenes.splice(i + 1, 1); });
   const split = i => !locked && updateP(p.id, q => { const a = q.scenes[i]; if (a.line_ids.length < 2) return; const b = clone(a); b.id = uid('sc'); const half = Math.ceil(a.line_ids.length / 2); b.line_ids = a.line_ids.slice(half); a.line_ids = a.line_ids.slice(0, half); b.image_versions = []; b.image_index = -1; b.image_status = 'pending'; b.clip_versions = []; b.clip_index = -1; b.clip_status = 'pending'; q.scenes.splice(i + 1, 0, b); });
-  const upload = async (id, file) => { if (!file) return; try { const data = await readImage(file); setS(id, sc => { sc.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); sc.image_index = sc.image_versions.length - 1; sc.image_status = 'ready'; }); toast('Your image was placed in the scene.'); } catch (e) { toast('That file could not be read as an image. Try a JPG or PNG.'); } };
+  const upload = async (id, file) => { if (!file) return; try { const data = await readImage(file); setI(id, sc => { sc.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); sc.image_index = sc.image_versions.length - 1; sc.image_status = 'ready'; }); toast('Your image was placed in the scene.'); } catch (e) { toast('That file could not be read as an image. Try a JPG or PNG.'); } };
   const gate = todo.length && !locked && !busy ? html`<${CostGate} p=${p} label=${(todo.length === p.scenes.length ? 'Generate all ' : 'Generate ') + todo.length + ' image' + (todo.length > 1 ? 's' : '')} cost=${todo.length * im.cost} rows=${[[im.name, fmt$(im.cost) + ' per image'], ['Style', styleById(p.style).name], ['Pacing', PACING[pc.mode].label + ', ~' + paceEvery(pc) + ' s per image'], ['Images', todo.length]]} onGo=${() => { setShowPace(false); api.generateImages(p.id, todo.map(sc => sc.id)); }} />` : null;
   return html`<${Fragment}>
     <${StepHead} title="Scenes and images" sub=${'The story is split into scenes at the pacing you choose. Check the scenes, then generate every image at once. Each card shows the scene on the left and its image on the right, made with ' + im.name + ' in the ' + styleById(p.style).name.toLowerCase() + ' style.'}>
@@ -2467,6 +2506,7 @@ function ScenesScreen({ p, s }) {
       ${!pending && stale && hasImages && !locked ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>The story changed since these scenes were planned.</span><button type="button" className="btn sm" onClick=${replan}>Re-plan scenes (keeps ${planStats(p, pc).keep} unchanged images)</button></div>` : null}
       <div className="row">${gate}${busy ? html`<span className="row note"><span className="spinner" style=${{ color: 'var(--rec)' }}></span> Generating ${p.scenes.filter(sc => sc.image_status === 'generating').length} images with ${im.name}</span>` : null}${hasImages ? html`<button type="button" className="btn sm ghost" onClick=${() => { setPending(null); setShowPace(false); }}>Hide</button>` : null}</div>
     </section>`}
+    ${zoomId && p.scenes.some(x => x.id === zoomId) ? html`<${SceneZoom} p=${p} id=${zoomId} setId=${setZoomId} />` : null}
     <div className="sgrid">${p.scenes.map((sc, i) => {
       const ls = sceneLines(p, sc); const open = openId === sc.id; const who = isChar && ls[0] && p.characters.find(c => c.id === ls[0].speaker);
       return html`<article key=${sc.id} className=${'scard2' + (open ? ' open' : '')}>
@@ -2474,30 +2514,30 @@ function ScenesScreen({ p, s }) {
           <div className="row sc-head">
             <strong>${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span>${sc.reuse_of ? html`<span className="chip" title="Shows the image of the scene before, with a different zoom">Reuses ${p.scenes.findIndex(x => x.id === sc.reuse_of) + 1}</span>` : html`<${Pill} status=${sc.image_status} />`}
             <span className="grow"></span>
-            <button type="button" className="btn ghost sm" aria-label=${(sc.reuse_of ? 'Give its own image to' : sc.image_versions.length ? 'Redo image for' : 'Generate image for') + ' scene ' + (i + 1)} title=${sc.reuse_of ? 'Make its own image instead of reusing' : sc.image_versions.length ? 'Redo this image' : 'Generate this image'} disabled=${locked || sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" /></button>
+            <button type="button" className="btn ghost sm" aria-label=${(sc.reuse_of ? 'Give its own image to' : sc.image_versions.length ? 'Redo image for' : 'Generate image for') + ' scene ' + (i + 1)} title=${sc.reuse_of ? 'Make its own image instead of reusing' : sc.image_versions.length ? 'Redo this image' : 'Generate this image'} disabled=${sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" /></button>
             <button type="button" className="btn sm" aria-expanded=${open} onClick=${() => setOpenId(open ? null : sc.id)}>${open ? 'Close' : 'Edit'}</button>
           </div>
           <p className="sc-line">${sc.split ? html`<span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sc.split.index + 1}/${sc.split.of} · </span>` : null}${who ? html`<b>${who.name}: </b>` : null}${sceneText(p, sc)}</p>
           <p className="sc-desc">${sc.description}</p>
         </div>
-        <div className="sc-thumb" style=${{ width: thumbW }}><${SceneImage} p=${p} sc=${sc} small=${true} /></div>
+        <div className="sc-thumb" style=${{ width: thumbW }}><${SceneImage} p=${p} sc=${sc} small=${true} onZoom=${() => setZoomId(sc.id)} /></div>
         ${open ? html`<div className="sc-edit">
           ${sc.error && sc.image_status === 'failed' ? html`<div className="warnbox">${sc.error}</div>` : null}
           <div className="sc-edit-grid">
             <div className="stack" style=${{ gap: 8 }}>
-              <label className="field">What the image shows<textarea className="textarea" rows="2" disabled=${locked} value=${sc.description} onChange=${e => setS(sc.id, x => { x.description = e.target.value; })}></textarea></label>
-              <label className="field">Image prompt<span className="prefix-chip">${styleById(p.style).prefix},</span><textarea className="textarea prompt" rows="2" disabled=${locked} value=${sc.image_prompt} onChange=${e => setS(sc.id, x => { x.image_prompt = e.target.value; })}></textarea></label>
+              <label className="field">What the image shows<textarea className="textarea" rows="2" value=${sc.description} onChange=${e => setI(sc.id, x => { x.description = e.target.value; })}></textarea></label>
+              <label className="field">Image prompt<span className="prefix-chip">${styleById(p.style).prefix},</span><textarea className="textarea prompt" rows="2" value=${sc.image_prompt} onChange=${e => setI(sc.id, x => { x.image_prompt = e.target.value; })}></textarea></label>
               ${isChar ? html`<div className="row"><span className="note">In scene</span>${p.characters.map(c => html`<button key=${c.id} type="button" className="chip btnchip" aria-pressed=${sc.character_ids.includes(c.id)} disabled=${locked} onClick=${() => setS(sc.id, x => { x.character_ids = x.character_ids.includes(c.id) ? x.character_ids.filter(y => y !== c.id) : x.character_ids.concat(c.id); })}>${c.name}</button>`)}</div>` : null}
               <div className="row">
-                <button type="button" className="btn sm" disabled=${locked || sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Redo image' : 'Generate image'}</button>
-                <label className="btn sm ghost" title="Upload your own image"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden disabled=${locked} onChange=${e => upload(sc.id, e.target.files[0])} /></label>
+                <button type="button" className="btn sm" disabled=${sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Redo image' : 'Generate image'}</button>
+                <label className="btn sm ghost" title="Upload your own image"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden onChange=${e => upload(sc.id, e.target.files[0])} /></label>
                 <button type="button" className="btn sm ghost" disabled=${locked || i === p.scenes.length - 1 || !!sc.split || !!(p.scenes[i + 1] && p.scenes[i + 1].split)} onClick=${() => { merge(i); }}><${Icon} n="merge" />Merge with next</button>
                 <button type="button" className="btn sm ghost" disabled=${locked || sc.line_ids.length < 2 || !!sc.split} onClick=${() => split(i)}><${Icon} n="split" />Split</button>
               </div>
             </div>
             <div className="stack" style=${{ gap: 6, width: bigW }}>
-              <${SceneImage} p=${p} sc=${sc} />
-              ${sc.image_versions.length > 1 ? html`<div className="versions" aria-label="Versions">${sc.image_versions.map((v, k) => html`<button key=${k} type="button" aria-pressed=${k === sc.image_index} title=${'Version ' + (k + 1) + ' · ' + (v.model === 'upload' ? 'Your upload' : (MODELS.image.find(m => m.id === v.model) || {}).name)} onClick=${() => setS(sc.id, x => { x.image_index = k; })}><${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload || v.url} /></button>`)}</div>` : null}
+              <${SceneImage} p=${p} sc=${sc} onZoom=${() => setZoomId(sc.id)} />
+              ${sc.image_versions.length > 1 ? html`<div className="versions" aria-label="Versions">${sc.image_versions.map((v, k) => html`<button key=${k} type="button" aria-pressed=${k === sc.image_index} title=${'Version ' + (k + 1) + ' · ' + (v.model === 'upload' ? 'Your upload' : (MODELS.image.find(m => m.id === v.model) || {}).name)} onClick=${() => setI(sc.id, x => { x.image_index = k; })}><${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload || v.url} /></button>`)}</div>` : null}
             </div>
           </div>
         </div>` : null}
@@ -2556,7 +2596,8 @@ function AnimateScreen({ p, s }) {
    Player: draft and final preview (ASM-1, ASM-2, ASM-4)
    ====================================================================== */
 // Caption signature: when it differs from the one a video was rendered with, that video's captions are out of date.
-const capsSig = p => p.audio.caption_style + '|' + (p.audio.caption_style === 'none' ? '' : p.scenes.map(sc => captionOf(p, sc)).join('\u00a6'));
+const capsSig = p => p.audio.caption_style + '|' + (p.audio.caption_style === 'none' ? '' : p.scenes.map(sc => captionOf(p, sc)).join('\u00a6'))
+  + '|' + p.scenes.map(sc => { const v = sceneVersion(p, sc); return v ? (v.url || (v.upload ? 'u' + v.upload.length : '') || v.seed) : ''; }).join(',');  // images too: a redone image also makes the video out of date
 // Live preview sound: plays each sentence's real voice clip in step with the preview clock.
 function useNarration(p, playing, t, onSeekRef) {
   const ref = useRef({ audio: null, idx: -1 });
@@ -2685,7 +2726,7 @@ function CompileScreen({ p, s }) {
   return html`<${Fragment}>
     <${StepHead} title="Compile" sub="Scenes, voice, captions and music come together here. Watch the draft, go back and redo any single scene if needed, then render the final file." />
     <div className="compile-grid">
-      ${capsStale ? html`<div className="stack" style=${{ gap: 8 }}><div className="okbox stack" style=${{ gap: 6 }}><span><strong>Showing your caption changes.</strong> This preview uses your images${LIVE ? ' and voice' : ''} with the edited captions. Update the video to put them in the file.</span><div><button type="button" className="btn sm primary" disabled=${!!p.rendering || !!p.missing} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />Update the video<span className="tag">free</span></button></div></div><${Player} p=${p} mode="draft" /></div>` : LIVE && videoUrl ? html`<${VideoBox} p=${p} url=${videoUrl} />` : html`<${Player} p=${p} mode=${p.render.final_path ? 'final' : 'draft'} key=${'pl' + p.scenes.map(x => x.id + x.image_index + x.clip_index).join()} />`}
+      ${capsStale ? html`<div className="stack" style=${{ gap: 8 }}><div className="okbox stack" style=${{ gap: 6 }}><span><strong>Showing your changes.</strong> This preview uses your latest images${LIVE ? ' and voice' : ''} and captions. Update the video to put them in the file.</span><div><button type="button" className="btn sm primary" disabled=${!!p.rendering || !!p.missing} onClick=${() => api.buildDraft(p.id)}><${Icon} n="film" />Update the video<span className="tag">free</span></button></div></div><${Player} p=${p} mode="draft" /></div>` : LIVE && videoUrl ? html`<${VideoBox} p=${p} url=${videoUrl} />` : html`<${Player} p=${p} mode=${p.render.final_path ? 'final' : 'draft'} key=${'pl' + p.scenes.map(x => x.id + x.image_index + x.clip_index).join()} />`}
       
       <div className="stack">
         <section className="panel stack"><h2>What goes in</h2>
@@ -2832,7 +2873,7 @@ function ExportScreen({ p, s }) {
         ${LIVE && (p.render.final_srt) ? html`<div className="row"><a className="btn" href=${p.render.final_srt} download=${fname.replace('.mp4', '.srt')}><${Icon} n="download" />Captions file (.srt)</a><span className="note">For uploading captions separately.</span></div>` : null}
       </div>
     </div>
-    ${LIVE && p.render.final_path && p.render.final_caps != null && p.render.final_caps !== capsSig(p) ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Captions changed after this final video was rendered.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Update it on Compile</button></div>` : null}
+    ${LIVE && p.render.final_path && p.render.final_caps != null && p.render.final_caps !== capsSig(p) ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Captions or images changed after this final video was rendered.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Update it on Compile</button></div>` : null}
     <${PublishKit} p=${p} />
     <${ChannelKit} p=${p} />
     <section className="panel row">
