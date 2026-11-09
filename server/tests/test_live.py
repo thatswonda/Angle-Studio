@@ -340,3 +340,29 @@ def test_flux_on_fal(monkeypatch, tmp_path):
         raise AssertionError("expected an error")
     except ProviderError as e:
         assert "refused the API key" in str(e)
+
+
+def test_silence_between_sentences_is_trimmed(tmp_path):
+    """Each clip has about 0.4 s of silence before and 0.5 s after the words; joined, that was a pause at every cut."""
+    import array
+    import math
+    import subprocess
+    import wave as _w
+    rate = 24000
+    media = tmp_path / "media"
+    (media / "audio").mkdir(parents=True)
+    for i in range(2):
+        speech = array.array("h", (int(8000 * math.sin(2 * math.pi * 220 * n / rate)) for n in range(rate)))  # 1.0 s of "speech"
+        pcm = array.array("h", [0] * int(0.4 * rate)) + speech + array.array("h", [0] * int(0.5 * rate))
+        with _w.open(str(media / "audio" / f"s{i}.wav"), "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(pcm.tobytes())
+    png = base64.b64encode(bytes.fromhex(
+        "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode()
+    img = "data:image/png;base64," + png
+    out = render.render({"final": False, "aspect": "1:1", "caption_style": "none",
+                         "scenes": [{"image": img, "lines": [0]}, {"image": img, "lines": [1]}],
+                         "lines": [{"audio": f"/media/audio/s{i}.wav", "text": "x"} for i in range(2)]}, media, lambda _: None)
+    assert all(abs(s - 1.1) < 0.03 for s in out["line_secs"]), out["line_secs"]  # 1.0 s of words + 0.1 s of breath, not 1.9 s
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                str(media / out["url"].removeprefix("/media/"))], capture_output=True, text=True).stdout)
+    assert abs(dur - 2.2) < 0.1  # each image still lasts exactly as long as its own sentence

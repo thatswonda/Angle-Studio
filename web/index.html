@@ -1233,7 +1233,9 @@ async function liveRender(pid, final, attempt = 0) {
     const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines },
       ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
     updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.render.final_res = r.res || res; q.render.final_from_draft = false; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); }
-      addVideo(q, { url: r.url, srt: r.srt, kind: final ? 'final' : 'draft', res: r.res || res }); });
+      addVideo(q, { url: r.url, srt: r.srt, kind: final ? 'final' : 'draft', res: r.res || res });
+      // the server trims the silence around each sentence: keep the real lengths so previews match the video
+      if (r.line_secs && r.line_secs.length === q.script.lines.length) q.script.lines.forEach((l, i) => { l.duration = r.line_secs[i]; }); });
     toast(final ? 'Final video rendered.' : 'Draft ready. Play it before rendering the final file.');
   } catch (e) {
     // The server restarted mid-render: finished scenes are kept on its disk, so carry on from there automatically.

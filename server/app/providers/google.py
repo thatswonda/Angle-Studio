@@ -201,6 +201,7 @@ async def speak(text: str, voice_id: str, model_id: str, out: Path, delivery: st
         raise ProviderError("Gemini TTS returned no audio.")
     m = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
     pcm, rate = clean_pcm(base64.b64decode(inline["data"]), int(m.group(1)) if m else 24000)
+    pcm = trim_silence(pcm, rate)
     write_wav(out, pcm, rate)
     return len(pcm) / 2 / rate, len(text) / 1000 * TTS_PRICES_PER_1K_CHARS.get(model_id, 0.01)
 
@@ -233,6 +234,33 @@ def clean_pcm(raw: bytes, rate: int = 24000) -> tuple[bytes, int]:
     if sys.byteorder == "big":
         samples.byteswap()
     return samples.tobytes(), rate
+
+
+def trim_silence(pcm: bytes, rate: int, lead: float = 0.03, tail: float = 0.07) -> bytes:
+    """Cuts the silence the TTS model leaves before and after the words (about 0.4 s and 0.5 s), keeping a short
+    natural breath, so joined sentences follow each other with no waiting. Re-fades both ends so joins never click."""
+    samples = array.array("h", pcm[: len(pcm) // 2 * 2])
+    if sys.byteorder == "big":
+        samples.byteswap()
+    win = max(1, rate // 100)  # 10 ms
+    levels = [max((abs(x) for x in samples[i:i + win]), default=0) for i in range(0, len(samples), win)]
+    peak = max(levels, default=0)
+    if peak < 300:  # nothing audible: leave it alone
+        return pcm
+    thr = max(300, peak * 0.03)
+    first = next(i for i, v in enumerate(levels) if v > thr)
+    last = len(levels) - 1 - next(i for i, v in enumerate(reversed(levels)) if v > thr)
+    a = max(0, first * win - int(lead * rate))
+    b = min(len(samples), (last + 1) * win + int(tail * rate))
+    out = samples[a:b]
+    fade = min(len(out) // 2, rate // 200)
+    for k in range(fade):
+        g = k / fade
+        out[k] = int(out[k] * g)
+        out[-1 - k] = int(out[-1 - k] * g)
+    if sys.byteorder == "big":
+        out.byteswap()
+    return out.tobytes()
 
 
 def write_wav(path: Path, pcm: bytes, rate: int) -> None:

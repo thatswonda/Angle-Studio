@@ -13,7 +13,7 @@ import wave
 from pathlib import Path
 from typing import Callable
 
-from .providers.google import ProviderError, clean_pcm, write_wav
+from .providers.google import ProviderError, clean_pcm, trim_silence, write_wav
 
 FPS = 30
 # Keeps each FFmpeg run well under 512 MB (Render Starter): few encoder threads and a short lookahead.
@@ -143,13 +143,15 @@ def captions_srt(cues: list[tuple[float, float, list[str]]]) -> str:
 
 
 def _clean_clip(src: Path, dst: Path) -> Path:
-    """Voice clips saved before the fix carry a WAV header and metadata inside their samples; strip them."""
+    """Every voice clip is cleaned before joining: older clips carry a WAV header inside their samples (stripped),
+    and the silence before and after the words is trimmed so one sentence follows the next with no waiting."""
     with wave.open(str(src)) as w:
-        rate, raw = w.getframerate(), w.readframes(w.getnframes())
-    if raw[:4] != b"RIFF":
+        rate, raw, width, ch = w.getframerate(), w.readframes(w.getnframes()), w.getsampwidth(), w.getnchannels()
+    if width != 2 or ch != 1:  # not a clip the app made: use it as it is
         return src
-    pcm, rate = clean_pcm(raw, rate)
-    write_wav(dst, pcm, rate)
+    if raw[:4] == b"RIFF":
+        raw, rate = clean_pcm(raw, rate)
+    write_wav(dst, trim_silence(raw, rate), rate)
     return dst
 
 
@@ -292,4 +294,5 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     for f in work.iterdir():
         f.unlink()
     work.rmdir()
-    return {"url": f"/media/renders/{stem}.mp4", "srt": srt_url, "res": res, "reused": reused}
+    return {"url": f"/media/renders/{stem}.mp4", "srt": srt_url, "res": res, "reused": reused,
+            "line_secs": [round(x, 3) for x in line_secs]}  # the real length of each sentence, as heard in the video
