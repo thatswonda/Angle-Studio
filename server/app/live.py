@@ -641,8 +641,9 @@ async def image(body: ImageBody):
         raise HTTPException(422, "Unsupported frame.")
     try:
         if fal.is_fal(body.model):  # FLUX schnell and dev read text only; FLUX Kontext gets the first style reference
-            ref = load_ref(kontext_ref(body.refs[0])) if body.model in fal.TAKES_REFERENCE and body.refs else None
-            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, ref)
+            ref = load_ref(kontext_ref(body.refs[0])) if body.model == "flux-kontext" and body.refs else None
+            refs = [load_ref(r) for r in body.refs[:4] if r] if body.model == "seedream" else None
+            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, ref, refs)
         else:
             refs = [load_ref(r) for r in body.refs[:4] if r]
             path, cost = await google.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, refs)

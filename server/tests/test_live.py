@@ -574,3 +574,29 @@ def test_cards_keep_only_the_words_that_matter():
     assert show("Save *first*") == "Save first"
     assert show("Tobi left a warm *roll*") == "left warm roll"  # the highlighted word stays; filler goes
     assert show("Every letter kept and loved forever") == "Every letter kept"
+
+
+def test_seedream_and_qwen_requests(monkeypatch, tmp_path):
+    import asyncio
+    import httpx
+    from app import live
+    from app.providers import fal
+    sent = []
+
+    def handler(req):
+        import json as _j
+        sent.append((str(req.url), _j.loads(req.content)))
+        return httpx.Response(200, json={"images": [{"url": "data:image/png;base64," + base64.b64encode(b"\x89PNGx").decode()}]})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(fal.httpx, "AsyncClient", lambda **k: real(transport=httpx.MockTransport(handler), **k))
+    monkeypatch.setenv("FAL_KEY", "k")
+    prompt = "stick figure. Scene: a jar. Avoid: shading, 3D render. No watermarks or signatures."
+    refs = [live.load_ref("templates/stickman-1.jpg"), live.load_ref("templates/stickman-2.jpg")]
+    p1, c1 = asyncio.run(fal.draw(prompt, "9:16", "seedream", tmp_path / "s", None, refs))
+    url, body = sent[-1]
+    assert url.endswith("/bytedance/seedream/v4/edit") and len(body["image_urls"]) == 2 and body["prompt"].startswith("Use the reference images only") and c1 == 0.03
+    assert p1.suffix == ".png"
+    p2, c2 = asyncio.run(fal.draw(prompt, "16:9", "qwen-image", tmp_path / "q"))
+    url, body = sent[-1]
+    assert url.endswith("/fal-ai/qwen-image") and body["negative_prompt"] == "shading, 3D render" and body["image_size"] == {"width": 1312, "height": 736} and c2 == 0.02

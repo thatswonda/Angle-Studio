@@ -17,8 +17,15 @@ MODELS = {
     "flux-dev": ("fal-ai/flux/dev", {"num_inference_steps": 28, "guidance_scale": 3.5}, 0.05),
     # Kontext sees a reference image: the template's example picture, so the result matches the template's look
     "flux-kontext": ("fal-ai/flux-pro/kontext", {"guidance_scale": 3.5}, 0.04),
+    # Seedream 4 (ByteDance) sees up to 10 reference images: the template's example pictures, so the look matches
+    "seedream": ("fal-ai/bytedance/seedream/v4/edit", {}, 0.03),
+    # Qwen-Image reads text only but takes the template's avoid list as a negative prompt; drawn at about 1 megapixel
+    "qwen-image": ("fal-ai/qwen-image", {"num_inference_steps": 30, "guidance_scale": 2.5}, 0.02),
 }
-TAKES_REFERENCE = {"flux-kontext"}
+TAKES_REFERENCE = {"flux-kontext", "seedream"}
+SEEDREAM_NOTE = ("Use the reference images only for their visual style: line work, rendering, colours, background and texture. "
+                 "Draw brand-new characters and a new scene; do not copy their people, objects, text or layout. ")
+QWEN_SIZES = {"9:16": (736, 1312), "16:9": (1312, 736), "1:1": (992, 992), "4:5": (880, 1104)}  # just under 1 megapixel
 KONTEXT_NOTE = ("Create a completely new image in exactly the same visual style as the reference image: the same line work, "
                 "rendering, colours, background and texture. Only the style carries over: draw brand-new characters who do not "
                 "look like anyone in the reference (different hair, face and clothes), and do not keep its objects, text, setting "
@@ -55,13 +62,33 @@ def _error(r: httpx.Response) -> str:
     return f"fal could not make the image ({r.status_code}): {detail}"
 
 
-async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tuple[bytes, str] | None = None) -> tuple[Path, float]:
+def avoid_of(prompt: str) -> str:
+    m = re.search(r"Avoid: (.*?)(?:\. No (?:words|watermarks)|\.\s|$)", prompt, flags=re.S)
+    return m.group(1).strip()[:500] if m else ""
+
+
+def _data_url(ref: tuple[bytes, str]) -> str:
+    return f"data:{ref[1]};base64,{base64.b64encode(ref[0]).decode()}"
+
+
+async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tuple[bytes, str] | None = None,
+               refs: list[tuple[bytes, str]] | None = None) -> tuple[Path, float]:
     key = os.getenv("FAL_KEY", "")
     if not key:
         raise ProviderError("FLUX needs a fal API key. Add FAL_KEY to the server's environment (on Render: Environment > Add variable).")
     endpoint, extra, price = MODELS[model_id]
     w, h = SIZES.get(aspect, SIZES["9:16"])
-    if model_id in TAKES_REFERENCE:
+    if model_id == "seedream":
+        refs = refs or ([ref] if ref else [])
+        if not refs:
+            raise ProviderError("Seedream needs a template with example pictures. Pick a built-in template, or another image model.")
+        body = {"prompt": (SEEDREAM_NOTE + flux_prompt(prompt))[:3500], "image_urls": [_data_url(r) for r in refs[:4]],
+                "image_size": {"width": w, "height": h}, "num_images": 1, "enable_safety_checker": True, "sync_mode": True}
+    elif model_id == "qwen-image":
+        qw, qh = QWEN_SIZES.get(aspect, QWEN_SIZES["9:16"])
+        body = {"prompt": flux_prompt(prompt)[:3500], "negative_prompt": avoid_of(prompt), "image_size": {"width": qw, "height": qh},
+                "num_images": 1, "enable_safety_checker": True, "sync_mode": True, "output_format": "jpeg", **extra}
+    elif model_id in TAKES_REFERENCE:
         if not ref:
             raise ProviderError("FLUX Kontext needs a template with example pictures. Pick a built-in template, or use FLUX dev.")
         data, mime = ref
@@ -74,7 +101,9 @@ async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tup
     headers = {"Authorization": f"Key {key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=180.0) as c:
         r = await c.post(f"https://fal.run/{endpoint}", json=body, headers=headers)
-        if r.status_code == 422 and model_id not in TAKES_REFERENCE:  # an older model version that only takes named sizes
+        if r.status_code in (500, 502, 503, 504):  # a passing upstream failure: one more try
+            r = await c.post(f"https://fal.run/{endpoint}", json=body, headers=headers)
+        if r.status_code == 422 and model_id in ("flux-schnell", "flux-dev"):  # an older model version that only takes named sizes
             r = await c.post(f"https://fal.run/{endpoint}", json={**body, "image_size": PRESETS.get(aspect, "portrait_16_9")}, headers=headers)
         if r.status_code != 200:
             raise ProviderError(_error(r))
@@ -92,7 +121,7 @@ async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tup
             if g.status_code != 200:
                 raise ProviderError("Could not download the image from fal.")
             raw = g.content
-    path = out_stem.with_suffix(".jpg")
+    path = out_stem.with_suffix(".png" if raw[:4] == b"\x89PNG" else ".jpg")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(raw)
     return path, price
