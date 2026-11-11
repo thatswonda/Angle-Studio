@@ -182,7 +182,7 @@ def scene_timing(scenes: list[dict], line_secs: list[float]) -> tuple[list[float
 
 def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     """payload: {final, aspect, caption_style, scenes: [{image, lines: [sentence indexes], split, caption, caption_auto}],
-    lines: [{audio, text}]} -> {"url": video, "srt": captions file or None}."""
+    lines: [{audio, text}], music: {url, volume, duck} (optional)} -> {"url": video, "srt": captions file or None}."""
     final = bool(payload.get("final"))
     res = int(payload.get("res") or (1080 if final else 480))
     res = res if res in (480, 720, 1080) else 1080
@@ -284,9 +284,26 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     _run(["-f", "concat", "-safe", "0", "-i", "video.txt", "-c", "copy", "video.mp4"], work)
 
     voice = "narration.wav"
+    music = payload.get("music") or {}
+    if music.get("url"):  # background music: looped to the video's length, faded, and pushed down whenever the voice speaks
+        progress("Adding the background music")
+        track = local(music["url"], "music")
+        vol = min(0.6, max(0.0, float(music.get("volume", 0.25))))
+        out_at = max(0.0, t - 2.5)
+        music_chain = (f"[1:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={vol:.3f},afade=t=in:d=1.5,"
+                       f"afade=t=out:st={out_at:.2f}:d=2.5,atrim=0:{t:.3f}[m0];")
+        if music.get("duck", True):
+            fc = (music_chain + "[0:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit=2[v1][v2];"
+                  "[m0][v2]sidechaincompress=threshold=0.02:ratio=10:attack=15:release=350[m1];"
+                  "[v1][m1]amix=inputs=2:duration=first:normalize=0[out]")
+        else:
+            fc = music_chain + "[0:a]aformat=sample_rates=48000:channel_layouts=stereo[v1];[v1][m0]amix=inputs=2:duration=first:normalize=0[out]"
+        _run(["-i", "narration.wav", "-stream_loop", "-1", "-i", str(track), "-filter_complex", fc, "-map", "[out]",
+              "-c:a", "pcm_s16le", "mixed.wav"], work)
+        voice = "mixed.wav"
     if final:  # loudness in its own audio-only pass
         progress("Normalizing loudness")
-        _run(["-i", "narration.wav", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-c:a", "pcm_s16le", "voice_norm.wav"], work)
+        _run(["-i", voice, "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-c:a", "pcm_s16le", "voice_norm.wav"], work)
         voice = "voice_norm.wav"
     progress("Joining the scenes and the voice")
     _run(["-i", "video.mp4", "-i", voice, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",

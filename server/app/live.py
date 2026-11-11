@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from . import jobs, render, storage
@@ -367,6 +367,36 @@ def put_state(body: StateBody):
         STATE_FILE.replace(STATE_FILE.with_name("app_state.prev.json"))
     tmp.replace(STATE_FILE)  # atomic: a crash mid-write never leaves a broken file
     return {"ok": True, "saved_at": body.saved_at}
+
+
+# ---------- Your music library (tracks you download, for example from the YouTube Audio Library)
+
+MUSIC_TYPES = [(b"ID3", "mp3"), (b"\xff\xfb", "mp3"), (b"\xff\xf3", "mp3"), (b"\xff\xf2", "mp3"), (b"RIFF", "wav"),
+               (b"OggS", "ogg"), (b"fLaC", "flac")]
+
+
+@router.post("/music")
+async def upload_music(request: Request, name: str = ""):
+    """Saves one uploaded track (the raw file as the request body) and returns where it lives and how long it is."""
+    import subprocess
+    data = await request.body()
+    if not data:
+        raise HTTPException(422, "Choose a music file first.")
+    if len(data) > 40_000_000:
+        raise HTTPException(413, "That file is over 40 MB. Use an MP3 version of the track.")
+    ext = next((e for magic, e in MUSIC_TYPES if data.startswith(magic)), "m4a" if data[4:8] == b"ftyp" else None)
+    if not ext:
+        raise HTTPException(422, "Use an MP3, WAV, M4A, OGG or FLAC file.")
+    path = MEDIA / "music" / f"{uuid.uuid4().hex}.{ext}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)], capture_output=True, text=True)
+    try:
+        seconds = float(p.stdout.strip())
+    except ValueError:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, "That file could not be read as music.")
+    return {"url": media_url(path), "duration": round(seconds, 1), "name": (name or "Track")[:80]}
 
 
 class MediaCheckBody(BaseModel):
@@ -739,6 +769,7 @@ class RenderBody(BaseModel):
     caption_style: str = "bold"
     scenes: list[dict[str, Any]]
     lines: list[dict[str, Any]]
+    music: dict[str, Any] = {}  # {url, volume 0-0.6, duck}
 
 
 @router.post("/render")

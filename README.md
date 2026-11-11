@@ -82,7 +82,7 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | Channel ideas | The writer + Nano Banana | Optional, on Export: grows from the analyzed video, follows the kind of channel you type, and suggests 3 channels (name, handle, bio, about) to copy; profile photo (1:1) and banner (16:9) are drawn on request in the video's style |
 | Render | FFmpeg on the server | Each image stays on screen exactly as long as its own sentences are spoken (measured from the voice clips). Captions are optional (On/Off on the Format and Compile steps; after a render, edits show at once in the preview and "Update the video" re-renders for free), come in 9 styles (Bold pop, One word, Karaoke, Highlight box, Comic, Neon glow, Typewriter, Clean bar, Minimal) and are editable per scene; a .srt captions file is saved with every render |
 | Animated clips | Not yet | The Gemini key has no Veo models, so scenes use zoom and pan |
-| Music | Not yet | Narration only |
+| Music | Your library | Upload tracks (for example from YouTube Studio > Audio Library); they stay on the server for every video, with a mood and an optional credit line. Mixed under the voice with FFmpeg: looped to length, faded in and out, lowered while someone speaks, volume slider. A required credit is added to the copied description |
 
 **Gemini free tier:** watching the video (Flash), writing (Flash) and voice work, but voice is limited to a handful of requests a day, Pro models are not included, and images are not included. Turn on billing in Google AI Studio for real use.
 
@@ -114,7 +114,6 @@ Claude (`server/app/providers/anthropic_writer.py`, official `anthropic` SDK) wr
 ## Still to do
 
 - Animated clips, once the Gemini key has Veo (or via Higgsfield).
-- Background music from a royalty-free library.
 - Hosting with a login, to use the app from a phone.
 
 ## Keeping costs down

@@ -453,3 +453,42 @@ def test_script_type_reaches_the_writer(monkeypatch):
     j = _run_job(TestClient(app), "/api/live/story", {"writer": "claude-opus-5-5", "angles": [{"title": "Everyone is gone"}],
                                                        "target_seconds": 30, "script_type": "narration"})
     assert j["status"] == "done" and "NARRATION in second person" in seen[-1] and "original script" in seen[-1]
+
+
+def test_background_music_under_the_voice(tmp_path):
+    """The track is looped to the video's length and mixed under the narration; the video still ends with the voice."""
+    import subprocess
+    media = tmp_path / "media"
+    (media / "audio").mkdir(parents=True)
+    (media / "music").mkdir()
+    _tone(media / "audio" / "v.wav", 3.0)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=330:duration=1.2", "-ac", "2",
+                    str(media / "music" / "m.mp3")], check=True)  # shorter than the video: must loop
+    png = base64.b64encode(bytes.fromhex(
+        "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode()
+    for duck in (True, False):
+        out = render.render({"final": True, "res": 480, "aspect": "1:1", "caption_style": "none",
+                             "scenes": [{"image": "data:image/png;base64," + png, "lines": [0]}],
+                             "lines": [{"audio": "/media/audio/v.wav", "text": "x"}],
+                             "music": {"url": "/media/music/m.mp3", "volume": 0.3, "duck": duck}}, media, lambda _: None)
+        video = media / out["url"].removeprefix("/media/")
+        info = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,channels:format=duration", "-of", "json", str(video)],
+                              capture_output=True, text=True).stdout
+        import json as _j
+        d = _j.loads(info)
+        assert abs(float(d["format"]["duration"]) - 3.0) < 0.15
+        assert any(st["codec_type"] == "audio" and st.get("channels") == 2 for st in d["streams"])  # stereo mix
+
+
+def test_music_upload(monkeypatch, tmp_path):
+    import subprocess
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    monkeypatch.setattr(live, "MEDIA", tmp_path / "media")
+    track = tmp_path / "t.mp3"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", str(track)], check=True)
+    c = TestClient(app)
+    r = c.post("/api/live/music?name=Calm%20piano", content=track.read_bytes()).json()
+    assert r["url"].startswith("/media/music/") and abs(r["duration"] - 2.0) < 0.2 and r["name"] == "Calm piano"
+    assert c.post("/api/live/music", content=b"not music at all").status_code == 422

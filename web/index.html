@@ -268,6 +268,13 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 /* Voice */
 .voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; max-height: 380px; overflow: auto; padding: 2px; }
 .tune summary { cursor: pointer; }
+.music-lib { grid-column: 1 / -1; }
+.mlist { display: grid; gap: 6px; }
+.mrow { display: grid; grid-template-columns: auto auto minmax(120px, 1fr) 150px auto auto auto; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.mrow.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.mrow .mcredit { grid-column: 3 / -1; }
+label.mrow { grid-template-columns: auto 1fr; cursor: pointer; }
+@media (max-width: 720px) { .mrow { grid-template-columns: auto auto minmax(0, 1fr); } .mrow .mmood, .mrow .mcredit { grid-column: 1 / -1; } }
 .aline.playing { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); border-radius: var(--r-sm); }
 .aline.problem { background: var(--fail-soft); box-shadow: inset 3px 0 0 var(--fail); border-radius: var(--r-sm); }
 .playing-tag { color: var(--accent); font-weight: 600; }
@@ -635,6 +642,14 @@ const CAPTIONS = [
 // What the writer needs to know about the analyzed video, so titles, thumbnails and channels relate to it.
 const sourceBrief = p => !p.source || p.source.own ? {} : { title: p.source.title, channel: p.source.channel, tags: (p.source.tags || []).slice(0, 15), description: (p.source.description || '').slice(0, 1200),
   summary: p.analysis && p.analysis.summary, hook: p.analysis && p.analysis.hook, why_it_worked: p.analysis && p.analysis.why_it_worked, views: p.source.views };
+// Your music library (live): tracks you upload, for example from the YouTube Audio Library. Kept on the server's disk.
+const MOODS = ['Calm', 'Upbeat', 'Cinematic', 'Dramatic', 'Mystery', 'Inspiring', 'Funny', 'Sad', 'Ancient / world', 'Lo-fi'];
+const musicLib = () => { try { return STATE.music || []; } catch (e) { return []; } };
+const liveTrack = p => LIVE && p.audio.music_id ? musicLib().find(t => t.id === p.audio.music_id) || null : null;
+const musicLabel = p => LIVE ? (liveTrack(p) ? liveTrack(p).name : 'No background music') : (p.audio.music_path === 'none' ? 'No background music' : (MUSIC.find(m => m.id === p.audio.music_path) || {}).name || 'Music');
+const hasMusic = p => LIVE ? !!liveTrack(p) : p.audio.music_path !== 'none';
+// A mood that usually fits the video, from its script type and look.
+const suggestMood = p => { const t = p.script_type || 'story'; const st = styleById(p.style); if (/ancient|histor/i.test(st.name)) return 'Ancient / world'; return { narration: 'Mystery', explainer: 'Upbeat', documentary: 'Cinematic', list: 'Upbeat', pov: 'Cinematic', motivational: 'Inspiring', story: /comedy|funny|kids/i.test(st.best) ? 'Funny' : 'Cinematic' }[t] || 'Calm'; };
 const capById = id => CAPTIONS.find(c => c.id === id) || CAPTIONS[0];
 // A scene's caption: your edit if you made one, otherwise its words from the story.
 const captionOf = (p, sc) => sc.caption_text != null ? sc.caption_text : sceneText(p, sc);
@@ -1080,7 +1095,7 @@ function mergeStates(local, remote) {
   Object.entries(remote.projects || {}).forEach(([id, rp]) => { const lp = out.projects[id]; if (!lp || (rp.updated_at || 0) > (lp.updated_at || 0)) out.projects[id] = rp; });
   deleted.forEach(id => { delete out.projects[id]; });
   out.templateIdeas = { ...(remote.templateIdeas || {}), ...(local.templateIdeas || {}) };
-  ['customStyles', 'templates', 'ideaBank'].forEach(k => { const have = new Set((out[k] || []).map(x => x.id)); out[k] = (out[k] || []).concat((remote[k] || []).filter(x => !have.has(x.id))); });
+  ['customStyles', 'templates', 'ideaBank', 'music'].forEach(k => { const have = new Set((out[k] || []).map(x => x.id)); out[k] = (out[k] || []).concat((remote[k] || []).filter(x => !have.has(x.id))); });
   if (!out.projects[out.currentId]) out.currentId = Object.keys(out.projects)[0];
   return out;
 }
@@ -1251,7 +1266,8 @@ function lookAnchor(p, exceptId) {
 async function checkMedia(pid) {
   const p = STATE.projects[pid]; if (!p || !p.script || !p.script.lines) return { lines: [], scenes: [] };
   const own = sc => { const v = sc.image_versions[sc.image_index]; return v && v.url; };
-  const paths = [...p.script.lines.map(l => l.audio_url), ...p.scenes.filter(sc => !sc.reuse_of).map(own), p.render.draft_path, p.render.final_path].filter(x => x && x.startsWith('/media/'));
+  const tr = liveTrack(p);
+  const paths = [...p.script.lines.map(l => l.audio_url), ...p.scenes.filter(sc => !sc.reuse_of).map(own), p.render.draft_path, p.render.final_path, tr && tr.url].filter(x => x && x.startsWith('/media/'));
   if (!paths.length) return { lines: [], scenes: [] };
   const { missing } = await post('media-check', { paths }); const gone = new Set(missing);
   const lines = p.script.lines.filter(l => gone.has(l.audio_url)).map(l => l.id);
@@ -1262,6 +1278,7 @@ async function checkMedia(pid) {
     q.scenes.forEach(sc => { if (scenes.includes(sc.id)) { sc.image_status = 'failed'; sc.error = lost; } });
     if (gone.has(q.render.draft_path)) q.render.draft_path = null;
     if (gone.has(q.render.final_path)) { q.render.final_path = null; q.status = 'draft'; }
+    if (tr && gone.has(tr.url)) { q.audio.music_id = null; setTimeout(() => toast('The music track \u201c' + tr.name + '\u201d was lost on the server. Upload it again on the Format step.'), 0); }
     q.missing = lines.length || scenes.length ? { lines, scenes } : null;
     if (q.missing) q.render_error = null;
   });
@@ -1278,7 +1295,8 @@ async function liveRender(pid, final, attempt = 0) {
   const lines = p.script.lines.map(l => ({ audio: l.audio_url || '', text: l.text }));
   try {
     const res = final ? (p.render.res || 1080) : 480;
-    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines },
+    const tr = liveTrack(p); const music = tr ? { url: tr.url, volume: p.audio.music_volume, duck: p.audio.duck !== false } : {};
+    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines, music },
       ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
     updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.render.final_res = r.res || res; q.render.final_from_draft = false; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); }
       addVideo(q, { url: r.url, srt: r.srt, kind: final ? 'final' : 'draft', res: r.res || res });
@@ -2485,6 +2503,50 @@ function CapSample({ id }) {
   return html`<div className="caption clean" style=${{ ...st, background: 'transparent', color: 'rgba(255,255,255,0.55)' }}>Off</div>`;
 }
 const setCaptions = (q, on) => { if (on) q.audio.caption_style = q.audio.prev_caption && q.audio.prev_caption !== 'none' ? q.audio.prev_caption : 'bold'; else { if (q.audio.caption_style !== 'none') q.audio.prev_caption = q.audio.caption_style; q.audio.caption_style = 'none'; } q.scenes.forEach(sc => { sc.caption_style = q.audio.caption_style; }); };
+function MusicLibrary({ p }) {
+  const lib = musicLib(); const cur = p.audio.music_id || null; const mood = suggestMood(p);
+  const [busy, setBusy] = useState(false); const [playing, setPlaying] = useState(null); const audio = useRef(null);
+  useEffect(() => () => { if (audio.current) audio.current.pause(); }, []);
+  const set = fn => updateP(p.id, fn);  // music can change at any time: it only affects the next render
+  const play = t => { if (audio.current) audio.current.pause(); if (playing === t.id) { setPlaying(null); return; } const a = new Audio(t.url); a.volume = 0.6; a.onended = () => setPlaying(null); a.play().catch(() => toast('This track could not be played.')); audio.current = a; setPlaying(t.id); };
+  const upload = async files => {
+    setBusy(true);
+    for (const f of Array.from(files || []).slice(0, 10)) {
+      try {
+        const r = await fetch('/api/live/music?name=' + encodeURIComponent(f.name.replace(/\.[^.]+$/, '')), { method: 'POST', body: f });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.detail || 'Upload failed (' + r.status + ').');
+        const id = uid('mu');
+        update(x => { x.music = (x.music || []).concat({ id, url: d.url, name: d.name, duration: d.duration, mood: '', credit: '', at: Date.now() }); });
+        if (!p.audio.music_id) set(q => { q.audio.music_id = id; });
+      } catch (e) { toast('\u201c' + f.name + '\u201d: ' + e.message); }
+    }
+    setBusy(false);
+  };
+  const edit = (id, fn) => update(x => { const t = (x.music || []).find(y => y.id === id); if (t) fn(t); });
+  const sorted = lib.slice().sort((a, b) => (b.mood === mood) - (a.mood === mood) || b.at - a.at);
+  return html`<section className="panel stack music-lib">
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h3>Background music</h3><label className=${'btn sm' + (busy ? ' disabled' : '')}><${Icon} n="upload" /><span>${busy ? 'Uploading\u2026' : 'Upload music'}</span><input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" multiple hidden disabled=${busy} onChange=${e => { upload(e.target.files); e.target.value = ''; }} /></label></div>
+    <p className="note">Free tracks: open <a href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio</a> \u2192 <b>Audio Library</b>, filter by mood, download, then upload here. Tracks are kept on your server for every video. If a track says \u201cattribution required\u201d, paste its credit line below and the app adds it to your description. Suggested mood for this video: <b>${mood}</b>.</p>
+    <div className="mlist" role="radiogroup" aria-label="Background music">
+      <label className=${'mrow' + (!cur ? ' on' : '')}><input type="radio" name=${'music-' + p.id} checked=${!cur} onChange=${() => set(q => { q.audio.music_id = null; })} /><span className="grow">No music</span></label>
+      ${sorted.map(t => html`<div key=${t.id} className=${'mrow' + (cur === t.id ? ' on' : '')}>
+        <input type="radio" name=${'music-' + p.id} aria-label=${'Use ' + t.name} checked=${cur === t.id} onChange=${() => set(q => { q.audio.music_id = t.id; })} />
+        <button type="button" className="btn ghost sm" aria-label=${(playing === t.id ? 'Stop ' : 'Play ') + t.name} onClick=${() => play(t)}><${Icon} n=${playing === t.id ? 'pause' : 'play'} /></button>
+        <input className="input mname" aria-label="Track name" value=${t.name} onChange=${e => edit(t.id, x => { x.name = e.target.value; })} />
+        <select className="select mmood" aria-label="Mood" value=${t.mood || ''} onChange=${e => edit(t.id, x => { x.mood = e.target.value; })}><option value="">Mood\u2026</option>${MOODS.map(m => html`<option key=${m} value=${m}>${m}</option>`)}</select>
+        <span className="mono muted" style=${{ fontSize: 12 }}>${fmtT(t.duration || 0)}</span>
+        ${t.mood === mood ? html`<span className="chip">Fits</span>` : null}
+        <button type="button" className="btn ghost sm danger" aria-label=${'Remove ' + t.name + ' from the library'} onClick=${() => { update(x => { x.music = (x.music || []).filter(y => y.id !== t.id); Object.values(x.projects).forEach(q => { if (q.audio.music_id === t.id) q.audio.music_id = null; }); }); }}><${Icon} n="trash" /></button>
+        <input className="input mcredit" aria-label=${'Credit line for ' + t.name} placeholder="Credit line, only if the track asks for one" value=${t.credit || ''} onChange=${e => edit(t.id, x => { x.credit = e.target.value; })} />
+      </div>`)}
+    </div>
+    ${!lib.length ? html`<p className="note">No tracks yet. Upload one or more to get started.</p>` : null}
+    <label className="field" htmlFor="vol">Music volume under the voice <span className="mono muted">${Math.round(p.audio.music_volume * 100)}%</span><input id="vol" type="range" min="0.05" max="0.6" step="0.05" disabled=${!cur} value=${p.audio.music_volume} onChange=${e => set(q => { q.audio.music_volume = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
+    <label className="switch"><input id="duck" type="checkbox" checked=${p.audio.duck !== false} disabled=${!cur} onChange=${e => set(q => { q.audio.duck = e.target.checked; })} />Lower the music while someone speaks</label>
+    <p className="note">Music fades in and out and loops to the video\u2019s length. Changing it later only needs \u201cUpdate the video\u201d on Compile (free).</p>
+  </section>`;
+}
 function FormatScreen({ p, s }) {
   const locked = p.checkpoints.format; const est = estimate(p); const im = modelOf(p, 'image'); const vm = modelOf(p, 'video');
   const nScenes = p.script.lines.length; const imgCost = nScenes * im.cost;
@@ -2509,12 +2571,11 @@ function FormatScreen({ p, s }) {
           <p className="note">You can also change the style, edit the words, or turn captions off on the Compile step.</p>
         </${Fragment}>`}
       </section>
-      <section className="panel stack"><h3>Music</h3>
-        ${LIVE ? html`<p className="note">Background music isn\u2019t connected yet, so the video has narration only.</p>` : null}
-        <select id="music" hidden=${!!LIVE} className="select" aria-label="Background music" disabled=${locked} value=${p.audio.music_path} onChange=${e => set(q => { q.audio.music_path = e.target.value; })}>${MUSIC.map(m => html`<option key=${m.id} value=${m.id}>${m.name}${m.mood ? ' · ' + m.mood : ''}</option>`)}</select>
+      ${LIVE ? html`<${MusicLibrary} p=${p} />` : html`      <section className="panel stack"><h3>Music</h3>
+                <select id="music" hidden=${!!LIVE} className="select" aria-label="Background music" disabled=${locked} value=${p.audio.music_path} onChange=${e => set(q => { q.audio.music_path = e.target.value; })}>${MUSIC.map(m => html`<option key=${m.id} value=${m.id}>${m.name}${m.mood ? ' · ' + m.mood : ''}</option>`)}</select>
         <label className="field" htmlFor="vol">Volume under voice <span className="mono muted">${Math.round(p.audio.music_volume * 100)}%</span><input id="vol" type="range" min="0" max="0.6" step="0.05" disabled=${locked || p.audio.music_path === 'none'} value=${p.audio.music_volume} onChange=${e => set(q => { q.audio.music_volume = +e.target.value; })} style=${{ accentColor: 'var(--accent)' }} /></label>
         <label className="switch"><input id="duck" type="checkbox" checked=${p.audio.duck} disabled=${locked} onChange=${e => set(q => { q.audio.duck = e.target.checked; })} />Duck music while someone speaks</label>
-      </section>
+      </section>`}
       <section className="panel stack"><h3>Estimated cost for this video</h3>
         <dl className="kv mono" style=${{ gridTemplateColumns: '1fr auto' }}>
           <dt>Analysis + writing (${analystOf().name}, ${modelOf(p, 'writer').name})</dt><dd>${fmt$(est.writing)}</dd>
@@ -2752,7 +2813,8 @@ function AnimateScreen({ p, s }) {
    ====================================================================== */
 // Caption signature: when it differs from the one a video was rendered with, that video's captions are out of date.
 const capsSig = p => p.audio.caption_style + '|' + (p.audio.caption_style === 'none' ? '' : p.scenes.map(sc => captionOf(p, sc)).join('\u00a6'))
-  + '|' + p.scenes.map(sc => { const v = sceneVersion(p, sc); return v ? (v.url || (v.upload ? 'u' + v.upload.length : '') || v.seed) : ''; }).join(',');  // images too: a redone image also makes the video out of date
+  + '|' + p.scenes.map(sc => { const v = sceneVersion(p, sc); return v ? (v.url || (v.upload ? 'u' + v.upload.length : '') || v.seed) : ''; }).join(',')
+  + (LIVE ? '|' + (p.audio.music_id || '') + ':' + p.audio.music_volume + ':' + (p.audio.duck !== false) : '');  // images too: a redone image also makes the video out of date
 // Live preview sound: plays each sentence's real voice clip in step with the preview clock.
 function useNarration(p, playing, t, onSeekRef) {
   const ref = useRef({ audio: null, idx: -1 });
@@ -2767,7 +2829,12 @@ function useNarration(p, playing, t, onSeekRef) {
     playFrom(i, time - starts[i]);
   };
   onSeekRef.current = startAt;
-  useEffect(() => { if (playing) startAt(t); else stop(); return stop; }, [playing]);
+  const bed = useRef(null);
+  useEffect(() => {
+    if (playing) { startAt(t); const tr = liveTrack(p); if (tr && can) { const m = new Audio(tr.url); m.loop = true; m.volume = Math.min(1, p.audio.music_volume * (p.audio.duck !== false ? 0.6 : 1)); m.play().catch(() => {}); bed.current = m; } }
+    else stop();
+    return () => { stop(); if (bed.current) { bed.current.pause(); bed.current = null; } };
+  }, [playing]);
   return can;
 }
 function Player({ p, mode }) {
@@ -2818,7 +2885,7 @@ function Player({ p, mode }) {
       <input type="range" min="0" max=${total} step="0.05" value=${t} aria-label="Scrub" onChange=${e => { setT(+e.target.value); if (playing && seekRef.current) seekRef.current(+e.target.value); }} />
       <span className="mono muted" style=${{ fontSize: 12 }}>${fmtT(t)}/${fmtT(total)}</span>
     </div>
-    <div className="note" style=${{ fontSize: 12 }}>Scene ${idx + 1} of ${scenes.length} · ${clip ? 'animated clip' : 'zoom and pan'}${music && music.id !== 'none' ? ' · music: ' + music.name + ' ' + Math.round(p.audio.music_volume * 100) + '%' + (p.audio.duck ? ', ducked' : '') : ''}</div>
+    <div className="note" style=${{ fontSize: 12 }}>Scene ${idx + 1} of ${scenes.length} · ${clip ? 'animated clip' : 'zoom and pan'}${hasMusic(p) ? ' · music: ' + musicLabel(p) + ' ' + Math.round(p.audio.music_volume * 100) + '%' + (p.audio.duck !== false ? ', ducked' : '') : ''}</div>
   </div>`;
 }
 
@@ -2875,7 +2942,7 @@ function CompileScreen({ p, s }) {
     [(p.video_type === 'character' ? 'Dialogue' : 'Narration') + ' audio, ' + fmtT(scriptSecs(p)), p.script.lines.every(l => l.audio_status === 'ready')],
     [p.audio.caption_style === 'none' ? 'No captions' : 'Captions: ' + capById(p.audio.caption_style).name + (p.scenes.some(sc => sc.caption_text != null) ? ', with your edits' : ''), p.audio.caption_style !== 'none'],
     ['Each image stays on screen exactly as long as its sentences are spoken', true],
-    [p.audio.music_path === 'none' ? 'No background music' : 'Music: ' + MUSIC.find(m => m.id === p.audio.music_path).name + (p.audio.duck ? ', ducked under voice' : ''), p.audio.music_path !== 'none'],
+    [!hasMusic(p) ? 'No background music' : 'Music: ' + musicLabel(p) + (p.audio.duck !== false ? ', ducked under voice' : ''), hasMusic(p)],
     [p.format.aspect_ratio + ' at 1080p, MP4', true],
   ];
   return html`<${Fragment}>
@@ -2955,7 +3022,7 @@ function PublishKit({ p }) {
       <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${k.captions.map((c, i) => html`<${Choice} key=${i} on=${k.sel.caption === i} onClick=${() => sel('caption', i)}>${c}</${Choice}>`)}</div>
     </section>
     ${descs.length ? html`<section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Description</h2><${CopyBtn} text=${desc + '\n\nVisuals in this video are AI-generated.'} /></div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Description</h2><${CopyBtn} text=${desc + (liveTrack(p) && liveTrack(p).credit ? '\n\n' + liveTrack(p).credit : '') + '\n\nVisuals in this video are AI-generated.'} /></div>
       <p className="note">For the description box under the video.</p>
       <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${descs.map((c, i) => html`<${Choice} key=${i} on=${(k.sel.desc || 0) === i} onClick=${() => sel('desc', i)}>${c}</${Choice}>`)}</div>
     </section>` : null}
@@ -3029,6 +3096,7 @@ function ExportScreen({ p, s }) {
       </div>
     </div>
     ${LIVE && p.render.final_path && p.render.final_caps != null && p.render.final_caps !== capsSig(p) ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Captions or images changed after this final video was rendered.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Update it on Compile</button></div>` : null}
+    ${liveTrack(p) && liveTrack(p).credit ? html`<section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h2>Music credit</h2><${CopyBtn} text=${liveTrack(p).credit} /></div><p className="note">This track asks for credit. It is added to the description you copy below; keep it when you upload.</p><p className="prompt" style=${{ margin: 0 }}>${liveTrack(p).credit}</p></section>` : null}
     <${PublishKit} p=${p} />
     <${ChannelKit} p=${p} />
     <section className="panel row">
