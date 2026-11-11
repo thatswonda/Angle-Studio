@@ -600,3 +600,23 @@ def test_seedream_and_qwen_requests(monkeypatch, tmp_path):
     p2, c2 = asyncio.run(fal.draw(prompt, "16:9", "qwen-image", tmp_path / "q"))
     url, body = sent[-1]
     assert url.endswith("/fal-ai/qwen-image") and body["negative_prompt"] == "shading, 3D render" and body["image_size"] == {"width": 1312, "height": 736} and c2 == 0.02
+
+
+def test_thumbnail_words_are_drawn_on_the_picture(tmp_path):
+    from fastapi.testclient import TestClient
+    from PIL import Image
+    from app import live, thumbs
+    from app.main import app
+    assert thumbs.words_of("it was *alive*") == [("IT", False), ("WAS", False), ("ALIVE", True)]
+    assert thumbs.words_of("three days left")[-1] == ("LEFT", True)
+    assert thumbs.words_of("what was *inside*?")[-1] == ("INSIDE?", True)  # no star: the last word is coloured
+    src = live.MEDIA / "images" / "thumbtest.jpg"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (720, 1280), (40, 90, 140)).save(src)
+    c = TestClient(app)
+    r = c.post("/api/live/thumb-text", json={"image": "/media/images/thumbtest.jpg", "text": "DON'T OPEN *IT*", "place": "top", "style": "stickman"})
+    assert r.status_code == 200
+    out = Image.open(live.MEDIA / r.json()["url"].removeprefix("/media/")).convert("RGB")
+    yellow = sum(1 for px in out.crop((0, 0, 720, 500)).getdata() if px[0] > 220 and px[1] > 180 and px[2] < 80)
+    assert yellow > 500  # the starred word is yellow, in the top area
+    assert c.post("/api/live/thumb-text", json={"image": "/media/../../etc/passwd", "text": "x"}).status_code == 422

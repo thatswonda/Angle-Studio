@@ -18,6 +18,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from . import thumbs as thumbs_mod
 from . import jobs, render, storage
 from .providers import fal, google, youtube
 from .providers.google import GeminiWriter, ProviderError
@@ -728,6 +729,32 @@ async def revise(body: ReviseBody):
 
 # ---------- After the video: titles, post captions and thumbnails to choose from
 
+# Thumbnail layouts that make people click; each of the 3 thumbnails uses a different one.
+THUMB_FORMULAS = ["Reaction and mystery: a huge shocked or scared face on one side, the thing causing it half hidden on the other",
+                  "Moment before: frozen one second before the outcome, at peak tension",
+                  "This or that: a split frame, before and after or two choices, with one clearly winning or failing",
+                  "Hidden detail: an ordinary scene with one small strange thing circled in red",
+                  "Stakes: one person against something huge, a countdown or a number that raises the stakes"]
+
+
+class ThumbTextBody(BaseModel):
+    image: str
+    text: str
+    place: str = "top"
+    style: str = ""
+
+
+@router.post("/thumb-text")
+def thumb_text(body: ThumbTextBody):
+    """Draws the suspense words on a thumbnail picture (free, no AI model), so they read clearly and are spelled right."""
+    path = (MEDIA / body.image.removeprefix("/media/")).resolve()
+    if MEDIA.resolve() not in path.parents or not path.exists():
+        raise HTTPException(422, "The thumbnail picture is missing on the server. Make it again.")
+    out = MEDIA / "images" / f"{uuid.uuid4().hex}.jpg"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    thumbs_mod.add_text(path, body.text[:60], body.place, body.style, out)
+    return {"url": media_url(out)}
+
 class KitBody(BaseModel):
     writer: str = "gpt-5-5"
     story: str
@@ -756,15 +783,24 @@ async def publish_kit(body: KitBody):
             'each ending with 3-5 hashtags],'
             ' "descriptions": [3 different full YouTube descriptions, each 2 short paragraphs that summarize the video and what '
             'the viewer will learn or feel, then one line inviting a comment, then a line of 3-5 hashtags],'
-            ' "thumbnails": [3 objects {"concept": "what the thumbnail image shows, one vivid moment from the story, close and readable at small size",'
-            ' "text": "2-4 bold words to print on it"}],'
+            ' "thumbnails": [3 objects, each built on a DIFFERENT proven click formula, ' + json.dumps(THUMB_FORMULAS) + ', each '
+            '{"formula": "the formula name", "concept": "the picture: ONE main subject shown large and close (a face with a strong '
+            'readable emotion when the story has people), one simple background, and the one detail that makes people wonder; '
+            'stop at the moment of highest tension, never show the answer", "emotion": "the face or mood in 2-4 words", '
+            '"focus": "the one object or detail to circle or point at with a red arrow, or empty", '
+            '"text": "2-4 words of SUSPENSE in capitals that open a question the picture does not answer (an unfinished claim, a '
+            'warning, a stake, a number, a twist); never repeat the title, never give away the ending; put *stars* around the '
+            'one word to colour, e.g. \'IT WAS *ALIVE*\', \'DON\'T OPEN *IT*\', \'*3* DAYS LEFT\'", '
+            '"place": "where the words go so they never cover the face: top, bottom, left or right"}],'
             ' "tags": [8 search tags]}'))
         if isinstance(data, list):
             data = data[0] if data and isinstance(data[0], dict) else {}
         thumbs = [t for t in (data.get("thumbnails") or []) if isinstance(t, dict) and t.get("concept")][:3]
         return {"titles": [str(t) for t in (data.get("titles") or [])][:4], "captions": [str(c) for c in (data.get("captions") or [])][:3],
                 "descriptions": [str(c) for c in (data.get("descriptions") or [])][:3],
-                "thumbnails": [{"concept": str(t["concept"]), "text": str(t.get("text", ""))[:40]} for t in thumbs],
+                "thumbnails": [{"concept": str(t["concept"]), "text": str(t.get("text", ""))[:48], "formula": str(t.get("formula", ""))[:40],
+                                "emotion": str(t.get("emotion", ""))[:60], "focus": str(t.get("focus", ""))[:120],
+                                "place": t.get("place") if t.get("place") in thumbs_mod.PLACES else "top"} for t in thumbs],
                 "tags": [str(t) for t in (data.get("tags") or [])][:10], "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
     return _job("Writing the publish kit", work)

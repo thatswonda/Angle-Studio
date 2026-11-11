@@ -942,6 +942,15 @@ const isTextOnly = id => !!(MODELS.image.find(m => m.id === id) || {}).text;
 const textImageModel = p => isTextOnly(p.models.image) ? 'nano-banana-2' : p.models.image;
 // Thumbnails and channel art use the same rule as the scene images.
 const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); return idea ? { ...st, prefix: (st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix) + '. Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') } : st; };
+// A thumbnail picture built on a click formula: one big subject with a strong emotion, a clear open area for the words
+// (drawn on afterwards, so the image model prints none), punchy contrast, and one red circle or arrow on the mystery.
+const thumbPrompt = (st, t) => st.prefix + '. A scroll-stopping video thumbnail' + (t.formula ? ' (' + t.formula + ')' : '') + ': ' + t.concept.replace(/[.\s]+$/, '')
+  + '. The main subject is large and close, filling about half the frame' + (t.emotion ? ', showing ' + t.emotion + ' clearly, eyes and expression easy to read' : '')
+  + '. Freeze the moment of highest tension; do not show how it ends.'
+  + (t.focus ? ' One bright red circle or thick red arrow points at ' + t.focus + '.' : '')
+  + ' Bold, saturated colours with strong contrast between the subject and a simple, slightly darker background; a rim of light separates the subject.'
+  + ' Keep the ' + ({ top: 'top third', bottom: 'bottom third', left: 'left half', right: 'right half' }[t.place] || 'top third') + ' of the frame simple and free of important detail, for a title added later.'
+  + ' Draw no words, letters, numbers or logos anywhere. Still in the exact visual style described at the start.';
 // The prompt every scene image is made from: the template's recipe, the scene, and what to keep out.
 // Words on images: off, on key scenes, or on every scene. A creator's idea that mentions words turns them on.
 const TEXT_IDEA = /\b(text|texts|word|words|label|labels|caption|captions|title|titles|written|writing|letters?|typography|headline|headlines)\b/i;
@@ -1530,7 +1539,7 @@ const api = {
             a.pitch + ' ' + a.reason + '\n\nIn ' + lenLabel(p0.format.target_seconds) + ' you get the whole story, step by step, with nothing left out.\n\nWhich part surprised you most? Tell me in the comments.\n\n' + tags,
             a.hooks[0] + '\n\nThis video answers the questions people kept asking under the original: ' + a.title.toLowerCase() + '. Watch to the end for the part most people miss.\n\nWhat should I cover next? Comment below.\n\n' + tags,
             'Everything you need to know about ' + a.title.toLowerCase() + ', told as one simple story.\n\n' + a.pitch + ' Save it so you can come back to it later.\n\nHave you tried this yourself? Let me know.\n\n' + tags],
-          tags: a.tags || [], thumbnails: [a.suggested_title.split(':')[0], a.hooks[1].split('.')[0], a.type].map((t, i) => ({ concept: 'Scene ' + (i * 2 + 1) + ' with bold text', text: t.split(' ').slice(0, 4).join(' '), status: 'ready', scene: Math.min(p0.scenes.length - 1, i * 2) })), cost: 0 };
+          tags: a.tags || [], thumbnails: ['NOBODY *SAW* THIS', 'DON\u2019T DO *THIS*', '*ONE* MISTAKE'].map((t, i) => ({ formula: ['Reaction and mystery', 'Moment before', 'Hidden detail'][i], concept: 'Scene ' + (i * 2 + 1) + ' at its most tense moment', text: t, status: 'ready', scene: Math.min(p0.scenes.length - 1, i * 2) })), cost: 0 };
       }
       updateP(pid, p => { p.kit = { ...kit, sel: { title: 0, caption: 0, desc: 0, thumb: 0 } }; addCost(p, kit.cost || 0); });  // thumbnails are drawn one at a time, on request
     } catch (e) { updateP(pid, p => { p.kit = { error: e.message }; }); toast(e.message); }
@@ -1574,11 +1583,31 @@ const api = {
     const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = projStyle(p0);
     updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; p.kit.thumbnails[i].error = null; });
     try {
-      const prompt = st.prefix + '. A video thumbnail: ' + t.concept + '. Print this text large, bold and easy to read at small size: "' + t.text + '". High contrast, one clear focal point, uncluttered background.';
+      const prompt = thumbPrompt(st, t);
       const anchor = lookAnchor(p0, null);
-      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: textImageModel(p0), refs: templateRefs(st).concat(anchor ? [anchor] : []) });
-      updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'ready', url: r.url }); addCost(p, r.cost || 0); });
+      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs: templateRefs(st).concat(anchor ? [anchor] : []) });
+      updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { raw: r.url }); addCost(p, r.cost || 0); });
+      await api.thumbText(pid, i);
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
+  },
+  // The suspense words are drawn on the picture by the server (free), so they are spelled right and can be changed any time.
+  async thumbText(pid, i, text) {
+    const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i];
+    if (text != null) updateP(pid, p => { p.kit.thumbnails[i].text = text; });
+    if (!t.raw) return;
+    updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; });
+    try {
+      const r = await post('thumb-text', { image: t.raw, text: text != null ? text : t.text, place: t.place || 'top', style: styleById(p0.style).base || p0.style });
+      updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'ready', url: r.url, error: null }); });
+    } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
+  },
+  // New thumbnail ideas only; titles, captions and descriptions stay as they are.
+  async rewriteThumbs(pid) {
+    const old = clone(STATE.projects[pid].kit);
+    await api.publishKit(pid);
+    const k = STATE.projects[pid].kit;
+    if (k && k.thumbnails && !k.error) updateP(pid, p => { p.kit = { ...old, thumbnails: k.thumbnails, sel: { ...old.sel, thumb: 0 } }; });
+    else updateP(pid, p => { p.kit = old; });
   },
   async generateAudio(pid, lineIds) {
     if (LIVE) {
@@ -3061,6 +3090,15 @@ function CopyBtn({ text }) {
 function Choice({ on, onClick, children }) {
   return html`<button type="button" className="hookopt" aria-pressed=${on} onClick=${onClick}><span className="radio"></span><span style=${{ whiteSpace: 'pre-wrap', minWidth: 0 }}>${children}</span></button>`;
 }
+// The words on a thumbnail: edit them, *star* the word to colour yellow; redrawn on the same picture for free.
+function ThumbWords({ t, onSave }) {
+  const [v, setV] = useState(t.text); useEffect(() => setV(t.text), [t.text]);
+  const changed = v.trim() && v !== t.text;
+  return html`<div className="row" style=${{ gap: 4 }} onClick=${e => e.stopPropagation()}>
+    <input className="input" style=${{ flex: 1, minWidth: 0, fontWeight: 700 }} value=${v} maxLength="48" aria-label="Thumbnail words (put *stars* around the word to colour)" title="Put *stars* around the word to colour yellow" onInput=${e => setV(e.target.value)} onKeyDown=${e => { if (e.key === 'Enter' && changed) onSave(v.trim()); e.stopPropagation(); }} />
+    ${changed ? html`<button type="button" className="btn sm" disabled=${t.status === 'generating'} onClick=${() => onSave(v.trim())}>${t.raw ? 'Update words' : 'Save'}<span className="tag">free</span></button>` : null}
+  </div>`;
+}
 function PublishKit({ p }) {
   const k = p.kit; const im = modelOf(p, 'image');
   const sel = (key, v) => updateP(p.id, q => { q.kit.sel[key] = v; });
@@ -3074,14 +3112,16 @@ function PublishKit({ p }) {
   const title = k.titles[k.sel.title] || ''; const cap = k.captions[k.sel.caption] || ''; const descs = k.descriptions || []; const desc = descs[k.sel.desc || 0] || ''; const tags = k.tags || [];
   return html`<${Fragment}>
     <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} Made in your video\u2019s style with ${im.name}.</span></div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} Each uses a different click formula, made in your video\u2019s style with ${im.name}; the suspense words are added sharp on top, and you can change them for free.</span>${LIVE ? html`<button type="button" className="btn sm" style=${{ marginLeft: 'auto' }} onClick=${() => api.rewriteThumbs(p.id)}><${Icon} n="redo" />New thumbnail ideas</button>` : null}</div>
       <div className="kthumbs">${k.thumbnails.map((t, i) => { const sc = t.scene != null && p.scenes[t.scene]; const v = sc && sceneVersion(p, sc); return html`<div key=${i} className="kthumb" role="radio" tabIndex="0" aria-pressed=${k.sel.thumb === i} aria-checked=${k.sel.thumb === i} onClick=${() => sel('thumb', i)} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel('thumb', i); } }}>
         <div className=${'frame' + frameCls(p)}>
-          ${t.url ? html`<img src=${t.url} alt=${t.concept} />` : LIVE && t.status !== 'generating' ? html`<div className="overlay" style=${{ background: 'var(--sunk)', color: 'var(--muted)' }}>Not drawn yet</div>` : v ? html`<${Fragment}><${Art} seed=${v.seed} styleId=${p.style} upload=${v.upload || v.url} /><div className="caption bold" style=${{ bottom: '10%' }}>${t.text.split(' ').map((w, j) => html`<span key=${j}>${w}</span>`)}</div></${Fragment}>` : null}
+          ${t.url ? html`<img src=${t.url} alt=${t.concept} />` : LIVE && t.status !== 'generating' ? html`<div className="overlay" style=${{ background: 'var(--sunk)', color: 'var(--muted)' }}>Not drawn yet</div>` : v ? html`<${Fragment}><${Art} seed=${v.seed} styleId=${p.style} upload=${v.upload || v.url} /><div className="caption bold" style=${{ bottom: '10%' }}>${t.text.split(' ').map((w, j) => html`<span key=${j} style=${/^\*.*\*$/.test(w) ? { color: '#FFD600' } : null}>${w.replace(/\*/g, '').toUpperCase()}</span>`)}</div></${Fragment}>` : null}
           ${t.status === 'generating' ? html`<div className="overlay"><span className="spinner"></span>Drawing</div>` : null}
           ${t.status === 'failed' ? html`<div className="overlay"><span>${t.error || 'Failed'}</span></div>` : null}
         </div>
-        <span className="note"><strong>${t.text}</strong> · ${t.concept}</span>
+        ${t.formula ? html`<span className="tag" style=${{ alignSelf: 'flex-start' }}>${t.formula.split(':')[0]}</span>` : null}
+        <span className="note">${t.concept}</span>
+        ${LIVE ? html`<${ThumbWords} t=${t} onSave=${txt => api.thumbText(p.id, i, txt)} />` : html`<span className="note"><strong>${t.text.replace(/\*/g, '')}</strong></span>`}
         <div className="row" style=${{ gap: 4 }}>
           ${LIVE ? html`<button type="button" className=${'btn sm' + (t.url ? '' : ' primary')} disabled=${t.status === 'generating'} onClick=${e => { e.stopPropagation(); api.makeThumb(p.id, i); }}><${Icon} n=${t.url ? 'redo' : 'spark'} />${t.url ? 'Redo' : 'Make this thumbnail'}<span className="tag">${fmt$(im.cost)}</span></button>` : null}
           ${LIVE && t.url ? html`<a className="btn sm" href=${t.url} download=${'thumbnail-' + (i + 1) + '.jpg'} onClick=${e => e.stopPropagation()}><${Icon} n="download" />Download</a>` : null}
