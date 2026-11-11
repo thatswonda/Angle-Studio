@@ -20,7 +20,9 @@ services:
         sync: false
       - key: FAL_KEY         # fal.ai key for the FLUX schnell and dev image models
         sync: false
+      - key: ANTHROPIC_API_KEY  # Claude writes angles, scripts, image ideas, titles and channel ideas
+        sync: false
       - key: ANGLE_STUDIO_WRITER
-        value: gpt-5-5
+        value: claude-opus-5-5
       - key: ANGLE_STUDIO_MOCK
         value: "0"

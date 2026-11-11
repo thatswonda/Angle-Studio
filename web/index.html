@@ -284,6 +284,8 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .vthumb { position: relative; width: 100%; max-height: 300px; aspect-ratio: 9 / 16; background: var(--frame); border-radius: var(--r-sm); overflow: hidden; margin: 0 auto; }
 .vthumb.r16x9 { aspect-ratio: 16 / 9; } .vthumb.r1x1 { aspect-ratio: 1; } .vthumb.r4x5 { aspect-ratio: 4 / 5; }
 .vthumb video, .vthumb svg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.idea-prev { width: 150px; flex: none; }
+.idea-prev.r16x9 { width: 240px; }
 .idea-box { border: 1px dashed var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--sunk); }
 .tune-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px 14px; margin: 10px 0 6px; }
 .line-edit { grid-column: 1 / -1; display: grid; gap: 8px; padding: 8px 0 4px; }
@@ -493,8 +495,8 @@ const MODELS = {
   writer: [
     { id: 'gpt-5-5', name: 'GPT-5.5', provider: 'openai', price: '$5/$30 per 1M tok', perVideo: 0.30, perMin: 0.03, limits: 'ChatGPT API · strong long-form writing · JSON output' },
     { id: 'gpt-5', name: 'GPT-5', provider: 'openai', price: '$1.25/$10 per 1M tok', perVideo: 0.10, perMin: 0.01, limits: 'ChatGPT API · about a third of the cost' },
-    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', provider: 'anthropic', price: '$4/$20 per 1M tok', perVideo: 0.40, perMin: 0.04, limits: 'Anthropic API · add its key to switch' },
-    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', provider: 'anthropic', price: '$2/$10 per 1M tok', perVideo: 0.20, perMin: 0.02, limits: 'Anthropic API · add its key to switch' },
+    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', provider: 'anthropic', price: '$4/$20 per 1M tok', perVideo: 0.40, perMin: 0.04, limits: 'The brain of the app: angles, scripts, image ideas, titles · Anthropic API' },
+    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', provider: 'anthropic', price: '$2/$10 per 1M tok', perVideo: 0.20, perMin: 0.02, limits: 'About half the cost of Opus · Anthropic API' },
     { id: 'gemini-pro-writer', name: 'Gemini Pro', provider: 'google', price: '~$0.10/video', perVideo: 0.10, perMin: 0.01, limits: 'Same Google account as the analysis step · needs Gemini billing' },
     { id: 'gemini-flash-writer', name: 'Gemini Flash', provider: 'google', price: '~$0.02/video', perVideo: 0.02, perMin: 0.003, limits: 'Fast and cheap · works on the Gemini free tier' },
   ],
@@ -648,8 +650,23 @@ const frameCls = p => ' r' + p.format.aspect_ratio.replace(':', 'x');
 const LENGTHS = [30, 60, 90, 180, 300, 600];
 const lenLabel = v => v < 120 ? v + 's' : (Math.round(v / 6) / 10) + ' min';
 const LENGTH_OPTS = [...LENGTHS.map(v => ({ value: v, label: lenLabel(v) })), { value: 'c', label: 'Custom' }];
-// Ways to recreate what made the reference video go viral (never a sequel): the new video stands alone and is recommended beside it.
-const ANGLE_TYPES = ['Fill a gap', 'Same story, new look', 'Same idea, new niche', 'Similar storyline', 'New perspective'];
+// Ways to remake the same viral video (never a sequel): the new video stands alone and is recommended beside it.
+const ANGLE_TYPES = ['Fill a gap', 'Same video, new niche', 'Same video, new character', 'Same format, new topic', 'Same story, new look', 'Similar storyline', 'New perspective'];
+// How the script talks to the viewer, chosen after the angle.
+const SCRIPT_TYPES = [
+  { id: 'story', name: 'Story', desc: 'A main character, a problem, rising tension and a payoff.' },
+  { id: 'narration', name: 'Narration (you / what if)', desc: '\u201cWhat if you woke up one morning and everyone was gone? You walk to the store. Empty.\u201d' },
+  { id: 'explainer', name: 'Explainer', desc: 'A question, then clear steps, facts and examples, ending on a takeaway.' },
+  { id: 'documentary', name: 'Documentary', desc: 'Calm, factual narration with real facts, places and dates.' },
+  { id: 'list', name: 'Top list', desc: 'A countdown: \u201cNumber five\u2026\u201d, the strongest item last.' },
+  { id: 'pov', name: 'POV (first person)', desc: '\u201cI wake up. The street is silent.\u201d Told by the person living it.' },
+  { id: 'motivational', name: 'Motivational', desc: 'Direct, rhythmic, inspiring lines and a call to act.' },
+];
+const scriptTypeOf = p => SCRIPT_TYPES.find(t => t.id === (p.script_type || 'story')) || SCRIPT_TYPES[0];
+function ScriptTypePicker({ p, value, onChange, disabled }) {
+  const cur = SCRIPT_TYPES.find(t => t.id === (value || 'story')) || SCRIPT_TYPES[0];
+  return html`<label className="field" htmlFor=${'stype-' + p.id}>Script type<select id=${'stype-' + p.id} className="select" disabled=${disabled} value=${cur.id} onChange=${e => onChange(e.target.value)}>${SCRIPT_TYPES.map(t => html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}</select><span className="note">${cur.desc}</span></label>`;
+}
 
 /* ======================================================================
    Sample reference video (fictional). In demo mode any link loads this.
@@ -834,9 +851,9 @@ const SAMPLE = {
 // The demo shows the 4 angles with the highest viral potential, as the real writer returns them.
 SAMPLE.angles = [
   ['a1', 'Fill a gap', 94, 'the 12-month balcony format and its hook', 'answers the top question: a balcony with little sun'],
-  ['a6', 'Same idea, new niche', 91, 'growing real food in a tiny rented space', 'a single windowsill instead of a balcony'],
+  ['a6', 'Same video, new niche', 91, 'growing real food in a tiny rented space', 'a single windowsill instead of a balcony'],
   ['a9', 'Same story, new look', 88, 'the same year, beat by beat', 'told in watercolor instead of live action'],
-  ['a4', 'Similar storyline', 85, 'a year of small wins and one funny rival', 'a fresh story built around the pigeon'],
+  ['a4', 'Same video, new character', 85, 'a year of small wins on the same balcony', 'the pigeon becomes the main character'],
 ].map(([id, type, score, keeps, changes]) => ({ ...SAMPLE.angles.find(a => a.id === id), type, score, keeps, changes, potential: 'High' }));
 const DEFAULT_CHARS = [
   { id: 'ch-tomi', name: 'Tomi', description: 'A cheerful cartoon tomato plant with a small round face and leaf arms', notes: 'Proud, a little dramatic', voice_id: 'v-puck', seed: 501 },
@@ -876,7 +893,8 @@ const styleImg = (st, n) => st.refs ? st.refs[n - 1] : (st.examples ? 'templates
 const isTextOnly = id => !!(MODELS.image.find(m => m.id === id) || {}).text;
 // Thumbnails and banners print words, which FLUX does poorly: they use Nano Banana 2 when a FLUX model is chosen.
 const textImageModel = p => isTextOnly(p.models.image) ? 'nano-banana-2' : p.models.image;
-const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); return idea ? { ...st, prefix: (st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix) + '. Also: ' + idea } : st; };
+// Thumbnails and channel art use the same rule as the scene images.
+const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); return idea ? { ...st, prefix: (st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix) + '. Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') } : st; };
 // The prompt every scene image is made from: the template's recipe, the scene, and what to keep out.
 // Words on images: off, on key scenes, or on every scene. A creator's idea that mentions words turns them on.
 const TEXT_IDEA = /\b(text|texts|word|words|label|labels|caption|captions|title|titles|written|writing|letters?|typography|headline|headlines)\b/i;
@@ -892,12 +910,12 @@ function buildImagePrompt(p, sc, chars) {
   const words = sceneWords(p, sc); const textOk = !!words || TEXT_IDEA.test(idea);
   const avoid = textOk ? (st.avoid || '').replace(/,?\s*(speech bubbles, )?(words, labels or letters|words or letters|labels or letters|written labels|lettering)/gi, '').replace(/^\s*,\s*/, '').trim() : (st.avoid || '');
   const said = sceneText(p, sc).replace(/"/g, "'").slice(0, 400);
-  return prefix + '. Scene: ' + (sc.image_prompt || sc.description) + (chars ? '. Characters: ' + chars : '')
+  return prefix + '.' + (idea ? ' Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') + '.' : '') + ' Scene: ' + (sc.image_prompt || sc.description) + (chars ? '. Characters: ' + chars : '')
     + '. This image is on screen while the narrator says: "' + said + '" Make that meaning obvious at a glance, even with the sound off: one clear focal point, readable faces and actions.'
-    + (idea ? ' Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') + '.' : '')
     + (words ? ' Write the words "' + words + '" exactly once, in large, bold, clean letters as part of the image, spelled exactly like that and easy to read on a phone. These are the only words in the image.' : '')
     + (avoid ? ' Avoid: ' + avoid + '.' : '')
-    + (textOk ? ' No watermarks, logos or signatures.' : ' No words, captions, watermarks or logos in the image.');
+    + (textOk ? ' No watermarks, logos or signatures.' : ' No words, captions, watermarks or logos in the image.')
+    + (idea ? ' Remember the rule: ' + idea.replace(/[.\s]+$/, '') + '.' : '');
 }
 const imagePrompt = (st, scene) => st.prefix + '. Scene: ' + scene + (st.avoid ? '. Avoid: ' + st.avoid : '') + '. No words, captions, watermarks or logos in the image.';
 const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || MODELS[kind][0];
@@ -1133,6 +1151,10 @@ async function detectLive() {
       fresh.projects = { [pj.id]: pj }; fresh.currentId = pj.id;
     }
     SYNC_READY = true;
+    if (d.providers.anthropic && /^claude/.test(d.writer || '') && !STATE.claude_brain) {
+      update(s => { s.claude_brain = true; s.settings.defaults.writer = d.writer; Object.values(s.projects).forEach(q => { q.models.writer = d.writer; }); });
+      setTimeout(() => toast('Claude is now the brain of the app: angles, scripts, image ideas, titles and channel ideas. Gemini still watches the videos.'), 600);
+    }
     update(s => { s.settings.keys = { ...s.settings.keys, ...d.providers }; if (!s.analyst_v2) { s.settings.analyst = 'gemini-flash'; s.analyst_v2 = true; } });
   } catch (e) { /* not served by the Angle Studio server: demo mode */ }
 }
@@ -1374,7 +1396,7 @@ const api = {
         const r = await liveJob(pid, 'Writing the story', 'story', {
           writer: wr.id, angles: chosen, analysis: p0.analysis, source_title: p0.source.title, target_seconds: p0.format.target_seconds,
           video_type: p0.video_type, characters: p0.characters.map(c => ({ name: c.name, description: c.description })),
-          direction: p0.user_direction, tone: (STATE.templates[0] || {}).tone || '', idea: p0.start_mode === 'idea' ? p0.own_text : '' }, [wr.name + ' is writing the story']);
+          direction: p0.user_direction, script_type: p0.script_type || 'story', tone: (STATE.templates[0] || {}).tone || '', idea: p0.start_mode === 'idea' ? p0.own_text : '' }, [wr.name + ' is writing the story']);
         updateP(pid, p => {
           const hints = {}; (r.visuals || []).forEach(v => splitSentences(v.sentence).forEach(x => { hints[norm(x)] = v.visual; }));
           p.script = { hook_options: r.hook_options, chosen_hook: 0, story: r.story, visual_hints: hints, lines: null, target_seconds: p.format.target_seconds,
@@ -1391,13 +1413,18 @@ const api = {
     updateP(pid, p => { p.script = buildScript(p); p.script.written_by = wr; p.scenes = []; p.plan_sig = null; addCost(p, modelOf(p, 'writer').perVideo * 0.3); });
   },
   // Rewrites the story with the creator's idea; the previous version is kept for Undo.
-  async reviseStory(pid, idea) {
+  async changeScriptType(pid, type) {
+    updateP(pid, q => { q.script_type = type; });
+    const t = SCRIPT_TYPES.find(x => x.id === type) || SCRIPT_TYPES[0];
+    return api.reviseStory(pid, 'Rewrite the whole script as a ' + t.name + ' (' + t.desc + ') and keep its content, length and opening idea.', type);
+  },
+  async reviseStory(pid, idea, scriptType) {
     const p0 = STATE.projects[pid]; const wr = modelOf(p0, 'writer');
     updateP(pid, p => { p.script.revising = true; });
     try {
       let story, changed, hints = {}, cost = 0, warning = null;
       if (LIVE) {
-        const r = await liveJob(pid, 'Rewriting the story', 'revise', { writer: wr.id, story: p0.script.story, idea, target_seconds: p0.format.target_seconds,
+        const r = await liveJob(pid, 'Rewriting the story', 'revise', { script_type: scriptType || '', writer: wr.id, story: p0.script.story, idea, target_seconds: p0.format.target_seconds,
           video_type: p0.video_type, characters: p0.characters.map(c => ({ name: c.name, description: c.description })) }, [wr.name + ' is rewriting the story with your idea']);
         story = r.story; changed = r.changed || 'Your idea was added.'; cost = r.cost || 0; warning = r.warning;
         (r.visuals || []).forEach(v => splitSentences(v.sentence).forEach(x => { hints[norm(x)] = v.visual; }));
@@ -1882,6 +1909,7 @@ function IngestScreen({ p, s }) {
   const wr = modelOf(p, 'writer'); const ownWords = words(own).length;
   const ownSecs = Math.max(15, Math.min(600, Math.round(ownWords / 2.5)));
   const modeSeg = html`<${Seg} label="How to start" value=${mode} onChange=${setMode} options=${[{ value: 'link', label: 'From a video link' }, { value: 'idea', label: 'From my idea' }, { value: 'paste', label: 'Paste my story' }]} />`;
+  const [stype, setStype] = useState(p.script_type || 'story');
   const typeSeg = html`<div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${vt} onChange=${setVt} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>`;
   if (mode !== 'link' && !(p.analysis && !p.ingesting)) return html`<${Fragment}>
     <${StepHead} title=${mode === 'idea' ? 'Start from your idea' : 'Start from your own story'} sub=${mode === 'idea' ? 'Type what the video is about. ' + wr.name + ' writes the story, then you go on to style, scenes, voice and the video.' : 'Paste a story you wrote. It is used word for word, then you go on to style, scenes, voice and the video.'} />
@@ -1894,7 +1922,8 @@ function IngestScreen({ p, s }) {
         ${typeSeg}
         <div className="row"><span className="note">Video length</span><${Seg} label="Video length" value=${LENGTHS.includes(len) ? len : 'c'} onChange=${v => setLen(v === 'c' ? 120 : v)} options=${LENGTH_OPTS} />
           ${!LENGTHS.includes(len) ? html`<input id="own-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} value=${len} onChange=${e => setLen(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" /><span className="note">seconds, up to 600</span>` : null}</div>
-        <div><${CostGate} p=${p} label="Write my story" disabled=${words(own).length < 3} cost=${wr.perVideo * 0.3} rows=${[[wr.name, 'one ' + lenLabel(len) + ' story with 3 hook options and an image idea per sentence']]} onGo=${() => api.startOwn(p.id, 'idea', own, { video_type: vt, target_seconds: len })} /></div>
+        <div style=${{ maxWidth: 420 }}><${ScriptTypePicker} p=${p} value=${stype} onChange=${setStype} /></div>
+        <div><${CostGate} p=${p} label="Write my story" disabled=${words(own).length < 3} cost=${wr.perVideo * 0.3} rows=${[[wr.name, 'one ' + lenLabel(len) + ' story with 3 hook options and an image idea per sentence']]} onGo=${() => { updateP(p.id, q => { q.script_type = stype; }); api.startOwn(p.id, 'idea', own, { video_type: vt, target_seconds: len }); }} /></div>
       </${Fragment}>` : html`<${Fragment}>
         <label className="field" htmlFor="own-story">Your story
           <textarea id="own-story" className="textarea story" rows="12" placeholder=${vt === 'character' ? 'One line per speaker, like\nAda: Where did you find this?\nTunde: In grandma\u2019s old box.' : 'Paste the full narration. Leave a blank line between paragraphs.'} value=${own} onChange=${e => setOwn(e.target.value)}></textarea></label>
@@ -2049,6 +2078,7 @@ function AnglesScreen({ p, s }) {
               ${!LENGTHS.includes(p.format.target_seconds) ? html`<input id="angle-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${p.format.target_seconds} onChange=${e => updateP(p.id, q => { q.format.target_seconds = Math.max(15, Math.min(600, +e.target.value || 60)); })} aria-label="Custom length in seconds" /><span className="note">seconds, up to 600</span>` : null}
             </div>
           </div>
+          <${ScriptTypePicker} p=${p} value=${p.script_type} disabled=${locked} onChange=${v => updateP(p.id, q => { q.script_type = v; })} />
           <label className="field" htmlFor="direction">Your direction (optional)
             <textarea id="direction" className="textarea" rows="3" disabled=${locked} placeholder="e.g. Keep it under a minute, end on the cheapest crop, talk to renters" value=${p.user_direction} onChange=${e => updateP(p.id, q => { q.user_direction = e.target.value; })}></textarea>
           </label>
@@ -2064,6 +2094,8 @@ function AnglesScreen({ p, s }) {
    ====================================================================== */
 function ScriptScreen({ p, s }) {
   const sc = p.script; const locked = p.checkpoints.script;
+  const [nextType, setNextType] = useState(scriptTypeOf(p).id);
+  useEffect(() => { setNextType(scriptTypeOf(p).id); }, [p.script_type]);
   const [custom, setCustom] = useState(!LENGTHS.includes(p.format.target_seconds));
   const [idea, setIdea] = useState('');
   if (sc && sc.error) return html`<${Fragment}><${StepHead} title="The story could not be written" sub=${sc.error} /><div className="row"><button type="button" className="btn primary" onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Try again</button><span className="note">You can also switch the Writing model in the top bar first.</span></div></${Fragment}>`;
@@ -2091,11 +2123,13 @@ function ScriptScreen({ p, s }) {
   };
   const tpl = s.templates[0];
   return html`<${Fragment}>
-    <${StepHead} title="Story script" sub=${(sc.pasted ? 'Your own story, used word for word.' : 'One story, written by ' + (sc.written_by || modelOf(p, 'writer').name) + '.') + ' Edit it freely. Next it is split into scenes and each scene gets an image.'}>
+    <${StepHead} title="Script" sub=${(sc.pasted ? 'Your own script, used word for word.' : 'Written by ' + (sc.written_by || modelOf(p, 'writer').name) + ' as a ' + scriptTypeOf(p).name.toLowerCase() + '.') + ' Edit it freely. Next it is split into scenes and each scene gets an image.'}>
       <div className="row"><span className="note">Length</span>
         <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (locked) return; if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${LENGTH_OPTS} />
         ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
       </div>
+      <div className="row"><span className="note">Type</span><select className="select" style=${{ width: 'auto' }} aria-label="Script type" disabled=${locked || sc.revising} value=${nextType} onChange=${e => setNextType(e.target.value)}>${SCRIPT_TYPES.map(t => html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}</select>
+        ${nextType !== scriptTypeOf(p).id ? html`<button type="button" className="btn primary" disabled=${locked || sc.revising} onClick=${() => api.changeScriptType(p.id, nextType)}><${Icon} n="redo" />Rewrite as ${(SCRIPT_TYPES.find(t => t.id === nextType) || {}).name}</button>` : null}</div>
       ${pasted ? html`<button type="button" className="btn" disabled=${locked || sc.revising} title="The writer shortens or lengthens your story to the target and keeps what it says" onClick=${() => api.reviseStory(p.id, 'Do not add new content. Only shorten or lengthen the story so it fits the target length, keeping its events, order, names and voice.')}><${Icon} n="redo" />Fit my story to ${lenLabel(target)}</button>` : html`<button type="button" className="btn" disabled=${locked} onClick=${() => api.writeScript(p.id)}><${Icon} n="redo" />Rewrite to ${lenLabel(target)}</button>`}
     </${StepHead}>
     <div className="script-grid">
@@ -2236,14 +2270,33 @@ function StyleIdea({ p, st, locked }) {
     setName(''); setMore(false); toast('Saved \u201c' + nm + '\u201d and chose it for this video.');
   };
   const changed = idea.trim() !== saved;
+  const [prev, setPrev] = useState(null); const im = modelOf(p, 'image');
+  const preview = async () => {
+    const t = idea.trim(); setPrev({ status: 'generating' });
+    try {
+      if (!LIVE) { await sleep(700); setPrev({ status: 'ready', seed: randSeed(), idea: t }); return; }
+      const sc0 = p.scenes && p.scenes[0]; const scene = (sc0 && (sc0.image_prompt || sc0.description)) || 'a person at a busy market stall, explaining something exciting to a friend';
+      const textOk = TEXT_IDEA.test(t); const prefix = st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix;
+      const avoid = textOk ? (st.avoid || '').replace(/,?\s*(speech bubbles, )?(words, labels or letters|words or letters|labels or letters|written labels|lettering)/gi, '').replace(/^\s*,\s*/, '').trim() : (st.avoid || '');
+      const prompt = prefix + '.' + (t ? ' Rule for every image (follow it exactly): ' + t.replace(/[.\s]+$/, '') + '.' : '') + ' Scene: ' + scene + '.' + (avoid ? ' Avoid: ' + avoid + '.' : '') + (textOk ? ' No watermarks, logos or signatures.' : ' No words, captions, watermarks or logos in the image.') + (t ? ' Remember the rule: ' + t.replace(/[.\s]+$/, '') + '.' : '');
+      const r = await post('image', { prompt, aspect: p.format.aspect_ratio, model: p.models.image, refs: st.refs || [] });
+      updateP(p.id, q => { addCost(q, r.cost || 0); });
+      setPrev({ status: 'ready', url: r.url, idea: t });
+    } catch (e) { setPrev({ status: 'failed', error: e.message }); }
+  };
   return html`<div className="stack idea-box" style=${{ gap: 8 }}>
     <label className="field" htmlFor=${'idea-' + st.id}><strong>Your idea for this template</strong><span className="note">A rule every image follows, e.g. \u201ceach image carries one or two bold words that sum up the scene\u201d or \u201ccharacters wear colourful Ankara fabrics\u201d.</span>
       <textarea id=${'idea-' + st.id} className="textarea" rows="2" value=${idea} onChange=${e => setIdea(e.target.value)} placeholder="Your idea for this template"></textarea></label>
     <div className="row">
       <button type="button" className="btn sm primary" disabled=${!changed && forThis && !own} onClick=${toTemplate}><${Icon} n="check" />${saved && !idea.trim() ? 'Remove the idea from this template' : 'Save to this template'}</button>
       <button type="button" className="btn sm" disabled=${forThis && idea.trim() === own} onClick=${forVideo}>Use for this video only</button>
+      <button type="button" className="btn sm ghost" disabled=${!idea.trim() || (prev && prev.status === 'generating')} onClick=${preview}><${Icon} n="spark" />Preview with my idea${LIVE ? html`<span className="tag">${fmt$(im.cost)}</span>` : null}</button>
       <button type="button" className="btn sm ghost" aria-expanded=${more} onClick=${() => setMore(!more)}>Save as a new template\u2026</button>
     </div>
+    ${prev ? html`<div className="row" style=${{ alignItems: 'flex-start' }}>
+      <div className=${'frame idea-prev' + frameCls(p)}>${prev.status === 'generating' ? html`<div className="overlay"><span className="spinner"></span></div>` : prev.status === 'failed' ? html`<div className="overlay"><span>${prev.error}</span></div>` : html`<${Art} seed=${prev.seed || 7} styleId=${st.id} upload=${prev.url} title="Preview with your idea" />`}</div>
+      <span className="note" style=${{ maxWidth: 260 }}>${prev.status === 'ready' ? 'One test image in ' + st.name + ' with your idea' + (p.scenes && p.scenes[0] ? ', using scene 1 of this video' : '') + '. Not added to your video.' : prev.status === 'generating' ? 'Drawing a test image\u2026' : ''}</span>
+    </div>` : null}
     ${more ? html`<div className="row"><input className="input" style=${{ maxWidth: 240 }} placeholder=${'Name, e.g. ' + st.name + ' (mine)'} value=${name} onChange=${e => setName(e.target.value)} aria-label="Template name" /><button type="button" className="btn sm" disabled=${!idea.trim()} onClick=${asCopy}><${Icon} n="plus" />Save copy</button></div>` : null}
     <p className="note">${own ? 'This video uses its own idea: \u201c' + own + '\u201d.' : saved ? 'Saved on this template: \u201c' + saved + '\u201d. Every video using it follows this.' : 'No idea saved on this template yet.'}${forThis ? ' Images already made keep their look until you redo them (click any image on the Scenes step).' : ''}</p>
   </div>`;

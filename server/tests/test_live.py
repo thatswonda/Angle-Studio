@@ -118,7 +118,7 @@ def test_analysis_is_cached(monkeypatch, tmp_path):
 
     async def fake_write(writer_id, progress, prompt):
         prompts.append(prompt)
-        return {"angles": [{"title": f"A{i}", "type": "Same idea, new niche" if i % 2 else "Fill a gap", "score": 60 + i * 5,
+        return {"angles": [{"title": f"A{i}", "type": "Same video, new niche" if i % 2 else "Fill a gap", "score": 60 + i * 5,
                             "keeps": "the hook", "changes": "the niche"} for i in range(6)]}, 0.01, "Gemini Flash", None
 
     monkeypatch.setattr(live.youtube, "fetch", fake_fetch)
@@ -140,8 +140,8 @@ def test_analysis_is_cached(monkeypatch, tmp_path):
     assert len(watched) == 1  # the video was watched once
     angles = first["result"]["angles"]
     assert [a["title"] for a in angles] == ["A5", "A4", "A3", "A2"]  # only the 4 with the highest viral potential, best first
-    assert angles[0]["keeps"] == "the hook" and angles[0]["type"] == "Same idea, new niche"
-    assert "NOT a continuation" in prompts[0] and "exactly 4" in prompts[0]
+    assert angles[0]["keeps"] == "the hook" and angles[0]["type"] == "Same video, new niche"
+    assert "NOT a continuation" in prompts[0] and "exactly 4" in prompts[0] and "NOT as a story" in prompts[0]
 
 
 def test_tts_wav_wrapper_is_stripped():
@@ -390,3 +390,66 @@ def test_scene_visuals_carry_the_message(monkeypatch):
 def test_scene_visual_descriptions_never_carry_their_own_words():
     from app.live import _no_words
     assert _no_words("A man holds an empty wallet. Bold words **PAYDAY SPENT** float above.") == "A man holds an empty wallet."
+
+
+def test_claude_writer(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace as NS
+    from app.providers.anthropic_writer import ClaudeWriter
+    sent = {}
+
+    class FakeStream:
+        def __init__(self, msg): self.msg = msg
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get_final_message(self): return self.msg
+
+    def client_returning(msg):
+        def stream(**kw):
+            sent.update(kw)
+            return FakeStream(msg)
+        return NS(beta=NS(messages=NS(stream=stream)))
+
+    ok = NS(stop_reason="end_turn", content=[NS(type="thinking", thinking=""), NS(type="text", text='{"story": "Once"}')],
+            usage=NS(input_tokens=1000, output_tokens=2000))
+    data, cost = asyncio.run(ClaudeWriter("claude-opus-5-5", client_returning(ok)).complete_json("sys", "write it"))
+    assert data == {"story": "Once"} and abs(cost - (1000 * 4 + 2000 * 20) / 1e6) < 1e-9
+    assert sent["model"] == "claude-opus-5-5" and sent["output_config"] == {"effort": "medium"} and sent["fallbacks"] == "default"
+    assert "thinking" not in sent and "temperature" not in sent  # adaptive thinking is the default; sampling params are rejected
+    refused = NS(stop_reason="refusal", content=[], usage=NS(input_tokens=1, output_tokens=0))
+    try:
+        asyncio.run(ClaudeWriter("claude-sonnet-5-5", client_returning(refused)).complete_json("sys", "x"))
+        raise AssertionError("expected an error")
+    except ProviderError as e:
+        assert "declined" in str(e)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    try:
+        asyncio.run(ClaudeWriter("claude-opus-5-5").complete_json("sys", "x"))
+        raise AssertionError("expected an error")
+    except ProviderError as e:
+        assert "ANTHROPIC_API_KEY" in str(e)
+
+
+def test_claude_is_the_brain_when_its_key_is_set(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.delenv("ANGLE_STUDIO_WRITER", raising=False)
+    s = TestClient(app).get("/api/live/status").json()
+    assert s["providers"]["anthropic"] and s["writer"] == "claude-opus-5-5"
+
+
+def test_script_type_reaches_the_writer(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    seen = []
+
+    async def fake_write(writer_id, progress, prompt):
+        seen.append(prompt)
+        return {"hook_options": ["a", "b", "c"], "story": " ".join(["word"] * 60)}, 0.01, "Claude Opus 5.5", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    j = _run_job(TestClient(app), "/api/live/story", {"writer": "claude-opus-5-5", "angles": [{"title": "Everyone is gone"}],
+                                                       "target_seconds": 30, "script_type": "narration"})
+    assert j["status"] == "done" and "NARRATION in second person" in seen[-1] and "original script" in seen[-1]

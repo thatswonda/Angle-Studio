@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from . import jobs, render, storage
 from .providers import fal, google, youtube
 from .providers.google import GeminiWriter, ProviderError
+from .providers.anthropic_writer import ClaudeWriter
 from .providers.openai_writer import OpenAIWriter
 
 router = APIRouter(prefix="/api/live")
@@ -28,14 +29,36 @@ MEDIA = storage.ROOT / "media"
 STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette", "cartoonexplain", "historypaint"]
 # Ways to recreate what made the reference video go viral, so the new video is recommended beside it.
 # Never a sequel or "part 2": each one is a stand-alone video built on the same proven idea.
-ANGLE_TYPES = ["Fill a gap", "Same story, new look", "Same idea, new niche", "Similar storyline", "New perspective"]
+ANGLE_TYPES = ["Fill a gap", "Same video, new niche", "Same video, new character", "Same format, new topic",
+               "Same story, new look", "Similar storyline", "New perspective"]
 ANGLE_GUIDE = {
-    "Fill a gap": "covers what the video left out or what viewers asked for in the comments, using the same format and hook style",
-    "Same story, new look": "retells the same story or concept in a clearly different visual style (for example animated, clay, stick figure, cinematic)",
-    "Same idea, new niche": "takes the idea that made it go viral and applies it to a different niche or audience",
-    "Similar storyline": "a fresh story with the same structure, emotional beats and payoff that made the original work",
-    "New perspective": "the same events or idea told from another character's or group's point of view",
+    "Fill a gap": "makes the video viewers asked for or that the original left out (from the comments and gaps), in the same format and hook style",
+    "Same video, new niche": "the same video idea that went viral, remade for a different niche or audience",
+    "Same video, new character": "the same video with a different main character (another person, animal, historical figure, object or job)",
+    "Same format, new topic": "the same structure, hook, pacing and payoff on a different but related topic people also search for",
+    "Same story, new look": "the same story or concept remade in a clearly different visual style (animated, clay, stick figure, cinematic...)",
+    "Similar storyline": "a fresh storyline with the same structure, emotional beats and payoff that made the original work",
+    "New perspective": "the same events or idea from another character's or group's point of view",
 }
+# How the script talks to the viewer, chosen after the angle. The writer follows the one the creator picked.
+SCRIPT_TYPES = {
+    "story": "STORY: tell a story with a main character, a goal or problem, rising tension and a satisfying payoff.",
+    "narration": "NARRATION in second person: speak straight to the viewer as an immersive what-if or experience "
+                 "('What if you woke up one morning and everyone was gone? You walk to the store. Empty.'). Vivid moments the "
+                 "viewer imagines living, building curiosity; no named main character.",
+    "explainer": "EXPLAINER: a question up front, then clear simple steps, facts and examples, each point building on the last, "
+                 "ending on a clear takeaway.",
+    "documentary": "DOCUMENTARY: calm, factual narration with real facts, places, dates and numbers, a sense of discovery.",
+    "list": "TOP LIST: a countdown of numbered items ('Number five...'), each a short punchy reveal, the strongest item last.",
+    "pov": "POV in first person, present tense, as the person living it ('I wake up. The street is silent.').",
+    "motivational": "MOTIVATIONAL SPEECH: direct, rhythmic, inspiring lines to the viewer, ending with a call to act.",
+}
+
+
+def script_rule(kind: str) -> str:
+    return "Script type: " + SCRIPT_TYPES.get(kind, SCRIPT_TYPES["story"])
+
+
 WRITER_NAMES = {"gpt-5-5": "GPT-5.5", "gpt-5": "GPT-5", "gemini-pro-writer": "Gemini Pro", "gemini-flash-writer": "Gemini Flash",
                 "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5-5": "Claude Sonnet 5.5"}
 ANALYST_NAMES = {"gemini-pro": "Gemini Pro", "gemini-flash": "Gemini Flash"}
@@ -52,7 +75,9 @@ def writer_for(model_id: str):
         return OpenAIWriter(model_id)
     if model_id.startswith("gemini"):
         return GeminiWriter(model_id)
-    raise ProviderError("Claude is not connected yet. Add ANTHROPIC_API_KEY and a Claude writer adapter, or pick GPT-5.5 or Gemini Pro.")
+    if model_id.startswith("claude"):
+        return ClaudeWriter(model_id)
+    raise ProviderError(f"Unknown writing model {model_id}.")
 
 
 FALLBACK_WRITER = "gemini-flash-writer"
@@ -86,9 +111,10 @@ def status():
     return {
         "live": True,
         "providers": {"google": has("GEMINI_API_KEY"), "youtube": has("YOUTUBE_API_KEY"), "openai": has("OPENAI_API_KEY"),
-                      "fal": has("FAL_KEY"), "anthropic": False, "higgsfield": False, "elevenlabs": False},
+                      "fal": has("FAL_KEY"), "anthropic": has("ANTHROPIC_API_KEY"), "higgsfield": False, "elevenlabs": False},
         "video_models": False,  # this Gemini key has no Veo models; animation stays off
-        "writer": os.getenv("ANGLE_STUDIO_WRITER", "gpt-5-5"),
+        # Claude is the brain when its key is set; otherwise the configured writer
+        "writer": os.getenv("ANGLE_STUDIO_WRITER") or ("claude-opus-5-5" if has("ANTHROPIC_API_KEY") else "gpt-5-5"),
     }
 
 
@@ -101,7 +127,7 @@ def job(job_id: str):
 
 
 # ---------- 1. Watch the reference video and write angle cards
-ANGLES_VERSION = 2  # bump when the angle prompt changes, so cached analyses get new angles without re-watching
+ANGLES_VERSION = 3  # bump when the angle prompt changes, so cached analyses get new angles without re-watching
 
 
 async def write_angles(writer: str, progress, handoff: dict, ids: set) -> tuple[list, float, str, Optional[str]]:
@@ -112,9 +138,13 @@ async def write_angles(writer: str, progress, handoff: dict, ids: set) -> tuple[
         "original. This is NOT a continuation, sequel or part 2: the new video stands on its own and does not pick up "
         "where the original stopped. Use these ways of recreating it:\n"
         + "\n".join(f"- {k}: {v}" for k, v in ANGLE_GUIDE.items()) + "\n"
-        "Propose exactly 4 angles: the 4 with the highest chance of going viral, best first, using at least 3 different "
-        "types. Keep the original's proven ingredients (hook, structure, emotion, topic keywords) so the platform links "
-        "the two videos, and change one clear thing. Never copy its wording, footage or characters.\n"
+        "Propose exactly 4 angles: the 4 ways of remaking this same video with the highest chance of going viral, best "
+        "first, using at least 3 different types. Exploit what made the idea work and the gaps viewers left in the comments. "
+        "Keep the original's proven ingredients (hook, structure, emotion, topic keywords) so the platform links the two "
+        "videos, and change one clear thing. Never copy its wording, footage or characters.\n"
+        "Describe each angle as a video concept (what the video is, what changes, why it can go viral), NOT as a story: "
+        "the creator picks the script type afterwards (a story, a 'what if you...' narration, an explainer, a list, a POV...). "
+        "Write the hooks so they work as opening lines for any script type.\n"
         f"Report: {json.dumps(handoff)[:60000]}\n"
         'Return {"angles": [{"type": one of the types, "title": short working title, "pitch": one line,'
         ' "reason": one line on why it can go viral like the original and be recommended next to it,'
@@ -262,6 +292,7 @@ class StoryBody(BaseModel):
     direction: str = ""
     tone: str = ""
     idea: str = ""  # set when the creator starts from their own idea instead of a reference video
+    script_type: str = "story"
 
 
 @router.post("/story")
@@ -282,7 +313,8 @@ async def story(body: StoryBody):
                  f"Angle(s): {json.dumps([{k: a.get(k) for k in ('title', 'pitch', 'reason', 'hooks', 'type')} for a in body.angles])}\n"
                  f"Reference video it should sit next to: {body.source_title}. What that video did: {json.dumps(body.analysis)[:6000]}\n")
         data, cost, wn, warning = await write_json(body.writer, progress, (
-            f"Write one continuous, original story for a {body.target_seconds}-second video (about {words} spoken words; stay within 10%).\n"
+            f"Write one continuous, original script for a {body.target_seconds}-second video (about {words} spoken words; stay within 10%).\n"
+            f"{script_rule(body.script_type)}\n"
             f"{brief}"
             f"Tone: {body.tone or 'friendly, practical, no filler'}. Direction from the creator: {body.direction or 'none'}.\n"
             f"{fmt} Open with a strong hook, keep a new idea every few seconds, and end with a natural call to action.\n"
@@ -567,6 +599,7 @@ class ReviseBody(BaseModel):
     target_seconds: int = 60
     video_type: str = "voiceover"
     characters: list[dict] = []
+    script_type: str = ""  # set to rewrite the script as another type
 
 
 @router.post("/revise")
@@ -585,6 +618,8 @@ async def revise(body: ReviseBody):
             f"Rewrite it to include this idea from the creator: {body.idea}\n"
             "Work the idea in naturally where it fits best, keep what already works, keep the opening hook unless the idea "
             f"changes it, and stay within 10% of {words} words. {fmt}\n"
+            + (f"Rewrite it in this script type, keeping its content: {script_rule(body.script_type)}\n" if body.script_type else "")
+            + 
             'Return {"story": "the full rewritten story", "changed": "one sentence on what changed",'
             ' "visuals": [{"sentence": "each sentence of the story, word for word, in order", "visual": "a short description of an original image that fits it, showing a real moment from the world of the story (never app icons, buttons, logos or on-screen text, even for a call to action)"}]}'))
         if isinstance(data, list):

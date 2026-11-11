@@ -1,6 +1,6 @@
 # Angle Studio
 
-A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You start in one of three ways: paste a link to a video that went viral and pick one of 4 angles that recreate what made it work (fill a gap, same story in a new look, same idea in a new niche, a similar storyline; never a part 2), type your own idea and let the writer draft the story, or paste a story you wrote. Then you take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
+A personal web app for the Video Angle & Auto-Creation Tool PRD (draft v2). You start in one of three ways: paste a link to a video that went viral and pick one of 4 angles that remake the same video in the way most likely to go viral too (fill a gap, same video in a new niche or with a new character, same format on a new topic, same story in a new look, a similar storyline; never a part 2), choose the script type, type your own idea and let the writer draft the story, or paste a story you wrote. Then you take it through a story script, visual style, scenes and images, voice, format, animation and compile to a finished MP4.
 
 **Status:** working. Opened from the server it runs in **live mode** with real APIs; the claude.ai preview is a demo with simulated AI.
 
@@ -59,7 +59,7 @@ Vercel cannot run this app: it needs a server that stays on, FFmpeg, background 
 
 1. Sign in at render.com with GitHub and allow access to this repository.
 2. New > Blueprint, pick this repository. Render reads `render.yaml`.
-3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `GEMINI_API_KEY`, `OPENAI_API_KEY`, `YOUTUBE_API_KEY`, and `FAL_KEY` for the FLUX image models.
+3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `ANTHROPIC_API_KEY` (Claude, the writer), `GEMINI_API_KEY`, `OPENAI_API_KEY` (optional), `YOUTUBE_API_KEY`, and `FAL_KEY` for the FLUX image models.
 4. Deploy. The first build takes a few minutes. Open the `onrender.com` link, type any user name and your `APP_PASSWORD`.
 
 The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB persistent disk (about $1.25 a month) mounted at `/app/server/data`. Voice clips, images, videos and the analysis cache live there; without the disk every redeploy deletes them. If files are lost anyway, the Compile step lists them and offers to make only those again. Projects (story, scenes, settings) are saved in the browser and backed up to the server's disk, so a cleared browser or another device gets them back. Renders are kept under 300 MB of memory and run FFmpeg at low priority, so they fit Render's Starter plan (half a CPU) without starving its health checks. Each scene is encoded once, with its captions; finished scenes are kept on disk, so an interrupted render continues where it stopped (the app retries on its own) and unchanged scenes are reused next time. Final renders come in 720p or 1080p, or you can continue with the 480p draft.
@@ -68,10 +68,11 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 
 | Step | Real service | Notes |
 |---|---|---|
+| Script types | The writer | Chosen after the angle (or with your idea): Story, Narration (you / what if), Explainer, Documentary, Top list, POV, Motivational; the Script step can rewrite a script as another type |
 | Start without a video | The writer | **From my idea**: the writer drafts the story from your idea at your chosen length (one text call). **Paste my story**: used word for word; an optional cheap text call writes an image idea per sentence. The angle step is skipped |
 | Stats and comments | YouTube Data API | Questions and requests are picked out of the top 100 comments |
 | Watching the video | Gemini (Flash or Pro) from the YouTube link | Transcript, scene-by-scene description, breakdown, gaps. Nothing is downloaded |
-| Angles and story | ChatGPT (GPT-5.5 / GPT-5), or Gemini Flash / Pro | Writer is chosen in the top bar; Claude can be added later |
+| Angles, scripts, image ideas, titles, channels | Claude Opus 5.5 (default when `ANTHROPIC_API_KEY` is set), Claude Sonnet 5.5, GPT-5.5 / GPT-5, or Gemini Flash / Pro | Writer is chosen in the top bar. Claude runs with adaptive thinking at medium effort, streamed, with Anthropic's server-side fallback on safety declines; if the chosen writer fails, Gemini Flash writes instead. Gemini still watches the reference video (Claude cannot watch video) |
 | Voice | Gemini TTS | 30 voices (filter higher or lower, search). Tune tone, pace, energy, accent and notes (director's-notes prompt, never read aloud), plus exact speed and pitch applied with FFmpeg. Edit any sentence's words or how it is said and regenerate just that one; sentences made with older settings are flagged. Play all voices plays every sentence back to back, highlights the one playing and flags any that is missing, failed or broken |
 | Images | Nano Banana 2 / Pro / 2 Lite, or FLUX schnell / dev on fal.ai (`FAL_KEY`) | 20 visual templates (recipe + avoid list + example images in `web/templates`), custom templates from your own images, and Lock look: scene 1 guides every other scene (Nano Banana only; FLUX uses the template recipe alone, and thumbnails and banners stay on Nano Banana because they print words). Needs Gemini billing or fal credit |
 | Scene images that carry the message | The writer | Before images are drawn, the writer pictures each scene from its narration (who, doing what, the key object, the emotion; abstract ideas become visual metaphors) and suggests 1-3 words. The image prompt includes the narration itself. Words on images: None, Key scenes or Every scene; Rewrite image ideas redoes the pictures' ideas |
@@ -103,18 +104,17 @@ The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB pe
 | Every rendered video kept with its project, with play and download | Projects page |
 | Checkpoints, resume after closing, job queue, cost limit (PRJ-1..3) | Everywhere |
 
-## Switching the writer from ChatGPT to Claude
+## Claude as the writer
 
-The writer sits behind one interface (`Writer` in `server/app/providers/base.py`), so switching is a setting, not a code change:
+Claude (`server/app/providers/anthropic_writer.py`, official `anthropic` SDK) writes everything except watching the video: angles, scripts and rewrites, image ideas for each scene, titles, captions, descriptions, thumbnail ideas and channel ideas.
 
-1. Add `ANTHROPIC_API_KEY` to `.env`.
-2. Set `ANGLE_STUDIO_WRITER=claude-opus-5-5` (or `claude-sonnet-5-5`) for new projects, or pick Claude in the Writing selector in the top bar for one project.
+1. Add `ANTHROPIC_API_KEY` to `.env` (or the host's environment).
+2. Leave `ANGLE_STUDIO_WRITER` unset, or set it to `claude-opus-5-5` (or `claude-sonnet-5-5`, about half the cost). The first time the app sees the key it switches the default writer and open projects to Claude; any project can still pick another writer in the top bar.
 
 ## Still to do
 
 - Animated clips, once the Gemini key has Veo (or via Higgsfield).
 - Background music from a royalty-free library.
-- A Claude writer adapter (the Writing selector and `ANGLE_STUDIO_WRITER` are ready for it).
 - Hosting with a login, to use the app from a phone.
 
 ## Keeping costs down
