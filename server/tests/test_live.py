@@ -502,3 +502,36 @@ def test_template_examples_can_be_style_references():
     from fastapi import HTTPException as _H
     with _p.raises(_H):
         live.load_ref("templates/../../server/.env")  # nothing outside the templates folder
+
+
+def test_flux_kontext_gets_the_template_example(monkeypatch, tmp_path):
+    import asyncio
+    import httpx
+    from app.providers import fal
+    sent = []
+
+    def handler(req):
+        import json as _j
+        sent.append((str(req.url), _j.loads(req.content)))
+        return httpx.Response(200, json={"images": [{"url": "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8x").decode()}]})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(fal.httpx, "AsyncClient", lambda **k: real(transport=httpx.MockTransport(handler), **k))
+    monkeypatch.setenv("FAL_KEY", "k")
+    from app import live
+    ref = live.load_ref("templates/stickman-1.jpg")
+    path, cost = asyncio.run(fal.draw("stick figure. Scene: a jar. Avoid: shading. No watermarks or signatures.", "9:16", "flux-kontext", tmp_path / "k", ref))
+    url, body = sent[0]
+    assert url.endswith("/fal-ai/flux-pro/kontext") and body["image_url"].startswith("data:image/jpeg;base64,/9j/") and body["aspect_ratio"] == "9:16"
+    assert body["prompt"].startswith("Create a completely new image in exactly the same visual style") and cost == 0.04
+    try:
+        asyncio.run(fal.draw("x", "9:16", "flux-kontext", tmp_path / "k2", None))
+        raise AssertionError("expected an error")
+    except ProviderError as e:
+        assert "example pictures" in str(e)
+
+
+def test_kontext_uses_the_style_swatch():
+    from app.live import kontext_ref
+    assert kontext_ref("templates/stickman-1.jpg") == "templates/stickman-style.jpg"
+    assert kontext_ref("/media/images/abc.png") == "/media/images/abc.png"  # a scene image or upload stays as it is

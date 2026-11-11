@@ -582,13 +582,23 @@ def load_ref(ref: str) -> tuple[bytes, str]:
     return data, mime
 
 
+def kontext_ref(ref: str) -> str:
+    """FLUX Kontext copies the people in its reference, so a template example scene is swapped for that template's
+    style swatch (one generic character and a few objects in the same style), when there is one."""
+    m = re.fullmatch(r"/?templates/([a-z0-9]+)-\d+\.jpg", ref)
+    if m and (Path(__file__).resolve().parents[2] / "web" / "templates" / f"{m.group(1)}-style.jpg").exists():
+        return f"templates/{m.group(1)}-style.jpg"
+    return ref
+
+
 @router.post("/image")
 async def image(body: ImageBody):
     if body.aspect not in ("9:16", "16:9", "1:1", "4:5"):
         raise HTTPException(422, "Unsupported frame.")
     try:
-        if fal.is_fal(body.model):  # FLUX takes the text prompt only; style references are not used
-            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex)
+        if fal.is_fal(body.model):  # FLUX schnell and dev read text only; FLUX Kontext gets the first style reference
+            ref = load_ref(kontext_ref(body.refs[0])) if body.model in fal.TAKES_REFERENCE and body.refs else None
+            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, ref)
         else:
             refs = [load_ref(r) for r in body.refs[:4] if r]
             path, cost = await google.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, refs)

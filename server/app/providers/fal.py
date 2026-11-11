@@ -15,7 +15,14 @@ from .google import ProviderError
 MODELS = {
     "flux-schnell": ("fal-ai/flux/schnell", {"num_inference_steps": 4}, 0.006),
     "flux-dev": ("fal-ai/flux/dev", {"num_inference_steps": 28, "guidance_scale": 3.5}, 0.05),
+    # Kontext sees a reference image: the template's example picture, so the result matches the template's look
+    "flux-kontext": ("fal-ai/flux-pro/kontext", {"guidance_scale": 3.5}, 0.04),
 }
+TAKES_REFERENCE = {"flux-kontext"}
+KONTEXT_NOTE = ("Create a completely new image in exactly the same visual style as the reference image: the same line work, "
+                "rendering, colours, background and texture. Only the style carries over: draw brand-new characters who do not "
+                "look like anyone in the reference (different hair, face and clothes), and do not keep its objects, text, setting "
+                "or layout. ")
 SIZES = {"9:16": (1024, 1824), "16:9": (1824, 1024), "1:1": (1360, 1360), "4:5": (1216, 1520)}
 PRESETS = {"9:16": "portrait_16_9", "16:9": "landscape_16_9", "1:1": "square_hd", "4:5": "portrait_4_3"}
 
@@ -48,18 +55,26 @@ def _error(r: httpx.Response) -> str:
     return f"fal could not make the image ({r.status_code}): {detail}"
 
 
-async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path) -> tuple[Path, float]:
+async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tuple[bytes, str] | None = None) -> tuple[Path, float]:
     key = os.getenv("FAL_KEY", "")
     if not key:
         raise ProviderError("FLUX needs a fal API key. Add FAL_KEY to the server's environment (on Render: Environment > Add variable).")
     endpoint, extra, price = MODELS[model_id]
     w, h = SIZES.get(aspect, SIZES["9:16"])
-    body = {"prompt": flux_prompt(prompt)[:3500], "image_size": {"width": w, "height": h}, "num_images": 1,
-            "enable_safety_checker": True, "sync_mode": True, "output_format": "jpeg", **extra}
+    if model_id in TAKES_REFERENCE:
+        if not ref:
+            raise ProviderError("FLUX Kontext needs a template with example pictures. Pick a built-in template, or use FLUX dev.")
+        data, mime = ref
+        body = {"prompt": (KONTEXT_NOTE + flux_prompt(prompt))[:3500], "image_url": f"data:{mime};base64,{base64.b64encode(data).decode()}",
+                "aspect_ratio": aspect if aspect in ("9:16", "16:9", "1:1", "4:5") else "9:16", "num_images": 1,
+                "enable_safety_checker": True, "sync_mode": True, "output_format": "jpeg", **extra}
+    else:
+        body = {"prompt": flux_prompt(prompt)[:3500], "image_size": {"width": w, "height": h}, "num_images": 1,
+                "enable_safety_checker": True, "sync_mode": True, "output_format": "jpeg", **extra}
     headers = {"Authorization": f"Key {key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=180.0) as c:
         r = await c.post(f"https://fal.run/{endpoint}", json=body, headers=headers)
-        if r.status_code == 422:  # an older model version that only takes named sizes
+        if r.status_code == 422 and model_id not in TAKES_REFERENCE:  # an older model version that only takes named sizes
             r = await c.post(f"https://fal.run/{endpoint}", json={**body, "image_size": PRESETS.get(aspect, "portrait_16_9")}, headers=headers)
         if r.status_code != 200:
             raise ProviderError(_error(r))
