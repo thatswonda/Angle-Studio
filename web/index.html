@@ -269,6 +269,7 @@ details.meta-d[open] summary { margin-bottom: 6px; }
 .voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; max-height: 380px; overflow: auto; padding: 2px; }
 .tune summary { cursor: pointer; }
 .cardview { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10%; container-type: inline-size; }
+.cv-emoji { font-size: clamp(22px, 24cqw, 120px); line-height: 1.1; margin-bottom: 4cqw; filter: drop-shadow(0 2px 2px rgba(0,0,0,.18)); }
 .cv-text { font-size: clamp(14px, 13cqw, 64px); line-height: 1.05; letter-spacing: 0.01em; }
 .cv-num { font-size: clamp(30px, 34cqw, 160px); line-height: 1; }
 .cv-bar { width: 32%; height: 1.4cqw; min-height: 3px; border-radius: 3px; margin-top: 4cqw; }
@@ -659,16 +660,21 @@ const suggestMood = p => { const t = p.script_type || 'story'; const st = styleB
 // Text cards: scenes drawn for free as designed words in the template's colours and font.
 const cardsShare = p => (p.format && p.format.cards != null ? p.format.cards : 0.3);
 const isCard = sc => sc && sc.kind === 'card';
+// A card carries only its 1 to 3 most important words (stars mark the highlighted word).
+const capWords = t => { const ws = (t || '').replace(/\s+/g, ' ').trim().split(' '); return ws.slice(0, 3).join(' ') + (ws.length > 3 && (ws.slice(0, 3).join(' ').split('*').length % 2 === 0) ? '*' : ''); };
+const EMOJI_HINTS = [[/money|cash|pay|save|rich|price|cost|dollar|naira/i, '\ud83d\udcb0'], [/time|clock|hour|minute|late/i, '\u23f0'], [/love|heart|kiss/i, '\u2764\ufe0f'], [/king|queen|crown|pharaoh|royal/i, '\ud83d\udc51'], [/ship|boat|sea|ocean/i, '\ud83d\udea2'], [/food|eat|bread|bake|cook/i, '\ud83c\udf5e'], [/grow|plant|garden|tree|seed/i, '\ud83c\udf31'], [/fire|hot|burn/i, '\ud83d\udd25'], [/idea|think|smart|learn/i, '\ud83d\udca1'], [/win|best|top|star/i, '\u2b50'], [/\?|why|what if|how/i, '\ud83e\udd14'], [/danger|warning|careful|stop/i, '\u26a0\ufe0f'], [/home|house/i, '\ud83c\udfe0'], [/world|earth|global/i, '\ud83c\udf0d']];
+const guessEmoji = t => (EMOJI_HINTS.find(([re]) => re.test(t || '')) || [null, '\u2728'])[1];
 const cardStyle = p => { const st = styleById(p.style); return { id: st.img_id || st.base || st.id, kind: st.kind, palette: st.palette }; };
 const CARD_FONTS = { stickman: 'Permanent Marker', wiresketch: 'Permanent Marker', lineart: 'Permanent Marker', papercut: 'Permanent Marker', comic: 'Bangers', cartoonexplain: 'Bangers', animated3d: 'Bangers', clay: 'Bangers', documentary: 'Playfair Display', historypaint: 'Playfair Display', watercolor: 'Playfair Display', botanical: 'Playfair Display', photoreal: 'Playfair Display', silhouette: 'Playfair Display', pixel: 'Press Start 2P' };
 function CardView({ p, card }) {
   const cs = cardStyle(p); const c = card || {};
-  if (LIVE) { const q = new URLSearchParams({ text: c.text || '', small: c.small || '', layout: c.layout || 'big', style: cs.id, kind: cs.kind || '', palette: (cs.palette || []).join(','), aspect: p.format.aspect_ratio }); return html`<img src=${'/api/live/card?' + q} alt=${'Text card: ' + (c.text || '').replace(/\*/g, '')} style=${{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />`; }
+  if (LIVE) { const q = new URLSearchParams({ text: c.text || '', small: c.small || '', emoji: c.emoji || '', layout: c.layout || 'big', style: cs.id, kind: cs.kind || '', palette: (cs.palette || []).join(','), aspect: p.format.aspect_ratio }); return html`<img src=${'/api/live/card?' + q} alt=${'Text card: ' + (c.text || '').replace(/\*/g, '')} style=${{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />`; }
   const [dark, mid, light, accent] = cs.palette || ['#222', '#888', '#f4eee2', '#e4572e']; const darkBg = ['cinematic', 'retro', 'silhouette', 'toyworld', 'anime'].includes(cs.id);
   const font = CARD_FONTS[cs.id] || 'Anton'; const upper = !['Playfair Display'].includes(font);
-  const parts = (c.text || '').split(/(\*[^*]+\*)/).filter(Boolean);
+  const parts = capWords(c.text || '').split(/(\*[^*]+\*)/).filter(Boolean);
   return html`<div className="cardview" style=${{ background: darkBg ? dark : light, color: darkBg ? light : dark, fontFamily: '"' + font + '", ' + (font === 'Playfair Display' ? 'Georgia, serif' : 'Impact, sans-serif') }}>
     ${c.layout === 'number' ? html`<div className="cv-num" style=${{ color: accent }}>${((c.small || c.text || '').match(/\d+/) || ['1'])[0]}</div>` : c.layout === 'quote' ? html`<div className="cv-num" style=${{ color: accent }}>\u201c</div>` : null}
+    ${c.emoji ? html`<div className="cv-emoji">${c.emoji}</div>` : null}
     <div className="cv-text" style=${{ textTransform: upper ? 'uppercase' : 'none' }}>${parts.map((t, i) => /^\*.*\*$/.test(t) ? html`<span key=${i} style=${{ color: accent }}>${t.slice(1, -1)}</span>` : t)}${c.layout === 'question' && !/\?$/.test(c.text || '') ? '?' : ''}</div>
     ${c.layout === 'big' ? html`<div className="cv-bar" style=${{ background: accent }}></div>` : null}
     ${c.small && c.layout !== 'number' ? html`<div className="cv-small" style=${{ color: mid }}>${c.small}</div>` : null}
@@ -1656,7 +1662,7 @@ const api = {
       await runJob(pid, 'Picturing the scenes', [wr.name + ' is picturing each scene'], 400);
       let last = -9; const share = cardsShare(p0);
       list.forEach(sc => { const t = sceneText(p0, sc); const n = nOf(sc); const kw = words(t).filter(w => w.length > 3).slice(0, 3).map(w => w.replace(/[^\w']/g, ''));
-        const card = share > 0 && n > 1 && n - last > 1 && n % Math.max(2, Math.round(1 / share)) === 0 ? { text: kw.slice(0, 2).join(' ') + (kw[2] ? ' *' + kw[2] + '*' : ''), small: '', layout: /\?/.test(t) ? 'question' : 'big' } : null;
+        const card = share > 0 && n > 1 && n - last > 1 && n % Math.max(2, Math.round(1 / share)) === 0 ? { text: kw[0] + (kw[1] ? ' *' + kw[1] + '*' : ''), emoji: guessEmoji(t), small: '', layout: /\?/.test(t) ? 'question' : 'big' } : null;
         if (card) last = n;
         res[String(n)] = { card, visual: 'a clear moment that shows: ' + words(t).slice(0, 14).join(' ').replace(/[.,!?]+$/, ''), text: kw.slice(0, 2).join(' ').toUpperCase(), key: n % 3 === 1 }; });
     }
@@ -2793,12 +2799,16 @@ ${isCard(sc) ? null : html`            <button type="button" className="btn ghos
         <div className="sc-thumb" style=${{ width: thumbW }}><${SceneImage} p=${p} sc=${sc} small=${true} onZoom=${() => setZoomId(sc.id)} /></div>
         ${open ? html`<div className="sc-edit">
           ${sc.error && sc.image_status === 'failed' ? html`<div className="warnbox">${sc.error}</div>` : null}
-          <div className="row" style=${{ marginBottom: 6 }}><span className="note">This scene is</span><${Seg} label=${'Scene ' + (i + 1) + ' kind'} value=${isCard(sc) ? 'card' : 'image'} onChange=${v => setI(sc.id, x => { x.kind_user = true; if (v === 'card') { x.kind = 'card'; x.card = x.card || { text: (x.overlay_text || words(sceneText(p, x)).filter(w => w.length > 3).slice(0, 3).join(' ')).replace(/[^\w' ]/g, ''), small: '', layout: 'big' }; x.image_status = 'ready'; } else { x.kind = 'image'; x.image_status = x.image_versions.length ? 'ready' : 'pending'; } })} options=${[{ value: 'image', label: 'Image' }, { value: 'card', label: 'Text card \u00b7 free' }]} /></div>
+          <div className="row" style=${{ marginBottom: 6 }}><span className="note">This scene is</span><${Seg} label=${'Scene ' + (i + 1) + ' kind'} value=${isCard(sc) ? 'card' : 'image'} onChange=${v => setI(sc.id, x => { x.kind_user = true; if (v === 'card') { x.kind = 'card'; x.card = x.card || { text: (x.overlay_text || words(sceneText(p, x)).filter(w => w.length > 3).slice(0, 2).join(' ')).replace(/[^\w' ]/g, ''), emoji: guessEmoji(sceneText(p, x)), small: '', layout: 'big' }; x.image_status = 'ready'; } else { x.kind = 'image'; x.image_status = x.image_versions.length ? 'ready' : 'pending'; } })} options=${[{ value: 'image', label: 'Image' }, { value: 'card', label: 'Text card \u00b7 free' }]} /></div>
           <div className="sc-edit-grid">
             ${isCard(sc) ? html`<div className="stack" style=${{ gap: 8 }}>
-              <label className="field">Words on the card<input className="input" maxLength="60" value=${(sc.card || {}).text || ''} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), text: e.target.value }; })} /><span className="note">2 to 6 words work best. Put *stars* around the word to highlight in the accent colour.</span></label>
-              <label className="field">Small line (optional)<input className="input" maxLength="40" placeholder="e.g. Number 3, 1962, Giza" value=${(sc.card || {}).small || ''} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), small: e.target.value }; })} /></label>
-              <label className="field">Layout<select className="select" value=${(sc.card || {}).layout || 'big'} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), layout: e.target.value }; })}><option value="big">Big words with an underline</option><option value="number">Number (for a countdown or numbered point)</option><option value="question">Question</option><option value="quote">Quote</option></select></label>
+              <div className="row" style=${{ alignItems: 'flex-end' }}>
+                <label className="field" style=${{ width: 90 }}>Emoji<input className="input" style=${{ fontSize: 22, textAlign: 'center' }} maxLength="8" value=${(sc.card || {}).emoji || ''} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), emoji: e.target.value.trim() }; })} /></label>
+                <label className="field grow">Words on the card (1 to 3)<input className="input" maxLength="40" value=${(sc.card || {}).text || ''} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), text: e.target.value }; })} /></label>
+              </div>
+              <span className="note">Only the most important words: up to 3 are shown. Put *stars* around the word to highlight it. ${((sc.card || {}).text || '').trim().split(/\s+/).length > 3 ? html`<b style=${{ color: 'var(--warn)' }}>Only the first 3 words will show.</b>` : ''}</span>
+              <label className="field">Small line (optional, e.g. for a countdown)<input className="input" maxLength="40" placeholder="e.g. Number 3, 1962, Giza" value=${(sc.card || {}).small || ''} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), small: e.target.value }; })} /></label>
+              <label className="field">Layout<select className="select" value=${(sc.card || {}).layout || 'big'} onChange=${e => setI(sc.id, x => { x.card = { ...(x.card || {}), layout: e.target.value }; })}><option value="big">Big words with an underline</option><option value="number">Number (for a countdown or numbered point)</option><option value="question">Question</option></select></label>
               <p className="note">Drawn on your server in ${styleById(p.style).name}\u2019s colours and lettering. No image cost.</p>
             </div>` : html`            <div className="stack" style=${{ gap: 8 }}>
               <label className="field">What the image shows<textarea className="textarea" rows="2" value=${sc.description} onChange=${e => setI(sc.id, x => { x.description = e.target.value; x.user_edited = true; })}></textarea></label>

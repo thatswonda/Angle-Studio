@@ -402,14 +402,14 @@ async def upload_music(request: Request, name: str = ""):
 # ---------- Text card preview: exactly what the render will draw (free)
 
 @router.get("/card")
-def card_preview(text: str = "", small: str = "", layout: str = "big", style: str = "", kind: str = "", palette: str = "", aspect: str = "9:16"):
+def card_preview(text: str = "", small: str = "", layout: str = "big", style: str = "", kind: str = "", palette: str = "", aspect: str = "9:16", emoji: str = ""):
     from fastapi.responses import Response
     from .cards import make_card
     import tempfile
     a, b = (int(x) for x in (aspect if aspect in ("9:16", "16:9", "1:1", "4:5") else "9:16").split(":"))
     w, h = (480, round(480 * b / a)) if a < b else (round(480 * a / b), 480)
     with tempfile.TemporaryDirectory() as d:
-        out = make_card({"text": text[:80], "small": small[:40], "layout": layout}, {"id": style, "kind": kind, "palette": [c for c in palette.split(",") if c][:4]},
+        out = make_card({"text": text[:80], "small": small[:40], "layout": layout, "emoji": emoji[:16]}, {"id": style, "kind": kind, "palette": [c for c in palette.split(",") if c][:4]},
                         w, h, Path(d) / "c.png")
         data = out.read_bytes()
     return Response(data, media_type="image/png", headers={"Cache-Control": "max-age=86400"})
@@ -481,12 +481,13 @@ async def scene_visuals(body: SceneVisualsBody):
                 + (f"Also mark about {round(body.cards_share * 100)}% of the scenes as TEXT CARDS: scenes whose message lands best as bold "
                    "words on a plain background (a key point, a number, a question, a strong statement, a turning point). Never the "
                    "first scene, never two text cards in a row, and keep scenes with people, places or actions as images. For a "
-                   "card give card_text (2 to 6 words, the punchline; wrap the one word to highlight in *stars*), card_small (an "
-                   "optional short line such as 'Number 3', a date or a place, else empty) and card_layout: big, number (for a "
-                   "countdown or a numbered point), question (if it asks something) or quote (for a memorable line).\n" if body.cards_share > 0 else "")
+                   "card give card_text (1 to 3 words only: the most important words of that scene, nothing else; wrap the one "
+                   "word to highlight in *stars*), card_emoji (exactly one emoji that fits the scene), card_small (only for a "
+                   "countdown: 'Number 3'; otherwise empty) and card_layout: big, number (for a countdown or a numbered point) "
+                   "or question (if it asks something).\n" if body.cards_share > 0 else "")
                 + f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600]} for s in batch])}\n"
                 + 'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "the words", "key": true or false'
-                + (', "card": true or false, "card_text": "...", "card_small": "...", "card_layout": "big|number|question|quote"' if body.cards_share > 0 else "")
+                + (', "card": true or false, "card_text": "1-3 words", "card_emoji": "one emoji", "card_small": "", "card_layout": "big|number|question"' if body.cards_share > 0 else "")
                 + '}]}'))
             cost += c
             warn = warn or w
@@ -496,8 +497,10 @@ async def scene_visuals(body: SceneVisualsBody):
                 if isinstance(item, dict) and item.get("visual"):
                     card = None
                     if body.cards_share > 0 and item.get("card") and str(item.get("card_text", "")).strip():
-                        card = {"text": " ".join(str(item["card_text"]).replace('"', "").split()[:8])[:60],
-                                "small": str(item.get("card_small") or "")[:40],
+                        from .cards import first_emoji
+                        card = {"text": " ".join(str(item["card_text"]).replace('"', "").split()[:3])[:40],
+                                "emoji": first_emoji(str(item.get("card_emoji") or "")),
+                                "small": str(item.get("card_small") or "")[:24],
                                 "layout": item.get("card_layout") if item.get("card_layout") in ("big", "number", "question", "quote") else "big"}
                     out[str(item.get("n"))] = {"card": card, "visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).replace('"', "").replace("*", "").split()[:max(1, min(3, body.words_max))])[:40],
                                                "key": bool(item.get("key"))}

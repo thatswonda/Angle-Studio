@@ -551,11 +551,13 @@ def test_text_cards(tmp_path, monkeypatch):
     assert r.status_code == 200 and r.headers["content-type"] == "image/png"
 
     async def fake_write(writer_id, progress, prompt):
-        return {"scenes": [{"n": n, "visual": "v", "text": "w", "card": True, "card_text": f"Point {n}", "card_layout": "big"} for n in range(1, 7)]}, 0.003, "Claude Opus 5.5", None
+        return {"scenes": [{"n": n, "visual": "v", "text": "w", "card": True, "card_text": f"Point number {n} here today", "card_emoji": "💡 extra", "card_layout": "big"} for n in range(1, 7)]}, 0.003, "Claude Opus 5.5", None
     monkeypatch.setattr(live, "write_json", fake_write)
     j = _run_job(c, "/api/live/scene-visuals", {"writer": "claude-opus-5-5", "scenes": [{"n": n, "text": "x"} for n in range(1, 7)], "cards_share": 0.3})
     cards = [n for n, v in sorted(j["result"]["scenes"].items(), key=lambda kv: int(kv[0])) if v["card"]]
     assert "1" not in cards and all(int(b) - int(a) > 1 for a, b in zip(cards, cards[1:])) and len(cards) <= 3
+    first = j["result"]["scenes"][cards[0]]["card"]
+    assert len(first["text"].split()) <= 3 and first["emoji"] == "💡"  # few words, one emoji
 
     media = tmp_path / "media"; (media / "audio").mkdir(parents=True)
     _tone(media / "audio" / "a.wav", 1.0); _tone(media / "audio" / "b.wav", 1.0)
@@ -564,3 +566,11 @@ def test_text_cards(tmp_path, monkeypatch):
                          "scenes": [{"image": "data:image/png;base64," + png, "lines": [0]}, {"image": "", "lines": [1], "card": {"text": "Nobody came *back*", "layout": "big"}}],
                          "lines": [{"audio": "/media/audio/a.wav", "text": "x"}, {"audio": "/media/audio/b.wav", "text": "y"}]}, media, lambda _: None)
     assert (media / res["url"].removeprefix("/media/")).exists()
+
+
+def test_cards_keep_only_the_words_that_matter():
+    from app.cards import _words
+    show = lambda t: " ".join(w for w, _ in _words(t))
+    assert show("Save *first*") == "Save first"
+    assert show("Tobi left a warm *roll*") == "left warm roll"  # the highlighted word stays; filler goes
+    assert show("Every letter kept and loved forever") == "Every letter kept"

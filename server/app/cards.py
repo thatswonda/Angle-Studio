@@ -13,6 +13,35 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 FONTS = Path(__file__).resolve().parent / "fonts"
+MAX_WORDS = 3  # a card carries only the few words that matter most
+# Colour emoji (Debian/Ubuntu package fonts-noto-color-emoji). Without it, cards are drawn without the emoji.
+EMOJI_FONT = next((p for p in ("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", "/usr/share/fonts/noto/NotoColorEmoji.ttf")
+                   if Path(p).exists()), None)
+
+
+def _emoji(e: str, size: int) -> Image.Image | None:
+    """One colour emoji as an RGBA image about size px tall (the font only comes at 109 px, so it is scaled)."""
+    if not EMOJI_FONT or not e or size < 8:
+        return None
+    try:
+        f = ImageFont.truetype(EMOJI_FONT, 109)
+        tmp = Image.new("RGBA", (220, 160), (0, 0, 0, 0))
+        ImageDraw.Draw(tmp).text((10, 10), e, font=f, embedded_color=True)
+        box = tmp.getbbox()
+        if not box:
+            return None
+        tmp = tmp.crop(box)
+        k = size / tmp.height
+        return tmp.resize((max(1, round(tmp.width * k)), size), Image.LANCZOS)
+    except OSError:
+        return None
+
+
+def first_emoji(text: str) -> str:
+    """The first emoji in a string (with its variation selector or skin tone), or ''."""
+    m = re.search(r"(?:[\U0001F1E6-\U0001F1FF]{2}|[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\u2300-\u23FF]"
+                  r"[\uFE0F\U0001F3FB-\U0001F3FF]?(?:\u200D[\U0001F000-\U0001FAFF\u2600-\u27BF][\uFE0F]?)*)", text or "")
+    return m.group(0) if m else ""
 LAYOUTS = ("big", "number", "question", "quote")
 
 # Template -> display font. Anything not listed uses Anton (bold condensed).
@@ -75,7 +104,19 @@ def _words(text: str) -> list[tuple[str, bool]]:
             out.extend((w, True) for w in tok[1:-1].split())
         else:
             out.append((tok, False))
-    return out[:12]
+    if len(out) <= MAX_WORDS:
+        return out
+    # too many words: keep the highlighted word, drop small filler words, then keep the words nearest the highlight
+    filler = {"a", "an", "the", "of", "to", "and", "or", "is", "was", "are", "were", "in", "on", "at", "for", "with", "his", "her",
+              "their", "its", "my", "your", "our", "this", "that", "it", "be", "by", "so", "very", "just"}
+    idx = [i for i, (w, hi) in enumerate(out) if not (w.lower().strip(".,!?") in filler and not hi)]
+    if len(idx) <= MAX_WORDS:
+        return [out[i] for i in idx]
+    focus = next((i for i in idx if out[i][1]), None)
+    if focus is None:  # nothing highlighted: the first meaningful words carry the subject
+        return [out[i] for i in idx[:MAX_WORDS]]
+    keep = sorted(sorted(idx, key=lambda i: (abs(i - focus), i > focus))[:MAX_WORDS])
+    return [out[i] for i in keep]
 
 
 def _wrap(words, font, max_w, draw):
@@ -147,7 +188,8 @@ def make_card(card: dict, style: dict, w: int, h: int, out: Path) -> Path:
     layout = card.get("layout") if card.get("layout") in LAYOUTS else "big"
     font_file, upper = _font_for(style_id, kind)
     bg, fg, accent, soft = _colors(style)
-    text = str(card.get("text") or "").strip() or "..."
+    emoji = first_emoji(str(card.get("emoji") or ""))
+    text = re.sub(r"[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]", "", str(card.get("text") or "")).strip() or "..."
     if upper:
         text = text.upper()
     small = str(card.get("small") or "").strip()
@@ -169,13 +211,15 @@ def make_card(card: dict, style: dict, w: int, h: int, out: Path) -> Path:
         nw, nh = nb[2] - nb[0], nb[3] - nb[1]
         top_space = nh + short * 0.06
         words = [x for x in words if x[0] != numeral and x[0] != "#" + numeral] or words
-    font, lines, line_h = _fit(words, font_file, box_w, H * 0.42, d, int(short * (0.2 if layout != "quote" else 0.13)),
-                               min_size=max(10, int(short * 0.05)))
+    em = _emoji(emoji, int(short * (0.2 if layout == "number" else 0.3)))
+    em_h = em.height + short * 0.07 if em else 0
+    font, lines, line_h = _fit(words, font_file, box_w, H * 0.36, d, int(short * (0.22 if layout != "quote" else 0.15)),
+                               min_size=max(10, int(short * 0.05)), max_lines=2)
     gap = line_h * 1.12
     block_h = len(lines) * gap
     small_font = ImageFont.truetype(str(FONTS / ("PressStart2P.woff" if pixel else "Inter-SemiBold.woff")), max(9, int(short * 0.05)))
     small_h = (small_font.getbbox("Hg")[3] + short * 0.04) if small and layout != "number" else 0
-    y = (H - (top_space + block_h + small_h)) / 2
+    y = (H - (top_space + em_h + block_h + small_h)) / 2
 
     if layout == "number":
         nb = d.textbbox((0, 0), numeral, font=nf)
@@ -193,6 +237,17 @@ def make_card(card: dict, style: dict, w: int, h: int, out: Path) -> Path:
         qb = d.textbbox((0, 0), "“", font=qf)
         d.text(((W - (qb[2] - qb[0])) / 2 - qb[0], y - (qb[3] - qb[1]) * 0.95 - qb[1]), "“", font=qf, fill=accent)
 
+    if em:  # the emoji sits above the words, with a soft shadow
+        ex = int((W - em.width) / 2)
+        sh = Image.new("RGBA", em.size, (0, 0, 0, 0))
+        sh.putalpha(em.getchannel("A").point(lambda a: a * 0.25))
+        sh = sh.filter(ImageFilter.GaussianBlur(max(1, short // 120)))
+        base = img.convert("RGBA")
+        base.alpha_composite(sh, (ex, int(y + short * 0.015)))
+        base.alpha_composite(em, (ex, int(y)))
+        img = base.convert("RGB")
+        d = ImageDraw.Draw(img)
+        y += em_h
     shadow = (0, 0, 0) if _lum(bg) < 0.5 else None
     top = font.getbbox("Hg")[1]  # the font's own top gap: y is where the letters visibly start
     for ln in lines:
