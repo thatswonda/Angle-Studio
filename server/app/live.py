@@ -399,6 +399,22 @@ async def upload_music(request: Request, name: str = ""):
     return {"url": media_url(path), "duration": round(seconds, 1), "name": (name or "Track")[:80]}
 
 
+# ---------- Text card preview: exactly what the render will draw (free)
+
+@router.get("/card")
+def card_preview(text: str = "", small: str = "", layout: str = "big", style: str = "", kind: str = "", palette: str = "", aspect: str = "9:16"):
+    from fastapi.responses import Response
+    from .cards import make_card
+    import tempfile
+    a, b = (int(x) for x in (aspect if aspect in ("9:16", "16:9", "1:1", "4:5") else "9:16").split(":"))
+    w, h = (480, round(480 * b / a)) if a < b else (round(480 * a / b), 480)
+    with tempfile.TemporaryDirectory() as d:
+        out = make_card({"text": text[:80], "small": small[:40], "layout": layout}, {"id": style, "kind": kind, "palette": [c for c in palette.split(",") if c][:4]},
+                        w, h, Path(d) / "c.png")
+        data = out.read_bytes()
+    return Response(data, media_type="image/png", headers={"Cache-Control": "max-age=86400"})
+
+
 class MediaCheckBody(BaseModel):
     paths: list[str]
 
@@ -427,6 +443,7 @@ class SceneVisualsBody(BaseModel):
     idea: str = ""              # the creator's own rule for every image
     characters: list[dict] = []
     words_max: int = 3          # most words to print on an image (an idea like "one or two words" sets 2)
+    cards_share: float = 0.0    # share of scenes to make free text cards (0.3 = about 30%)
 
 
 def _no_words(visual: str) -> str:
@@ -461,18 +478,42 @@ async def scene_visuals(body: SceneVisualsBody):
                 "focal point, no collage, no split screen, never app icons, buttons or logos. Do not put any words, signs, labels "
                 "or captions in the visual itself. Separately, give " + ("1 word" if body.words_max <= 1 else f"1 to {min(3, body.words_max)} words") + " that sum up "
                 "the scene's message, and mark about one scene in three as key (where printed words would help most).\n"
-                f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600]} for s in batch])}\n"
-                'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "the words", "key": true or false}]}'))
+                + (f"Also mark about {round(body.cards_share * 100)}% of the scenes as TEXT CARDS: scenes whose message lands best as bold "
+                   "words on a plain background (a key point, a number, a question, a strong statement, a turning point). Never the "
+                   "first scene, never two text cards in a row, and keep scenes with people, places or actions as images. For a "
+                   "card give card_text (2 to 6 words, the punchline; wrap the one word to highlight in *stars*), card_small (an "
+                   "optional short line such as 'Number 3', a date or a place, else empty) and card_layout: big, number (for a "
+                   "countdown or a numbered point), question (if it asks something) or quote (for a memorable line).\n" if body.cards_share > 0 else "")
+                + f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600]} for s in batch])}\n"
+                + 'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "the words", "key": true or false'
+                + (', "card": true or false, "card_text": "...", "card_small": "...", "card_layout": "big|number|question|quote"' if body.cards_share > 0 else "")
+                + '}]}'))
             cost += c
             warn = warn or w
             if isinstance(data, list):
                 data = {"scenes": data}
             for item in data.get("scenes") or []:
                 if isinstance(item, dict) and item.get("visual"):
-                    out[str(item.get("n"))] = {"visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).replace('"', "").replace("*", "").split()[:max(1, min(3, body.words_max))])[:40],
+                    card = None
+                    if body.cards_share > 0 and item.get("card") and str(item.get("card_text", "")).strip():
+                        card = {"text": " ".join(str(item["card_text"]).replace('"', "").split()[:8])[:60],
+                                "small": str(item.get("card_small") or "")[:40],
+                                "layout": item.get("card_layout") if item.get("card_layout") in ("big", "number", "question", "quote") else "big"}
+                    out[str(item.get("n"))] = {"card": card, "visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).replace('"', "").replace("*", "").split()[:max(1, min(3, body.words_max))])[:40],
                                                "key": bool(item.get("key"))}
         if not out:
             raise ProviderError(f"{wn} returned no image ideas. Try again.")
+        # keep cards where they belong: not the first scene, never two in a row, about the share asked for
+        if body.cards_share > 0:
+            nums = sorted(int(k) for k in out if k.isdigit())
+            cap = max(1, round(body.cards_share * len(scenes) + 0.5))
+            used, prev = 0, None
+            for n in nums:
+                item = out[str(n)]
+                if item.get("card") and (n == 1 or prev == n - 1 or used >= cap):
+                    item["card"] = None
+                if item.get("card"):
+                    used, prev = used + 1, n
         return {"scenes": out, "written_by": wn, "cost": round(cost, 4), "warning": warn}
 
     return _job("Picturing the scenes", work)
@@ -788,6 +829,7 @@ class RenderBody(BaseModel):
     scenes: list[dict[str, Any]]
     lines: list[dict[str, Any]]
     music: dict[str, Any] = {}  # {url, volume 0-0.6, duck}
+    card_style: dict[str, Any] = {}  # {id, kind, palette} of the template, for text cards
 
 
 @router.post("/render")

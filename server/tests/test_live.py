@@ -535,3 +535,32 @@ def test_kontext_uses_the_style_swatch():
     from app.live import kontext_ref
     assert kontext_ref("templates/stickman-1.jpg") == "templates/stickman-style.jpg"
     assert kontext_ref("/media/images/abc.png") == "/media/images/abc.png"  # a scene image or upload stays as it is
+
+
+def test_text_cards(tmp_path, monkeypatch):
+    """Cards are drawn for free in the template's look; the writer's cards are kept off scene 1 and never back to back."""
+    import subprocess
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    from app.cards import make_card
+    out = make_card({"text": "Save *first*", "small": "Number 3", "layout": "number"}, {"id": "stickman", "kind": "flat", "palette": ["#1A1A1A", "#9AA0A6", "#FAF8F3", "#E4572E"]}, 360, 640, tmp_path / "c.png")
+    assert out.read_bytes()[:4] == b"\x89PNG"
+    c = TestClient(app)
+    r = c.get("/api/live/card", params={"text": "What if?", "layout": "question", "style": "pixel", "palette": "#1F1B3A,#3F6EA8,#F3E7C9,#E9724C"})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+
+    async def fake_write(writer_id, progress, prompt):
+        return {"scenes": [{"n": n, "visual": "v", "text": "w", "card": True, "card_text": f"Point {n}", "card_layout": "big"} for n in range(1, 7)]}, 0.003, "Claude Opus 5.5", None
+    monkeypatch.setattr(live, "write_json", fake_write)
+    j = _run_job(c, "/api/live/scene-visuals", {"writer": "claude-opus-5-5", "scenes": [{"n": n, "text": "x"} for n in range(1, 7)], "cards_share": 0.3})
+    cards = [n for n, v in sorted(j["result"]["scenes"].items(), key=lambda kv: int(kv[0])) if v["card"]]
+    assert "1" not in cards and all(int(b) - int(a) > 1 for a, b in zip(cards, cards[1:])) and len(cards) <= 3
+
+    media = tmp_path / "media"; (media / "audio").mkdir(parents=True)
+    _tone(media / "audio" / "a.wav", 1.0); _tone(media / "audio" / "b.wav", 1.0)
+    png = base64.b64encode(bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode()
+    res = render.render({"final": False, "aspect": "9:16", "caption_style": "none", "card_style": {"id": "cinematic", "palette": ["#0E1A24", "#1F4E5A", "#E7B15A", "#C2563A"]},
+                         "scenes": [{"image": "data:image/png;base64," + png, "lines": [0]}, {"image": "", "lines": [1], "card": {"text": "Nobody came *back*", "layout": "big"}}],
+                         "lines": [{"audio": "/media/audio/a.wav", "text": "x"}, {"audio": "/media/audio/b.wav", "text": "y"}]}, media, lambda _: None)
+    assert (media / res["url"].removeprefix("/media/")).exists()

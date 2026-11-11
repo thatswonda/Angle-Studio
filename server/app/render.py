@@ -13,6 +13,7 @@ import wave
 from pathlib import Path
 from typing import Callable
 
+from .cards import make_card
 from .providers.google import ProviderError, clean_pcm, trim_silence, write_wav
 
 FPS = 30
@@ -253,7 +254,9 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         f0, f1 = round(a * FPS), round((a + d) * FPS)
         frames = max(1, f1 - f0)
         t0, t1 = f0 / FPS, f0 / FPS + frames / FPS
-        if sc.get("variant"):  # second scene on a reused image: start close on another part, then pull back
+        if sc.get("card"):  # text card: a slow, centred push in keeps the words readable
+            zp = f"zoompan=z='min(1+0.05*on/{frames},1.05)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        elif sc.get("variant"):  # second scene on a reused image: start close on another part, then pull back
             zp = f"zoompan=z='max(1.25-0.2*on/{frames},1.05)':x='(iw-iw/zoom)*(0.85-0.5*on/{frames})':y='(ih-ih/zoom)*0.35'"
         elif i % 2 == 0:
             zp = f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
@@ -267,7 +270,10 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
                 ass = captions_ass(part, style, w, h)
                 (work / f"cap{i}.ass").write_text(ass)
                 vf += f",ass=cap{i}.ass"
-        img = local(sc.get("image", ""), f"img{i}")
+        if sc.get("card"):  # drawn here, free: the template's colours and font
+            img = make_card(sc["card"], payload.get("card_style") or {}, big_w, big_h, work / f"card{i}.png")
+        else:
+            img = local(sc.get("image", ""), f"img{i}")
         key = hashlib.sha1(hashlib.sha1(img.read_bytes()).digest() + f"|{vf}|{frames}|{crf}|{ass}".encode()).hexdigest()[:24]
         clip = cache / f"{key}.mp4"
         if clip.exists():
