@@ -426,6 +426,7 @@ class SceneVisualsBody(BaseModel):
     style_name: str = ""
     idea: str = ""              # the creator's own rule for every image
     characters: list[dict] = []
+    words_max: int = 3          # most words to print on an image (an idea like "one or two words" sets 2)
 
 
 def _no_words(visual: str) -> str:
@@ -458,17 +459,17 @@ async def scene_visuals(body: SceneVisualsBody):
                 "what they are doing, where, the key object or symbol, and the emotion on their faces. Turn abstract ideas "
                 "into a concrete visual metaphor (for example 'saving money' becomes a hand dropping a coin into a jar). One clear "
                 "focal point, no collage, no split screen, never app icons, buttons or logos. Do not put any words, signs, labels "
-                "or captions in the visual itself. Separately, give 1 to 3 words that sum up "
+                "or captions in the visual itself. Separately, give " + ("1 word" if body.words_max <= 1 else f"1 to {min(3, body.words_max)} words") + " that sum up "
                 "the scene's message, and mark about one scene in three as key (where printed words would help most).\n"
                 f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600]} for s in batch])}\n"
-                'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "1-3 words", "key": true or false}]}'))
+                'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "the words", "key": true or false}]}'))
             cost += c
             warn = warn or w
             if isinstance(data, list):
                 data = {"scenes": data}
             for item in data.get("scenes") or []:
                 if isinstance(item, dict) and item.get("visual"):
-                    out[str(item.get("n"))] = {"visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).split()[:3])[:40],
+                    out[str(item.get("n"))] = {"visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).replace('"', "").replace("*", "").split()[:max(1, min(3, body.words_max))])[:40],
                                                "key": bool(item.get("key"))}
         if not out:
             raise ProviderError(f"{wn} returned no image ideas. Try again.")
@@ -557,11 +558,18 @@ class ImageBody(BaseModel):
 
 
 def load_ref(ref: str) -> tuple[bytes, str]:
-    """Reads a reference image from a data: URL or from this server's media folder."""
+    """Reads a reference image from a data: URL, a template example picture, or this server's media folder."""
     if ref.startswith("data:"):
         head, b64 = ref.split(",", 1)
         mime = head[5:].split(";")[0] or "image/jpeg"
         data = base64.b64decode(b64)
+    elif ref.lstrip("/").startswith("templates/"):  # a built-in template's example picture, used as a style reference
+        root = (Path(__file__).resolve().parents[2] / "web" / "templates").resolve()
+        path = (root / ref.lstrip("/").removeprefix("templates/")).resolve()
+        if root not in path.parents or not path.exists():
+            raise HTTPException(422, "A template example image is missing on the server.")
+        data = path.read_bytes()
+        mime = "image/jpeg"
     else:
         rel = ref.removeprefix("/media/")
         path = (MEDIA / rel).resolve()

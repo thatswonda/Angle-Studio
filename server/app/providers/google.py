@@ -272,8 +272,9 @@ def write_wav(path: Path, pcm: bytes, rate: int) -> None:
         w.writeframes(pcm)
 
 
-STYLE_REF_NOTE = ("Use the reference image(s) only for their visual style: medium, rendering, color palette, lighting and "
-                  "texture. Do not copy their subjects, people, objects or composition. Create this new image:\n")
+STYLE_REF_NOTE = ("The reference image(s) show the exact visual style to match: medium, line work, rendering, color palette, "
+                  "lighting and texture. Match that style closely. Do not copy their subjects, people, objects, composition or "
+                  "any text in them. Create this new image:\n")
 
 
 async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path,

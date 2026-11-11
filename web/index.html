@@ -914,23 +914,44 @@ const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); 
 // Words on images: off, on key scenes, or on every scene. A creator's idea that mentions words turns them on.
 const TEXT_IDEA = /\b(text|texts|word|words|label|labels|caption|captions|title|titles|written|writing|letters?|typography|headline|headlines)\b/i;
 const wordsMode = p => (p.format && p.format.image_text) || 'off';
-const sceneWords = (p, sc) => { const m = wordsMode(p); const t = (sc.overlay_text || '').trim(); return !t || m === 'off' || (m === 'some' && !sc.overlay_key) ? '' : t; };
+// How many words an idea allows ("one or two bold words" -> 2). Default 3.
+const wordLimit = idea => /\b(one or two|1 or 2|1-2|one to two|two)\s+(bold\s+|big\s+|short\s+)*words?\b/i.test(idea || '') ? 2 : /\b(one|a single|single|1)\s+(bold\s+|big\s+|short\s+)*word\b/i.test(idea || '') ? 1 : 3;
+const sceneWords = (p, sc) => { const m = wordsMode(p); const t = (sc.overlay_text || '').replace(/["\u201c\u201d*]/g, '').trim(); if (!t || m === 'off' || (m === 'some' && !sc.overlay_key)) return ''; return t.split(/\s+/).slice(0, wordLimit(ideaOf(p))).join(' '); };
+// Two of the template's own example pictures go with every image as style references (Nano Banana), so the look matches.
+const templateRefs = st => st.refs && st.refs.length ? st.refs : st.examples ? ['templates/' + (st.img_id || st.id) + '-1.jpg', 'templates/' + (st.img_id || st.id) + '-2.jpg'] : [];
 // A template's idea is saved on the template (every video using it); a video can also have its own idea that replaces it.
-const templateIdea = st => { let m = {}; try { m = STATE.templateIdeas || {}; } catch (e) {} return (m[st.id] != null ? m[st.id] : st.idea || '').trim(); };
+const templateIdea = st => (st.custom ? st.idea || '' : '').trim();
+// Makes your own template from another one plus an idea; the original stays as it is.
+function copyWithIdea(x, st, idea, name) {
+  const id = uid('custom');
+  x.customStyles = (x.customStyles || []).concat({ ...clone(st), id, name: (name || '').trim() || st.name + ' (my idea)', prefix: st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix, idea: (idea || '').trim(), base: st.base || st.id, img_id: st.img_id || st.id, custom: true, best: 'Your own version of ' + st.name, at: Date.now() });
+  return id;
+}
+// Ideas saved on built-in templates (earlier version) move to templates of your own, once.
+function moveTemplateIdeas(x) {
+  if (x.ideas_v2) return; x.ideas_v2 = true;
+  Object.entries(x.templateIdeas || {}).forEach(([sid, idea]) => { const st = STYLES.find(y => y.id === sid); if (!st || !(idea || '').trim()) return; const id = copyWithIdea(x, st, idea); Object.values(x.projects || {}).forEach(q => { if (q.style === sid && !(q.style_note || '').trim()) q.style = id; }); });
+  delete x.templateIdeas;
+}
 const ideaOf = p => { const st = styleById(p.style); return ((p.style_note || '').trim() || templateIdea(st)).trim(); };
 // The full image prompt for one scene: the look, the picture, the narration it must make obvious, the creator's rule, and words if wanted.
 function buildImagePrompt(p, sc, chars) {
-  const st = styleById(p.style); const idea = ideaOf(p);
-  const prefix = st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix;  // older copies kept the idea inside the recipe
-  const words = sceneWords(p, sc); const textOk = !!words || TEXT_IDEA.test(idea);
+  const st = styleById(p.style); const idea = ideaOf(p).replace(/[.\s]+$/, '');
+  const prefix = st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix;
+  const words = sceneWords(p, sc); const textIdea = TEXT_IDEA.test(idea); const textOk = !!words || textIdea; const limit = wordLimit(idea);
   const avoid = textOk ? (st.avoid || '').replace(/,?\s*(speech bubbles, )?(words, labels or letters|words or letters|labels or letters|written labels|lettering)/gi, '').replace(/^\s*,\s*/, '').trim() : (st.avoid || '');
-  const said = sceneText(p, sc).replace(/"/g, "'").slice(0, 400);
-  return prefix + '.' + (idea ? ' Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') + '.' : '') + ' Scene: ' + (sc.image_prompt || sc.description) + (chars ? '. Characters: ' + chars : '')
-    + '. This image is on screen while the narrator says: "' + said + '" Make that meaning obvious at a glance, even with the sound off: one clear focal point, readable faces and actions.'
-    + (words ? ' Write the words "' + words + '" exactly once, in large, bold, clean letters as part of the image, spelled exactly like that and easy to read on a phone. These are the only words in the image.' : '')
+  const meaning = sceneText(p, sc).replace(/["\u201c\u201d]/g, '').slice(0, 400);
+  const text = words
+    ? ' The only text in the image is exactly "' + words + '" (' + words.split(/\s+/).length + (words.split(/\s+/).length > 1 ? ' words' : ' word') + '), written once in large, bold, clean letters, spelled exactly like that. No other words, letters, numbers, labels, signs, captions or speech bubbles anywhere.'
+    : textIdea ? ' If the rule asks for words, write at most ' + limit + (limit > 1 ? ' short words' : ' short word') + ', once, and no other text anywhere.' : ' No words, captions, labels, signs, watermarks or logos in the image.';
+  return prefix + '.' + (idea ? ' Rule for every image (follow it exactly): ' + idea + '.' : '')
+    + ' Scene: ' + (sc.image_prompt || sc.description || '').trim().replace(/[.\s]+$/, '') + (chars ? '. Characters: ' + chars : '') + '.'
+    + ' The picture must make this meaning obvious at a glance, with one clear focal point and readable faces and actions (it is the meaning only: never write it as text): ' + meaning
+    + text
     + (avoid ? ' Avoid: ' + avoid + '.' : '')
-    + (textOk ? ' No watermarks, logos or signatures.' : ' No words, captions, watermarks or logos in the image.')
-    + (idea ? ' Remember the rule: ' + idea.replace(/[.\s]+$/, '') + '.' : '');
+    + ' No watermarks or signatures.'
+    + (idea && !textIdea ? ' Remember the rule: ' + idea + '.' : '')
+    + ' Draw it in the ' + st.name + ' style: ' + prefix.split(/\s+/).slice(0, 22).join(' ').replace(/[,.]+$/, '') + '.';
 }
 const imagePrompt = (st, scene) => st.prefix + '. Scene: ' + scene + (st.avoid ? '. Avoid: ' + st.avoid : '') + '. No words, captions, watermarks or logos in the image.';
 const modelOf = (p, kind) => MODELS[kind].find(m => m.id === p.models[kind]) || MODELS[kind][0];
@@ -1094,7 +1115,6 @@ function mergeStates(local, remote) {
   out.deleted = [...deleted];
   Object.entries(remote.projects || {}).forEach(([id, rp]) => { const lp = out.projects[id]; if (!lp || (rp.updated_at || 0) > (lp.updated_at || 0)) out.projects[id] = rp; });
   deleted.forEach(id => { delete out.projects[id]; });
-  out.templateIdeas = { ...(remote.templateIdeas || {}), ...(local.templateIdeas || {}) };
   ['customStyles', 'templates', 'ideaBank', 'music'].forEach(k => { const have = new Set((out[k] || []).map(x => x.id)); out[k] = (out[k] || []).concat((remote[k] || []).filter(x => !have.has(x.id))); });
   if (!out.projects[out.currentId]) out.currentId = Object.keys(out.projects)[0];
   return out;
@@ -1109,6 +1129,7 @@ async function pushState() {
 }
 let SYNC_FAILS = 0;
 let STATE = load() || seed();
+moveTemplateIdeas(STATE);
 // Live mode: when this page is served by the Angle Studio server, real APIs replace the simulation.
 let LIVE = null;
 const DEFAULT_DELIVERY = 'warm, steady and conversational, like explaining something to a friend, at a medium pace';
@@ -1156,7 +1177,7 @@ async function detectLive() {
     if (remote && remote.projects && remote.version === 1) {
       remote = settle({ ...remote, jobs: [], toasts: [] });
       STATE = STATE.live_init ? mergeStates(STATE, remote) : remote;
-      STATE.live_init = true;
+      STATE.live_init = true; moveTemplateIdeas(STATE);
     } else if (!STATE.live_init) {
       // First visit in live mode: start clean instead of with the demo's sample project.
       const fresh = seed(); fresh.live_init = true; fresh.intro = false; fresh.cache = {};
@@ -1513,7 +1534,7 @@ const api = {
       const prompt = kind === 'avatar'
         ? st.prefix + '. A YouTube channel profile picture for "' + c.name + '": ' + c.avatar + '. One simple bold subject, centered, filling the frame, plain uncluttered background, reads clearly when shown as a tiny circle. No text, no letters, no logos.'
         : st.prefix + '. A wide YouTube channel banner for "' + c.name + '": ' + c.banner + '. Keep the important parts in the middle third. Print the channel name "' + c.name + '" large, bold and centered in the middle. No other text.';
-      const r = await post('image', { prompt, aspect: kind === 'avatar' ? '1:1' : '16:9', model: kind === 'avatar' ? p0.models.image : textImageModel(p0), refs: st.refs || [] });
+      const r = await post('image', { prompt, aspect: kind === 'avatar' ? '1:1' : '16:9', model: kind === 'avatar' ? p0.models.image : textImageModel(p0), refs: templateRefs(st) });
       updateP(pid, p => { p.channels.list[i][key] = { status: 'ready', url: r.url }; addCost(p, r.cost || 0); });
     } catch (e) { updateP(pid, p => { p.channels.list[i][key] = { status: 'failed', error: e.message }; }); toast(e.message); }
   },
@@ -1523,7 +1544,7 @@ const api = {
     try {
       const prompt = st.prefix + '. A video thumbnail: ' + t.concept + '. Print this text large, bold and easy to read at small size: "' + t.text + '". High contrast, one clear focal point, uncluttered background.';
       const anchor = lookAnchor(p0, null);
-      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: textImageModel(p0), refs: (st.refs || []).concat(anchor ? [anchor] : []) });
+      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: textImageModel(p0), refs: templateRefs(st).concat(anchor ? [anchor] : []) });
       updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'ready', url: r.url }); addCost(p, r.cost || 0); });
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
   },
@@ -1604,7 +1625,7 @@ const api = {
     const nOf = sc => p0.scenes.findIndex(x => x.id === sc.id) + 1;
     let res = {}, cost = 0;
     if (LIVE) {
-      const r = await liveJob(pid, 'Picturing the scenes', 'scene-visuals', { writer: wr.id, story: p0.script.story, scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc) })), style_name: st.name, idea: ideaOf(p0),
+      const r = await liveJob(pid, 'Picturing the scenes', 'scene-visuals', { writer: wr.id, story: p0.script.story, scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc) })), style_name: st.name, idea: ideaOf(p0), words_max: wordLimit(ideaOf(p0)),
         characters: p0.video_type === 'character' ? p0.characters.map(c => ({ name: c.name, description: c.description })) : [] }, [wr.name + ' is picturing each scene']);
       res = r.scenes || {}; cost = r.cost || 0; if (r.warning) toast(r.warning);
     } else {
@@ -1643,7 +1664,7 @@ const api = {
       const st = projStyle(p0);
       const prompt = buildImagePrompt(p0, sc0, chars);
       const anchor = lookAnchor(p0, sceneId);
-      const refs = (st.refs || []).concat(anchor ? [anchor] : []);
+      const refs = templateRefs(st).concat(anchor ? [anchor] : []);
       try {
         const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs });
         updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (!x) return; x.image_versions.push({ url: r.url, prompt, model: p.models.image, style: p.style, at: Date.now() }); x.image_index = x.image_versions.length - 1; x.image_status = 'ready'; addCost(p, r.cost || 0); });
@@ -2234,7 +2255,7 @@ function StyleScreen({ p, s }) {
       <div className="tgal" role="radiogroup" aria-label="Visual template">${allStyles().map(t => html`<button key=${t.id} type="button" className="tcard" role="radio" aria-checked=${cur === t.id} aria-pressed=${cur === t.id} onClick=${() => pick(t.id)}>
         <div className="tmain">${styleImg(t, 1) ? html`<img src=${styleImg(t, 1)} alt=${t.name + ' example'} loading="lazy" />` : html`<${Art} seed=${hashSeed(t.id)} styleId=${t.id} />`}</div>
         <div className="tthumbs">${[2, 3, 4].map(n => html`<span key=${n}>${styleImg(t, n) ? html`<img src=${styleImg(t, n)} alt="" loading="lazy" />` : null}</span>`)}</div>
-        <div className="tbody"><div className="row" style=${{ justifyContent: 'space-between', gap: 4 }}><strong>${t.name}</strong>${templateIdea(t) ? html`<span className="chip" title=${templateIdea(t)}>Your idea</span>` : t.id === suggested ? html`<span className="chip">Suggested</span>` : t.custom ? html`<span className="chip">Yours</span>` : null}</div>
+        <div className="tbody"><div className="row" style=${{ justifyContent: 'space-between', gap: 4 }}><strong>${t.name}</strong>${t.custom && templateIdea(t) ? html`<span className="chip" title=${templateIdea(t)}>Yours + idea</span>` : t.id === suggested ? html`<span className="chip">Suggested</span>` : t.custom ? html`<span className="chip">Yours</span>` : null}</div>
           <span className="note">${t.mood}</span><span className="note">Best for: ${t.best}</span></div>
         ${cur === t.id ? html`<span className="tcheck"><${Icon} n="check" /></span>` : null}
       </button>`)}</div>
@@ -2271,52 +2292,50 @@ function StyleScreen({ p, s }) {
 // Add your own idea to a template: for this video only, or saved as a new template of your own.
 function StyleIdea({ p, st, locked }) {
   const forThis = p.style === st.id; const saved = templateIdea(st); const own = forThis ? (p.style_note || '').trim() : '';
-  const [idea, setIdea] = useState(own || saved); const [name, setName] = useState(''); const [more, setMore] = useState(false);
-  useEffect(() => { setIdea((p.style === st.id ? (p.style_note || '').trim() : '') || templateIdea(st)); }, [st.id, saved]);
+  const [idea, setIdea] = useState(own || saved); const [name, setName] = useState('');
+  useEffect(() => { setIdea((p.style === st.id ? (p.style_note || '').trim() : '') || templateIdea(st)); setName(''); }, [st.id, saved]);
   const wordsOn = (q, text) => { if (TEXT_IDEA.test(text) && wordsMode(q) === 'off') q.format.image_text = /\b(every|each|all)\b/i.test(text) ? 'all' : 'some'; };
-  const toTemplate = () => {
+  const asNew = () => {
+    const t = idea.trim(); let id = null;
+    update(x => { id = copyWithIdea(x, st, t, name); });
+    updateP(p.id, q => { q.style = id; q.style_note = ''; wordsOn(q, t); });
+    setName(''); toast('Saved as a new template and chose it for this video. \u201c' + st.name + '\u201d is unchanged.');
+  };
+  const saveHere = () => {
     const t = idea.trim();
-    update(x => { x.templateIdeas = { ...(x.templateIdeas || {}), [st.id]: t }; });
+    update(x => { const c = (x.customStyles || []).find(y => y.id === st.id); if (c) { c.idea = t; c.prefix = c.idea && c.prefix.includes('. Also: ') ? c.prefix.split('. Also: ')[0] : c.prefix; } });
     updateP(p.id, q => { q.style = st.id; q.style_note = ''; wordsOn(q, t); });
-    toast(t ? 'Saved to \u201c' + st.name + '\u201d. Every video using this template follows it' + (TEXT_IDEA.test(t) ? ', and Words on images is on for this video.' : '.') : 'Idea removed from \u201c' + st.name + '\u201d.');
+    toast('Saved to your template \u201c' + st.name + '\u201d.');
   };
   const forVideo = () => { const t = idea.trim(); updateP(p.id, q => { q.style = st.id; q.style_note = t; wordsOn(q, t); }); toast(t ? 'Used for this video only.' : 'This video uses the template\u2019s own idea again.'); };
-  const asCopy = () => {
-    const id = uid('custom'); const nm = name.trim() || st.name + ' (mine)';
-    update(x => { x.customStyles = (x.customStyles || []).concat({ ...clone(st), id, name: nm, prefix: st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix, idea: idea.trim(), base: st.base || st.id, img_id: st.img_id || st.id, custom: true, best: 'Your own version of ' + st.name }); });
-    updateP(p.id, q => { q.style = id; q.style_note = ''; wordsOn(q, idea); });
-    setName(''); setMore(false); toast('Saved \u201c' + nm + '\u201d and chose it for this video.');
-  };
-  const changed = idea.trim() !== saved;
   const [prev, setPrev] = useState(null); const im = modelOf(p, 'image');
   const preview = async () => {
     const t = idea.trim(); setPrev({ status: 'generating' });
     try {
-      if (!LIVE) { await sleep(700); setPrev({ status: 'ready', seed: randSeed(), idea: t }); return; }
-      const sc0 = p.scenes && p.scenes[0]; const scene = (sc0 && (sc0.image_prompt || sc0.description)) || 'a person at a busy market stall, explaining something exciting to a friend';
-      const textOk = TEXT_IDEA.test(t); const prefix = st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix;
-      const avoid = textOk ? (st.avoid || '').replace(/,?\s*(speech bubbles, )?(words, labels or letters|words or letters|labels or letters|written labels|lettering)/gi, '').replace(/^\s*,\s*/, '').trim() : (st.avoid || '');
-      const prompt = prefix + '.' + (t ? ' Rule for every image (follow it exactly): ' + t.replace(/[.\s]+$/, '') + '.' : '') + ' Scene: ' + scene + '.' + (avoid ? ' Avoid: ' + avoid + '.' : '') + (textOk ? ' No watermarks, logos or signatures.' : ' No words, captions, watermarks or logos in the image.') + (t ? ' Remember the rule: ' + t.replace(/[.\s]+$/, '') + '.' : '');
-      const r = await post('image', { prompt, aspect: p.format.aspect_ratio, model: p.models.image, refs: st.refs || [] });
+      if (!LIVE) { await sleep(700); setPrev({ status: 'ready', seed: randSeed() }); return; }
+      const sc0 = (p.scenes && p.scenes[0]) || { description: 'a person at a busy market stall, explaining something exciting to a friend', line_ids: [] };
+      const fake = { ...p, style: st.id, style_note: t, format: { ...p.format, image_text: TEXT_IDEA.test(t) && wordsMode(p) === 'off' ? 'all' : wordsMode(p) } };
+      const prompt = buildImagePrompt(fake, { ...sc0, overlay_text: sc0.overlay_text || (TEXT_IDEA.test(t) ? 'BIG IDEA' : ''), overlay_key: true });
+      const r = await post('image', { prompt, aspect: p.format.aspect_ratio, model: p.models.image, refs: templateRefs(st) });
       updateP(p.id, q => { addCost(q, r.cost || 0); });
-      setPrev({ status: 'ready', url: r.url, idea: t });
+      setPrev({ status: 'ready', url: r.url });
     } catch (e) { setPrev({ status: 'failed', error: e.message }); }
   };
   return html`<div className="stack idea-box" style=${{ gap: 8 }}>
-    <label className="field" htmlFor=${'idea-' + st.id}><strong>Your idea for this template</strong><span className="note">A rule every image follows, e.g. \u201ceach image carries one or two bold words that sum up the scene\u201d or \u201ccharacters wear colourful Ankara fabrics\u201d.</span>
-      <textarea id=${'idea-' + st.id} className="textarea" rows="2" value=${idea} onChange=${e => setIdea(e.target.value)} placeholder="Your idea for this template"></textarea></label>
+    <label className="field" htmlFor=${'idea-' + st.id}><strong>${st.custom ? 'Your idea for this template' : 'Add your idea to this look'}</strong><span className="note">A rule every image follows, e.g. \u201ceach image carries one or two bold words that sum up the scene\u201d or \u201ccharacters wear colourful Ankara fabrics\u201d.</span>
+      <textarea id=${'idea-' + st.id} className="textarea" rows="2" value=${idea} onChange=${e => setIdea(e.target.value)} placeholder="Your idea"></textarea></label>
     <div className="row">
-      <button type="button" className="btn sm primary" disabled=${!changed && forThis && !own} onClick=${toTemplate}><${Icon} n="check" />${saved && !idea.trim() ? 'Remove the idea from this template' : 'Save to this template'}</button>
+      <input className="input" style=${{ maxWidth: 230 }} placeholder=${'Name, e.g. ' + (st.base ? styleById(st.base).name : st.name) + ' (my idea)'} value=${name} onChange=${e => setName(e.target.value)} aria-label="New template name" />
+      <button type="button" className=${'btn sm' + (st.custom ? '' : ' primary')} disabled=${!idea.trim()} onClick=${asNew}><${Icon} n="plus" />Save as new template</button>
+      ${st.custom ? html`<button type="button" className="btn sm primary" disabled=${idea.trim() === saved} onClick=${saveHere}><${Icon} n="check" />Save changes to this template</button>` : null}
       <button type="button" className="btn sm" disabled=${forThis && idea.trim() === own} onClick=${forVideo}>Use for this video only</button>
-      <button type="button" className="btn sm ghost" disabled=${!idea.trim() || (prev && prev.status === 'generating')} onClick=${preview}><${Icon} n="spark" />Preview with my idea${LIVE ? html`<span className="tag">${fmt$(im.cost)}</span>` : null}</button>
-      <button type="button" className="btn sm ghost" aria-expanded=${more} onClick=${() => setMore(!more)}>Save as a new template\u2026</button>
+      <button type="button" className="btn sm ghost" disabled=${!idea.trim() || (prev && prev.status === 'generating')} onClick=${preview}><${Icon} n="spark" />Preview${LIVE ? html`<span className="tag">${fmt$(im.cost)}</span>` : null}</button>
     </div>
     ${prev ? html`<div className="row" style=${{ alignItems: 'flex-start' }}>
       <div className=${'frame idea-prev' + frameCls(p)}>${prev.status === 'generating' ? html`<div className="overlay"><span className="spinner"></span></div>` : prev.status === 'failed' ? html`<div className="overlay"><span>${prev.error}</span></div>` : html`<${Art} seed=${prev.seed || 7} styleId=${st.id} upload=${prev.url} title="Preview with your idea" />`}</div>
       <span className="note" style=${{ maxWidth: 260 }}>${prev.status === 'ready' ? 'One test image in ' + st.name + ' with your idea' + (p.scenes && p.scenes[0] ? ', using scene 1 of this video' : '') + '. Not added to your video.' : prev.status === 'generating' ? 'Drawing a test image\u2026' : ''}</span>
     </div>` : null}
-    ${more ? html`<div className="row"><input className="input" style=${{ maxWidth: 240 }} placeholder=${'Name, e.g. ' + st.name + ' (mine)'} value=${name} onChange=${e => setName(e.target.value)} aria-label="Template name" /><button type="button" className="btn sm" disabled=${!idea.trim()} onClick=${asCopy}><${Icon} n="plus" />Save copy</button></div>` : null}
-    <p className="note">${own ? 'This video uses its own idea: \u201c' + own + '\u201d.' : saved ? 'Saved on this template: \u201c' + saved + '\u201d. Every video using it follows this.' : 'No idea saved on this template yet.'}${forThis ? ' Images already made keep their look until you redo them (click any image on the Scenes step).' : ''}</p>
+    <p className="note">${own ? 'This video uses its own idea: \u201c' + own + '\u201d. ' : ''}${st.custom ? (saved ? 'Saved on this template: \u201c' + saved + '\u201d. ' : '') + 'This is your own template, based on ' + styleById(st.base || st.id).name + '.' : '\u201c' + st.name + '\u201d is a built-in template and stays as it is: saving makes a new template of your own.'}${forThis ? ' Images already made keep their look until you redo them.' : ''}</p>
   </div>`;
 }
 function hashSeed(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) % 100000; }

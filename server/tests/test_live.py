@@ -380,10 +380,10 @@ def test_scene_visuals_carry_the_message(monkeypatch):
 
     monkeypatch.setattr(live, "write_json", fake_write)
     j = _run_job(TestClient(app), "/api/live/scene-visuals", {"writer": "gemini-flash-writer", "scenes": [{"n": 1, "text": "Start saving a little every day."}],
-                                                               "style_name": "Stick figure", "idea": "every image shows one or two bold words"})
+                                                               "style_name": "Stick figure", "idea": "every image shows one or two bold words", "words_max": 2})
     assert j["status"] == "done", j
     r = j["result"]["scenes"]["1"]
-    assert r["visual"].startswith("a hand") and r["text"] == "save money now" and r["key"]  # at most 3 words
+    assert r["visual"].startswith("a hand") and r["text"] == "save money" and r["key"]  # the idea allows 2 words
     assert "follow it exactly): every image shows one or two bold words" in prompts[0] and "sound off" in prompts[0]
 
 
@@ -492,3 +492,13 @@ def test_music_upload(monkeypatch, tmp_path):
     r = c.post("/api/live/music?name=Calm%20piano", content=track.read_bytes()).json()
     assert r["url"].startswith("/media/music/") and abs(r["duration"] - 2.0) < 0.2 and r["name"] == "Calm piano"
     assert c.post("/api/live/music", content=b"not music at all").status_code == 422
+
+
+def test_template_examples_can_be_style_references():
+    from app import live
+    data, mime = live.load_ref("templates/stickman-1.jpg")
+    assert data[:2] == b"\xff\xd8" and mime == "image/jpeg"
+    import pytest as _p
+    from fastapi import HTTPException as _H
+    with _p.raises(_H):
+        live.load_ref("templates/../../server/.env")  # nothing outside the templates folder
