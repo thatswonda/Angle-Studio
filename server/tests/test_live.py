@@ -620,3 +620,23 @@ def test_thumbnail_words_are_drawn_on_the_picture(tmp_path):
     yellow = sum(1 for px in out.crop((0, 0, 720, 500)).getdata() if px[0] > 220 and px[1] > 180 and px[2] < 80)
     assert yellow > 500  # the starred word is yellow, in the top area
     assert c.post("/api/live/thumb-text", json={"image": "/media/../../etc/passwd", "text": "x"}).status_code == 422
+
+
+def test_template_from_an_image_made_in_the_app(monkeypatch):
+    from fastapi.testclient import TestClient
+    from PIL import Image
+    from app import live
+    from app.main import app
+    src = live.MEDIA / "images" / "madehere.jpg"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 64), (200, 150, 90)).save(src)
+    seen = []
+
+    async def fake_json(model, parts, max_tokens=0):
+        seen.append(parts)
+        return {"name": "Warm paint", "mood": "golden", "prefix": "warm painted look", "avoid": "photos", "palette": ["#111111"]}, 0.001
+
+    monkeypatch.setattr(live.google, "generate_json", fake_json)
+    r = TestClient(app).post("/api/live/style-from-images", json={"images": ["/media/images/madehere.jpg"], "name": "Mine"})
+    assert r.status_code == 200 and r.json()["name"] == "Mine" and len(r.json()["palette"]) == 4
+    assert seen[0][0]["inlineData"]["mimeType"] == "image/jpeg"

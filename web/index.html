@@ -290,6 +290,12 @@ label.mrow { grid-template-columns: auto 1fr; cursor: pointer; }
 .zoom-box { display: grid; grid-template-columns: auto minmax(0, auto) auto minmax(220px, 300px); gap: 12px; align-items: center; background: var(--surface); border-radius: var(--r); padding: 14px; max-width: 100%; max-height: 100%; }
 .zoom-img { height: min(82vh, 900px); aspect-ratio: 9 / 16; } .zoom-img.r16x9 { height: auto; width: min(62vw, 1100px); aspect-ratio: 16 / 9; } .zoom-img.r1x1 { aspect-ratio: 1; } .zoom-img.r4x5 { aspect-ratio: 4 / 5; }
 .zoom-img .frame { width: 100%; height: 100%; }
+.pickgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 46vh; overflow: auto; padding: 2px; }
+.pickgrid button { position: relative; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--sunk); cursor: pointer; aspect-ratio: 1; }
+.pickgrid button[aria-pressed="true"] { border-color: var(--accent); }
+.pickgrid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pickgrid .pnum { position: absolute; top: 4px; right: 4px; background: var(--accent); color: #fff; border-radius: 999px; width: 20px; height: 20px; font-size: 12px; display: grid; place-items: center; font-weight: 700; }
+.tplbox { background: var(--surface); border-radius: var(--r); padding: 16px; width: min(720px, 100%); max-height: 100%; overflow: auto; }
 .zoom-nav { font-size: 28px; line-height: 1; padding: 6px 10px; }
 @media (max-width: 860px) { .zoom-box { grid-template-columns: auto minmax(0, 1fr) auto; overflow: auto; } .zoom-side { grid-column: 1 / -1; } .zoom-img { height: 60vh; } .zoom-img.r16x9 { width: 100%; height: auto; } }
 .vlib { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
@@ -1601,6 +1607,14 @@ const api = {
       updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'ready', url: r.url, error: null }); });
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
   },
+  // A new template from 1 to 3 pictures (uploads or images made in the app). Built-in templates are never changed.
+  async templateFromImages(images, name, pid) {
+    const r = LIVE ? await post('style-from-images', { images, name }) : (await sleep(900), { name: name || 'My style', mood: 'Your own look', prefix: 'in the visual style of the reference images: same medium, palette, lighting and texture', avoid: 'anything that breaks the reference look', palette: ['#2B2B2B', '#7A6F63', '#EFE8DE', '#C47A4A'], cost: 0 });
+    const id = uid('custom');
+    update(x => { x.customStyles = (x.customStyles || []).concat({ id, name: r.name, kind: 'soft', mood: r.mood, best: 'Your own channel look', prefix: r.prefix, avoid: r.avoid, palette: r.palette, refs: images.slice(0, 3), custom: true, at: Date.now() }); });
+    if (pid && r.cost) updateP(pid, q => { addCost(q, r.cost); });
+    return { id, name: r.name };
+  },
   // New thumbnail ideas only; titles, captions and descriptions stay as they are.
   async rewriteThumbs(pid) {
     const old = clone(STATE.projects[pid].kit);
@@ -2293,7 +2307,7 @@ function ScriptScreen({ p, s }) {
 function StyleScreen({ p, s }) {
   const locked = p.checkpoints.style; const suggested = (p.angles.find(a => a.id === p.selected_angle_ids[0]) || {}).style;
   const cur = p.style || suggested || 'photoreal'; const st = styleById(cur);
-  const [files, setFiles] = useState([]); const [name, setName] = useState(''); const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState([]); const [name, setName] = useState(''); const [busy, setBusy] = useState(false); const [picking, setPicking] = useState(false);
   const pick = id => updateP(p.id, q => { q.style = id; });  // allowed after approval too: only new and redone images change
   const addFiles = async list => {
     const out = [];
@@ -2303,10 +2317,8 @@ function StyleScreen({ p, s }) {
   const create = async () => {
     setBusy(true);
     try {
-      const r = LIVE ? await post('style-from-images', { images: files, name }) : (await sleep(900), { name: name || 'My style', mood: 'Your own look', prefix: 'in the visual style of the reference images: same medium, palette, lighting and texture', avoid: 'anything that breaks the reference look', palette: ['#2B2B2B', '#7A6F63', '#EFE8DE', '#C47A4A'], cost: 0 });
-      const id = uid('custom');
-      update(x => { x.customStyles = (x.customStyles || []).concat({ id, name: r.name, kind: 'soft', mood: r.mood, best: 'Your own channel look', prefix: r.prefix, avoid: r.avoid, palette: r.palette, refs: files.slice(), custom: true }); });
-      updateP(p.id, q => { q.style = id; addCost(q, r.cost || 0); });
+      const r = await api.templateFromImages(files, name, p.id);
+      updateP(p.id, q => { q.style = r.id; });
       setFiles([]); setName(''); toast('Template “' + r.name + '” created and selected.');
     } catch (e) { toast(e.message); }
     setBusy(false);
@@ -2343,15 +2355,17 @@ function StyleScreen({ p, s }) {
       </div>
     </section>
     <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Create a template from your images</h2><span className="note">1 to 3 images in the look you want: your own work, or frames you made before</span></div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Create a template from your images</h2><span className="note">1 to 3 images in the look you want: your own work, or any image you made in this app</span></div>
       <div className="row">
-        <label className="btn" htmlFor="tpl-files"><${Icon} n="upload" />Choose images</label>
-        <input id="tpl-files" type="file" accept="image/*" multiple hidden disabled=${locked} onChange=${e => addFiles(e.target.files)} />
-        <input id="tpl-name" className="input" style=${{ maxWidth: 240 }} placeholder="Name, e.g. My channel look" value=${name} disabled=${locked} onChange=${e => setName(e.target.value)} />
-        <button type="button" className="btn primary" disabled=${locked || !files.length || busy} onClick=${create}>${busy ? html`<span className="spinner"></span> Reading the style` : 'Create template'}</button>
+        <button type="button" className="btn" onClick=${() => setPicking(true)}><${Icon} n="spark" />Pick from images you made</button>
+        <label className="btn" htmlFor="tpl-files"><${Icon} n="upload" />Upload images</label>
+        <input id="tpl-files" type="file" accept="image/*" multiple hidden onChange=${e => addFiles(e.target.files)} />
+        <input id="tpl-name" className="input" style=${{ maxWidth: 240 }} placeholder="Name, e.g. My channel look" value=${name} onChange=${e => setName(e.target.value)} />
+        <button type="button" className="btn primary" disabled=${!files.length || busy} onClick=${create}>${busy ? html`<span className="spinner"></span> Reading the style` : 'Create template'}</button>
       </div>
       ${files.length ? html`<div className="upl">${files.map((f, i) => html`<img key=${i} src=${f} alt=${'Reference ' + (i + 1)} />`)}</div>` : null}
-      <p className="note">${LIVE ? 'Gemini describes the style (never the subjects) as a recipe, and your images are sent as style references with every scene.' : 'In the demo the recipe is simulated. In live mode Gemini writes it from your images.'}</p>
+      <p className="note">${LIVE ? 'Gemini describes the style (never the subjects) as a recipe, and your images are sent as style references with every scene.' : 'In the demo the recipe is simulated. In live mode Gemini writes it from your images.'} You can also open any scene image (click it) or thumbnail and press \u201cMake a template from this\u201d.</p>
+      ${picking ? html`<${MakeTemplate} p=${p} onClose=${() => setPicking(false)} />` : null}
     </section>
     <section className="panel row"><div className="grow"><strong>Saved channel looks</strong><p className="note">Apply style, voice, captions, music and frame in one click.</p></div>
       ${s.templates.map(t => html`<button key=${t.id} type="button" className="btn" disabled=${locked} onClick=${() => { applyTemplate(p.id, t); toast('Applied “' + t.name + '”.'); }}>Apply “${t.name}”</button>`)}</section>
@@ -2683,6 +2697,41 @@ function FormatScreen({ p, s }) {
 /* ======================================================================
    7. Scenes (VIS-1..6, CHR-5, ANM-4)
    ====================================================================== */
+// Every picture made in the app that can become a template: this video's scene images and thumbnails first, then other videos'.
+function madeImages(p) {
+  const out = []; const seen = new Set();
+  const add = (src, label, pid) => { if (src && !seen.has(src)) { seen.add(src); out.push({ src, label, pid }); } };
+  const projs = [p].concat(Object.values(STATE.projects).filter(q => q && q.id !== p.id).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)));
+  for (const q of projs) {
+    (q.scenes || []).forEach((sc, i) => { if (isCard(sc) || sc.reuse_of) return; const v = sc.image_versions && sc.image_versions[sc.image_index]; if (v) add(v.url || v.upload, (q.id === p.id ? '' : q.title + ' \u00b7 ') + 'Scene ' + (i + 1), q.id); });
+    ((q.kit && q.kit.thumbnails) || []).forEach((t, i) => add(t.raw, (q.id === p.id ? '' : q.title + ' \u00b7 ') + 'Thumbnail ' + (i + 1), q.id));
+  }
+  return out.filter(x => LIVE || !x.src.startsWith('/media/')).slice(0, 120);
+}
+// Makes a new template from 1 to 3 images you made (built-in templates stay as they are). start: the image it was opened from.
+function MakeTemplate({ p, start, onClose }) {
+  const all = madeImages(p); if (start && !all.some(x => x.src === start)) all.unshift({ src: start, label: 'This image' });
+  const [sel, setSel] = useState(start ? [start] : []); const [name, setName] = useState(''); const [busy, setBusy] = useState(false); const [made, setMade] = useState(null);
+  useEffect(() => { const k = e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }; document.addEventListener('keydown', k, true); return () => document.removeEventListener('keydown', k, true); });
+  const toggle = src => setSel(s => s.includes(src) ? s.filter(x => x !== src) : s.length >= 3 ? s : s.concat(src));
+  const go = async () => { setBusy(true); try { const r = await api.templateFromImages(sel, name, p.id); setMade(r); toast('Template \u201c' + r.name + '\u201d saved. It is in Visual style for every video.'); } catch (e) { toast(e.message); } setBusy(false); };
+  return html`<div className="zoom-back" style=${{ zIndex: 90 }} onClick=${e => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label="Make a template from your images">
+    <div className="tplbox stack">
+      <div className="row" style=${{ justifyContent: 'space-between' }}><h2 style=${{ margin: 0 }}>Make a template from your images</h2><button type="button" className="btn ghost sm" aria-label="Close" onClick=${onClose}><${Icon} n="x" /></button></div>
+      ${made ? html`<${Fragment}>
+        <p>\u201c${made.name}\u201d is saved with your templates. It is a new template: the ones it came from are unchanged.</p>
+        <div className="row"><button type="button" className="btn primary" onClick=${() => { updateP(p.id, q => { q.style = made.id; }); toast('This video now uses \u201c' + made.name + '\u201d for new and redone images.'); onClose(); }}>Use it for this video</button><button type="button" className="btn" onClick=${onClose}>Done</button></div>
+      </${Fragment}>` : html`<${Fragment}>
+        <p className="note" style=${{ margin: 0 }}>Pick 1 to 3 images in the look you want. Two or three in the same look give the closest match. Only the style is copied, never the people or objects.</p>
+        ${all.length ? html`<div className="pickgrid">${all.map(x => { const n = sel.indexOf(x.src); return html`<button key=${x.src.slice(-60)} type="button" aria-pressed=${n >= 0} title=${x.label} aria-label=${x.label} onClick=${() => toggle(x.src)}><img src=${x.src} alt="" loading="lazy" />${n >= 0 ? html`<span className="pnum">${n + 1}</span>` : null}</button>`; })}</div>` : html`<p className="note">No images made yet. Make some scene images first, or upload your own.</p>`}
+        <div className="row">
+          <input className="input" style=${{ flex: 1, minWidth: 160 }} placeholder="Template name (optional)" value=${name} onInput=${e => setName(e.target.value)} aria-label="Template name" />
+          <button type="button" className="btn primary" disabled=${!sel.length || busy} onClick=${go}>${busy ? html`<span className="spinner"></span> Reading the style` : 'Create template (' + sel.length + '/3)'}</button>
+        </div>
+      </${Fragment}>`}
+    </div>
+  </div>`;
+}
 function readImage(file) {
   return new Promise((res, rej) => {
     const fr = new FileReader();
@@ -2705,9 +2754,9 @@ function SceneImage({ p, sc, small, onZoom }) {
 }
 // A scene image shown large, with arrows to move through the scenes and Redo / Upload right there.
 function SceneZoom({ p, id, setId }) {
-  const i = p.scenes.findIndex(x => x.id === id); const sc = p.scenes[i]; const im = modelOf(p, 'image');
+  const i = p.scenes.findIndex(x => x.id === id); const sc = p.scenes[i]; const im = modelOf(p, 'image'); const [tpl, setTpl] = useState(false);
   const go = d => { const j = (i + d + p.scenes.length) % p.scenes.length; setId(p.scenes[j].id); };
-  useEffect(() => { const k = e => { if (e.key === 'Escape') setId(null); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); });
+  useEffect(() => { const k = e => { if (tpl) return; if (e.key === 'Escape') setId(null); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); });
   const own = imageScene(p, sc); const busy = sceneStatus(p, sc) === 'generating';
   const upload = async f => { if (!f) return; try { const data = await readImage(f); updateP(p.id, q => { const x = q.scenes.find(y => y.id === own.id); x.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); x.image_index = x.image_versions.length - 1; x.image_status = 'ready'; }); } catch (e) { toast('That file could not be read as an image.'); } };
   return html`<div className="zoom-back" onClick=${e => { if (e.target === e.currentTarget) setId(null); }} role="dialog" aria-modal="true" aria-label=${'Scene ' + (i + 1) + ' image'}>
@@ -2726,6 +2775,8 @@ function SceneZoom({ p, id, setId }) {
           <button type="button" className="btn primary sm" hidden=${isCard(sc)} disabled=${busy} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${busy ? 'Making it\u2026' : sceneVersion(p, sc) ? 'Redo image' : 'Generate image'}${LIVE ? html`<span className="tag">${fmt$(im.cost)}</span>` : null}</button>
           <label className="btn sm ghost"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden onChange=${e => upload(e.target.files[0])} /></label>
         </div>
+        ${!isCard(sc) && sceneVersion(p, sc) && (sceneVersion(p, sc).url || sceneVersion(p, sc).upload) ? html`<button type="button" className="btn sm" style=${{ alignSelf: 'flex-start' }} onClick=${() => setTpl(true)}><${Icon} n="spark" />Make a template from this</button>` : null}
+        ${tpl ? html`<${MakeTemplate} p=${p} start=${sceneVersion(p, sc).url || sceneVersion(p, sc).upload} onClose=${() => setTpl(false)} />` : null}
         ${own.image_versions.length > 1 ? html`<div className="row" style=${{ gap: 4 }}><span className="note">Versions</span>${own.image_versions.map((v, k) => html`<button key=${k} type="button" className="chip btnchip" aria-pressed=${k === own.image_index} onClick=${() => updateP(p.id, q => { q.scenes.find(y => y.id === own.id).image_index = k; })}>${k + 1}</button>`)}</div>` : null}
         <p className="note">Arrow keys move between scenes. Esc closes.</p>
       </div>
@@ -3100,7 +3151,7 @@ function ThumbWords({ t, onSave }) {
   </div>`;
 }
 function PublishKit({ p }) {
-  const k = p.kit; const im = modelOf(p, 'image');
+  const k = p.kit; const im = modelOf(p, 'image'); const [tplFrom, setTplFrom] = useState(null);
   const sel = (key, v) => updateP(p.id, q => { q.kit.sel[key] = v; });
   if (!k || k.error) return html`<section className="panel stack">
     <h2>Titles, captions, descriptions and thumbnails</h2>
@@ -3125,9 +3176,11 @@ function PublishKit({ p }) {
         <div className="row" style=${{ gap: 4 }}>
           ${LIVE ? html`<button type="button" className=${'btn sm' + (t.url ? '' : ' primary')} disabled=${t.status === 'generating'} onClick=${e => { e.stopPropagation(); api.makeThumb(p.id, i); }}><${Icon} n=${t.url ? 'redo' : 'spark'} />${t.url ? 'Redo' : 'Make this thumbnail'}<span className="tag">${fmt$(im.cost)}</span></button>` : null}
           ${LIVE && t.url ? html`<a className="btn sm" href=${t.url} download=${'thumbnail-' + (i + 1) + '.jpg'} onClick=${e => e.stopPropagation()}><${Icon} n="download" />Download</a>` : null}
+          ${t.raw ? html`<button type="button" className="btn sm ghost" onClick=${e => { e.stopPropagation(); setTplFrom(t.raw); }}><${Icon} n="spark" />Make a template</button>` : null}
         </div>
       </div>`; })}</div>
     </section>
+    ${tplFrom ? html`<${MakeTemplate} p=${p} start=${tplFrom} onClose=${() => setTplFrom(null)} />` : null}
     <section className="panel stack">
       <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Title</h2><${CopyBtn} text=${title} /></div>
       <div className="hooks" style=${{ gridTemplateColumns: '1fr' }}>${k.titles.map((t, i) => html`<${Choice} key=${i} on=${k.sel.title === i} onClick=${() => sel('title', i)}>${t}</${Choice}>`)}</div>
