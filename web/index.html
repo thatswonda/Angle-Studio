@@ -671,6 +671,8 @@ const isCard = sc => sc && sc.kind === 'card';
 // A card carries only its 1 to 3 most important words (stars mark the highlighted word).
 const capWords = t => { const ws = (t || '').replace(/\s+/g, ' ').trim().split(' '); return ws.slice(0, 3).join(' ') + (ws.length > 3 && (ws.slice(0, 3).join(' ').split('*').length % 2 === 0) ? '*' : ''); };
 const EMOJI_HINTS = [[/money|cash|pay|save|rich|price|cost|dollar|naira/i, '\ud83d\udcb0'], [/time|clock|hour|minute|late/i, '\u23f0'], [/love|heart|kiss/i, '\u2764\ufe0f'], [/king|queen|crown|pharaoh|royal/i, '\ud83d\udc51'], [/ship|boat|sea|ocean/i, '\ud83d\udea2'], [/food|eat|bread|bake|cook/i, '\ud83c\udf5e'], [/grow|plant|garden|tree|seed/i, '\ud83c\udf31'], [/fire|hot|burn/i, '\ud83d\udd25'], [/idea|think|smart|learn/i, '\ud83d\udca1'], [/win|best|top|star/i, '\u2b50'], [/\?|why|what if|how/i, '\ud83e\udd14'], [/danger|warning|careful|stop/i, '\u26a0\ufe0f'], [/home|house/i, '\ud83c\udfe0'], [/world|earth|global/i, '\ud83c\udf0d']];
+// A free text card from a scene's own words, for a scene that has no card or picture.
+const fallbackCard = (p, sc) => ({ text: capWords((sc.overlay_text || words(sceneText(p, sc)).filter(w => w.length > 3).slice(0, 2).join(' ')).replace(/[^\w' ]/g, '')) || '\u2026', emoji: guessEmoji(sceneText(p, sc)), small: '', layout: 'big' });
 const guessEmoji = t => (EMOJI_HINTS.find(([re]) => re.test(t || '')) || [null, '\u2728'])[1];
 const cardStyle = p => { const st = styleById(p.style); return { id: st.img_id || st.base || st.id, kind: st.kind, palette: st.palette }; };
 const CARD_FONTS = { stickman: 'Permanent Marker', wiresketch: 'Permanent Marker', lineart: 'Permanent Marker', papercut: 'Permanent Marker', comic: 'Bangers', cartoonexplain: 'Bangers', animated3d: 'Bangers', clay: 'Bangers', documentary: 'Playfair Display', historypaint: 'Playfair Display', watercolor: 'Playfair Display', botanical: 'Playfair Display', photoreal: 'Playfair Display', silhouette: 'Playfair Display', pixel: 'Press Start 2P' };
@@ -1358,9 +1360,17 @@ async function liveRender(pid, final, attempt = 0) {
   updateP(pid, q => { q.rendering = final ? 'final' : 'draft'; q.render_error = null; q.render_failed = null; });
   // Each scene lists its sentences, so the server can time every image to exactly those sentences' audio.
   const index = {}; p.script.lines.forEach((l, i) => { index[l.id] = i; });
-  const scenes = p.scenes.map(sc => { const v = isCard(sc) ? null : sceneVersion(p, sc); return { card: isCard(sc) ? sc.card : null, image: v ? (v.url || v.upload || '') : '', duration: sceneSecs(p, sc), variant: sc.reuse_of ? 1 : 0,
+  // A scene with no picture (never made, failed, or reusing a scene that became a text card) is shown as a free text card
+  // instead of stopping the render, and the creator is told which scenes to fill in.
+  const filled = [];
+  const scenes = p.scenes.map((sc, n) => { const src = imageScene(p, sc); const v = isCard(src) ? null : sceneVersion(p, sc); const image = v ? (v.url || v.upload || '') : '';
+    let card = isCard(sc) ? sc.card : isCard(src) ? src.card : null;
+    if (!image && !card) { card = fallbackCard(p, sc); if (!isCard(sc)) filled.push(n + 1); }
+    if (card && !card.text) card = { ...card, ...fallbackCard(p, sc) };
+    return { card: image && !isCard(sc) ? null : card, image: card && (isCard(sc) || !image) ? '' : image, duration: sceneSecs(p, sc), variant: sc.reuse_of ? 1 : 0,
     lines: sc.line_ids.map(id => index[id]).filter(i => i != null), split: sc.split || null, caption: captionOf(p, sc), caption_auto: sc.caption_text == null }; });
   const lines = p.script.lines.map(l => ({ audio: l.audio_url || '', text: l.text }));
+  if (filled.length) toast((filled.length === 1 ? 'Scene ' + filled[0] + ' has' : 'Scenes ' + filled.join(', ') + ' have') + ' no picture yet, so ' + (filled.length === 1 ? 'it is' : 'they are') + ' shown as a text card. Make ' + (filled.length === 1 ? 'its image' : 'their images') + ' in Scenes and render again to replace ' + (filled.length === 1 ? 'it' : 'them') + '.');
   try {
     const res = final ? (p.render.res || 1080) : 480;
     const tr = liveTrack(p); const music = tr ? { url: tr.url, volume: p.audio.music_volume, duck: p.audio.duck !== false } : {};

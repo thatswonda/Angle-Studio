@@ -273,7 +273,9 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         if sc.get("card"):  # drawn here, free: the template's colours and font
             img = make_card(sc["card"], payload.get("card_style") or {}, big_w, big_h, work / f"card{i}.png")
         else:
-            img = local(sc.get("image", ""), f"img{i}")
+            if not sc.get("image"):
+                raise ProviderError(f"Scene {i + 1} has no image. Make its image in Scenes (or turn it into a text card) and try again.")
+            img = local(sc["image"], f"img{i}")
         key = hashlib.sha1(hashlib.sha1(img.read_bytes()).digest() + f"|{vf}|{frames}|{crf}|{ass}".encode()).hexdigest()[:24]
         clip = cache / f"{key}.mp4"
         if clip.exists():
