@@ -1432,7 +1432,7 @@ async function liveRender(pid, final, attempt = 0) {
   try {
     const res = final ? (p.render.res || 1080) : 480;
     const tr = liveTrack(p); const music = tr ? { url: tr.url, volume: p.audio.music_volume, duck: p.audio.duck !== false } : {};
-    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style === 'source' && !capLook(p) ? 'bold' : p.audio.caption_style, caption_look: capLook(p), scenes, lines, music, card_style: cardStyle(p) },
+    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style === 'source' && !capLook(p) ? 'bold' : p.audio.caption_style, caption_look: capLook(p), motion: motionOf(p), scenes, lines, music, card_style: cardStyle(p) },
       ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
     updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.render.final_res = r.res || res; q.render.final_from_draft = false; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); }
       addVideo(q, { url: r.url, srt: r.srt, kind: final ? 'final' : 'draft', res: r.res || res });
@@ -2737,6 +2737,7 @@ function FormatScreen({ p, s }) {
       </section>
       <section className="panel stack"><h3>Scenes</h3>
         ${LIVE && !LIVE.video_models ? html`<p className="note">Every scene uses zoom and pan. Animated clips need Veo, which your Gemini key doesn\u2019t include yet.</p>` : html`<${Seg} label="Scene motion" value=${p.format.animated ? 'a' : 's'} onChange=${v => set(q => { q.format.animated = v === 'a'; q.scenes.forEach(sc => { sc.animate = v === 'a'; }); })} options=${[{ value: 's', label: 'Static: zoom and pan' }, { value: 'a', label: 'Animated clips' }]} />`}
+        ${!p.format.animated ? html`<${MotionPicker} p=${p} compact=${true} />` : null}
         <p className="note" hidden=${!!(LIVE && !LIVE.video_models)}>${p.format.animated ? 'Each scene image becomes a clip with ' + vm.name + ' (about ' + fmt$(vm.cost) + ' per second). You can still mark single scenes static later.' : 'Images move with zoom and pan in the compile step. No video model cost, and the Animate step is skipped.'}</p>
       </section>
       <section className="panel stack fmt-caps">
@@ -3044,6 +3045,7 @@ function AnimateScreen({ p, s }) {
 // Caption signature: when it differs from the one a video was rendered with, that video's captions are out of date.
 const capsSig = p => p.audio.caption_style + '|' + (p.audio.caption_style === 'none' ? '' : p.scenes.map(sc => captionOf(p, sc)).join('\u00a6'))
   + '|' + p.scenes.map(sc => { if (isCard(sc)) return 'card:' + JSON.stringify(sc.card || {}); const v = sceneVersion(p, sc); return v ? (v.url || (v.upload ? 'u' + v.upload.length : '') || v.seed) : ''; }).join(',')
+  + (JSON.stringify(motionOf(p)) === '{"strength":"normal","type":"mix"}' ? '' : '|' + JSON.stringify(motionOf(p)))  // the default adds nothing, so older videos stay up to date
   + (LIVE ? '|' + (p.audio.music_id || '') + ':' + p.audio.music_volume + ':' + (p.audio.duck !== false) : '');  // images too: a redone image also makes the video out of date
 // Live preview sound: plays each sentence's real voice clip in step with the preview clock.
 function useNarration(p, playing, t, onSeekRef) {
@@ -3081,10 +3083,9 @@ function Player({ p, mode }) {
   const local = Math.min(1, Math.max(0, (t - acc) / durs[idx]));
   const v = sceneVersion(p, sc);
   const clip = sc.animate && sc.clip_versions[sc.clip_index];
-  const dir = idx % 2 ? -1 : 1;
   const tr = clip
     ? 'scale(' + (1.1 + 0.08 * local) + ') translate(' + (Math.sin(local * 6.28) * 2.5) + '%, ' + (Math.cos(local * 6.28) * 2) + '%) rotate(' + Math.sin(local * 6.28) * 1 + 'deg)'
-    : 'scale(' + (1.05 + 0.12 * local) + ') translate(' + (dir * (local - 0.5) * 5) + '%, ' + ((0.5 - local) * 2) + '%)';
+    : motionCss(p, idx, local, isCard(sc));
   const ls = sceneLines(p, sc); const text = captionOf(p, sc); const ws = words(text); const wi = Math.min(ws.length - 1, Math.floor(local * ws.length));
   const cap = p.audio.caption_style;
   const speaker = p.video_type === 'character' && ls[0] && p.characters.find(c => c.id === ls[0].speaker);
@@ -3105,7 +3106,7 @@ function Player({ p, mode }) {
   const music = MUSIC.find(m => m.id === p.audio.music_path);
   return html`<div className=${'player' + frameCls(p)}>
     <div className=${'frame' + frameCls(p)} style=${{ borderRadius: 14 }}>
-      <div className="stage-wrap" style=${{ transform: isCard(sc) ? 'scale(' + (1 + 0.05 * local) + ')' : tr }}>${isCard(sc) ? html`<${CardView} p=${p} card=${sc.card} />` : v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload || v.url} />` : null}</div>
+      <div className="stage-wrap" style=${{ transform: tr }}>${isCard(sc) ? html`<${CardView} p=${p} card=${sc.card} />` : v ? html`<${Art} seed=${v.seed} styleId=${v.style || p.style} upload=${v.upload || v.url} />` : null}</div>
       ${t > 0 || playing ? caption : null}
       ${speaker ? html`<span className="speaker">${speaker.name}</span>` : null}
       ${mode === 'draft' ? html`<span className="drafttag">DRAFT 480p</span>` : null}
@@ -3126,6 +3127,29 @@ function Player({ p, mode }) {
 function VideoBox({ p, url }) {
   const w = { '9:16': 300, '16:9': 560, '1:1': 400, '4:5': 360 }[p.format.aspect_ratio] || 300; // fixed width: an empty video has no size of its own
   return html`<div className=${'player' + frameCls(p)} style=${{ width: w, maxWidth: '100%' }}><video key=${url} className=${'frame' + frameCls(p)} src=${url} controls playsInline style=${{ borderRadius: 14, background: '#000', display: 'block' }}></video></div>`;
+}
+// Zoom and pan: how far each image moves while it is on screen (so how fast it feels), and which way.
+const MOTION_STRENGTHS = [{ value: 'none', label: 'Still', m: 0 }, { value: 'subtle', label: 'Subtle', m: 0.5 }, { value: 'normal', label: 'Normal', m: 1 }, { value: 'strong', label: 'Strong', m: 1.7 }, { value: 'dramatic', label: 'Dramatic', m: 2.4 }];
+const MOTION_TYPES = [{ value: 'mix', label: 'Zoom + pan' }, { value: 'zoomin', label: 'Zoom in' }, { value: 'zoomout', label: 'Zoom out' }, { value: 'pan', label: 'Pan' }];
+const motionOf = p => ({ strength: 'normal', type: 'mix', ...((p.format && p.format.motion) || {}) });
+// The same moves as the render, as a CSS transform for the preview (local: 0 to 1 through the scene).
+function motionCss(p, idx, local, card) {
+  const mo = motionOf(p); const m = (MOTION_STRENGTHS.find(x => x.value === mo.strength) || MOTION_STRENGTHS[2]).m;
+  if (!m) return 'none';
+  if (card) return 'scale(' + (1 + 0.05 * Math.min(m, 1.5) * local) + ')';
+  const zin = 'scale(' + (1 + 0.12 * m * local) + ')'; const zout = 'scale(' + (1 + 0.12 * m * (1 - local)) + ')';
+  const z = 1 + 0.1 * Math.min(m, 2); const span = Math.min(1, 0.4 + 0.6 * m); const ltr = ((mo.type === 'mix' ? Math.floor(idx / 2) : idx) % 2) === 0;
+  const free = (1 - 1 / z) * 50; const pos = (ltr ? -1 : 1) * (local - 0.5) * span * 2 * free;  // percent of the frame
+  const pan = 'scale(' + z + ') translateX(' + pos + '%)';
+  return mo.type === 'zoomin' ? zin : mo.type === 'zoomout' ? zout : mo.type === 'pan' ? pan : idx % 2 === 0 ? zin : pan;
+}
+function MotionPicker({ p, compact }) {
+  const mo = motionOf(p); const set = (k, v) => updateP(p.id, q => { q.format.motion = { ...motionOf(q), [k]: v }; });
+  return html`<div className="stack" style=${{ gap: 6 }}>
+    <div className="row" style=${{ gap: 8 }}><span className="note" style=${{ minWidth: 70 }}>Strength</span><${Seg} label="Motion strength" value=${mo.strength} onChange=${v => set('strength', v)} options=${MOTION_STRENGTHS} /></div>
+    <div className="row" style=${{ gap: 8, opacity: mo.strength === 'none' ? 0.5 : 1 }}><span className="note" style=${{ minWidth: 70 }}>Movement</span><${Seg} label="Motion type" value=${mo.type} onChange=${v => set('type', v)} options=${MOTION_TYPES} /></div>
+    ${compact ? null : html`<p className="note" style=${{ margin: 0 }}>Strength sets how far each image zooms or pans while it is on screen, so how fast it feels: Subtle is calm, Dramatic is fast. Text cards always move gently so the words stay easy to read. The preview shows it; rebuild the draft to see it in the video.</p>`}
+  </div>`;
 }
 function CaptionEditor({ p }) {
   const on = p.audio.caption_style !== 'none';
@@ -3169,7 +3193,7 @@ function CompileScreen({ p, s }) {
   const draftJob = p.rendering === 'draft'; const finalJob = p.rendering === 'final';
   const job = s.jobs.find(j => j.pid === p.id && j.status === 'running' && /draft|final/i.test(j.label));
   const checks = [
-    [p.scenes.length + ' scenes with images', true], [anim ? anim + ' animated, ' + (p.scenes.length - anim) + ' zoom and pan' : 'All scenes zoom and pan', true],
+    [p.scenes.length + ' scenes with images', true], [(anim ? anim + ' animated, ' + (p.scenes.length - anim) + ' zoom and pan' : 'All scenes zoom and pan') + (motionOf(p).strength === 'none' ? ' (set to still)' : ': ' + MOTION_STRENGTHS.find(x => x.value === motionOf(p).strength).label.toLowerCase() + ', ' + MOTION_TYPES.find(x => x.value === motionOf(p).type).label.toLowerCase()), motionOf(p).strength !== 'none'],
     [(p.video_type === 'character' ? 'Dialogue' : 'Narration') + ' audio, ' + fmtT(scriptSecs(p)), p.script.lines.every(l => l.audio_status === 'ready')],
     [p.audio.caption_style === 'none' ? 'No captions' : 'Captions: ' + capById(p.audio.caption_style).name + (p.scenes.some(sc => sc.caption_text != null) ? ', with your edits' : ''), p.audio.caption_style !== 'none'],
     ['Each image stays on screen exactly as long as its sentences are spoken', true],
@@ -3186,6 +3210,7 @@ function CompileScreen({ p, s }) {
           <ul className="checklist">${checks.map(([k, ok]) => html`<li key=${k} className=${ok ? '' : 'no'}><${Icon} n=${ok ? 'check' : 'x'} />${k}</li>`)}</ul>
         </section>
         <${MissingPanel} p=${p} />
+        <section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h2>Zoom and pan</h2><span className="note">Free to change</span></div><${MotionPicker} p=${p} /></section>
         <${CaptionEditor} p=${p} />
         <section className="panel stack"><h2>Final polish</h2>
           <ul className="checklist"><li><${Icon} n="check" />Loudness normalized to −14 LUFS</li><li><${Icon} n="check" />Same transition between every scene</li><li><${Icon} n="check" />Captions kept inside the platform’s safe area</li></ul>
@@ -3340,7 +3365,7 @@ function ExportScreen({ p, s }) {
         ${LIVE && (p.render.final_srt) ? html`<div className="row"><a className="btn" href=${p.render.final_srt} download=${fname.replace('.mp4', '.srt')}><${Icon} n="download" />Captions file (.srt)</a><span className="note">For uploading captions separately.</span></div>` : null}
       </div>
     </div>
-    ${LIVE && p.render.final_path && p.render.final_caps != null && p.render.final_caps !== capsSig(p) ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Captions or images changed after this final video was rendered.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Update it on Compile</button></div>` : null}
+    ${LIVE && p.render.final_path && p.render.final_caps != null && p.render.final_caps !== capsSig(p) ? html`<div className="warnbox row" style=${{ justifyContent: 'space-between' }}><span>Captions, images or motion changed after this final video was rendered.</span><button type="button" className="btn sm" onClick=${() => goStep('compile')}>Update it on Compile</button></div>` : null}
     ${liveTrack(p) && liveTrack(p).credit ? html`<section className="panel stack"><div className="panel-h" style=${{ marginBottom: 0 }}><h2>Music credit</h2><${CopyBtn} text=${liveTrack(p).credit} /></div><p className="note">This track asks for credit. It is added to the description you copy below; keep it when you upload.</p><p className="prompt" style=${{ margin: 0 }}>${liveTrack(p).credit}</p></section>` : null}
     <${PublishKit} p=${p} />
     <${ChannelKit} p=${p} />

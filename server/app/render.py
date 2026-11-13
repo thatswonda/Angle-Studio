@@ -179,6 +179,41 @@ def captions_ass(cues: list[tuple[float, float, list[str]]], style: str, w: int,
     return "\n".join(out) + "\n"
 
 
+MOTION_STRENGTH = {"none": 0.0, "subtle": 0.5, "normal": 1.0, "strong": 1.7, "dramatic": 2.4}
+MOTION_TYPES = ("mix", "zoomin", "zoomout", "pan")
+
+
+def motion_filter(i: int, frames: int, motion: dict | None, card: bool = False, variant: bool = False) -> str:
+    """The zoom-and-pan of one scene. strength scales how far it moves over the scene (so how fast it feels);
+    type: mix (zoom in and pan, alternating), zoomin, zoomout or pan (left and right in turn)."""
+    motion = motion or {}
+    m = MOTION_STRENGTH.get(motion.get("strength"), 1.0)
+    kind = motion.get("type") if motion.get("type") in MOTION_TYPES else "mix"
+    f = frames
+    centre = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+    if m == 0:
+        return f"zoompan=z='1':{centre}"
+    if card:  # text cards: a gentle centred push in keeps the words readable
+        return f"zoompan=z='min(1+{0.05 * min(m, 1.5):.4f}*on/{f},{1 + 0.05 * min(m, 1.5):.4f})':{centre}"
+    zin = f"zoompan=z='min(1+{0.12 * m:.4f}*on/{f},{1 + 0.12 * m:.4f})':{centre}"
+    zout = f"zoompan=z='max({1 + 0.12 * m:.4f}-{0.12 * m:.4f}*on/{f},1)':{centre}"
+    z = 1 + 0.1 * min(m, 2.0)
+    span = min(1.0, 0.4 + 0.6 * m)  # how much of the free width the pan covers
+    left_to_right = ((i // 2) if kind == "mix" else i) % 2 == 0  # pans alternate direction
+    a, b = (0.5 - span / 2, span) if left_to_right else (0.5 + span / 2, -span)
+    pan = f"zoompan=z='{z:.4f}':x='(iw-iw/zoom)*({a:.4f}+{b:.4f}*on/{f})':y='ih/2-(ih/zoom/2)'"
+    if variant:  # second scene on a reused image: start close on another part, then pull back
+        hi = 1 + 0.25 * min(m, 1.8)
+        return (f"zoompan=z='max({hi:.4f}-{hi - 1.05:.4f}*on/{f},1.05)':x='(iw-iw/zoom)*(0.85-0.5*on/{f})':y='(ih-ih/zoom)*0.35'")
+    if kind == "zoomin":
+        return zin
+    if kind == "zoomout":
+        return zout
+    if kind == "pan":
+        return pan
+    return zin if i % 2 == 0 else pan
+
+
 def captions_srt(cues: list[tuple[float, float, list[str]]]) -> str:
     return "".join(f"{n}\n{_srt_ts(a)} --> {_srt_ts(b)}\n{' '.join(ch)}\n\n" for n, (a, b, ch) in enumerate(cues, 1))
 
@@ -231,6 +266,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
     scenes = payload.get("scenes") or []
     lines = payload.get("lines") or []
     style = payload.get("caption_style", "bold")
+    motion = payload.get("motion") or {}
     if not scenes:
         raise ProviderError("There are no scenes to render.")
     work = media / "renders" / f"work_{uuid.uuid4().hex[:8]}"
@@ -294,14 +330,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         f0, f1 = round(a * FPS), round((a + d) * FPS)
         frames = max(1, f1 - f0)
         t0, t1 = f0 / FPS, f0 / FPS + frames / FPS
-        if sc.get("card"):  # text card: a slow, centred push in keeps the words readable
-            zp = f"zoompan=z='min(1+0.05*on/{frames},1.05)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        elif sc.get("variant"):  # second scene on a reused image: start close on another part, then pull back
-            zp = f"zoompan=z='max(1.25-0.2*on/{frames},1.05)':x='(iw-iw/zoom)*(0.85-0.5*on/{frames})':y='(ih-ih/zoom)*0.35'"
-        elif i % 2 == 0:
-            zp = f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        else:
-            zp = f"zoompan=z='1.1':x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)'"
+        zp = motion_filter(i, frames, motion, card=bool(sc.get("card")), variant=bool(sc.get("variant")))
         vf = f"scale={big_w}:{big_h}:force_original_aspect_ratio=increase,crop={big_w}:{big_h},{zp}:d={frames}:s={w}x{h}:fps={FPS},format=yuv420p"
         ass = ""
         if burn:  # this scene's slice of the captions, timed from the start of the clip

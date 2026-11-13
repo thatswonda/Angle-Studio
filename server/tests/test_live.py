@@ -721,3 +721,15 @@ def test_text_cards_are_spread_evenly(monkeypatch):
     cards = sorted(int(k) for k, v in r["scenes"].items() if v["card"])
     assert len(cards) == 9 and any(10 <= n <= 20 for n in cards) and 1 not in cards
     assert all("liked" not in v for v in r["scenes"].values())
+
+
+def test_zoom_and_pan_strength_and_type():
+    from app.render import motion_filter
+    assert motion_filter(0, 90, {}) == motion_filter(0, 90, {"strength": "normal", "type": "mix"})
+    assert "z='1'" in motion_filter(0, 90, {"strength": "none"})
+    assert "1.0600" in motion_filter(0, 90, {"strength": "subtle", "type": "zoomin"})
+    assert "1.2880" in motion_filter(0, 90, {"strength": "dramatic", "type": "zoomin"})
+    assert "max(" in motion_filter(0, 90, {"type": "zoomout"})
+    a, b = motion_filter(0, 90, {"type": "pan"}), motion_filter(1, 90, {"type": "pan"})
+    assert "x='(iw-iw/zoom)*(" in a and a != b  # pans alternate direction
+    assert "0.0750" in motion_filter(3, 90, {"strength": "dramatic"}, card=True)  # cards stay gentle
