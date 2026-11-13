@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from .cards import FONTS, PIXEL, HAND, COMIC, _wrap
 
-PLACES = ("top", "bottom", "left", "right")
+PLACES = ("top", "bottom", "left", "right", "center")
 HIGHLIGHT = (255, 214, 0)
 WHITE = (255, 255, 255)
 MAX_WORDS = 5
@@ -43,6 +43,11 @@ def words_of(text: str) -> list[tuple[str, bool]]:
     return out
 
 
+def _rgb(c: str):
+    c = (c or "").strip().lstrip("#")
+    return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4)) if len(c) == 6 and all(x in "0123456789abcdefABCDEF" for x in c) else None
+
+
 def _place(place: str, w: int, h: int) -> str:
     place = place if place in PLACES else "top"
     if h > w and place in ("left", "right"):  # tall frames have no room beside the subject
@@ -50,7 +55,14 @@ def _place(place: str, w: int, h: int) -> str:
     return place
 
 
-def add_text(src: Path, text: str, place: str, style_id: str, out: Path) -> Path:
+def add_text(src: Path, text: str, place: str, style_id: str, out: Path, look: dict | None = None) -> Path:
+    """look (optional): the original thumbnail's words, {text_color, highlight_color, box_color, outline}, copied so the
+    new thumbnail is the same type."""
+    look = look or {}
+    fill = _rgb(look.get("text_color")) or WHITE
+    hilite = _rgb(look.get("highlight_color")) or (HIGHLIGHT if not look.get("text_color") else fill)
+    boxc = _rgb(look.get("box_color"))
+    outline = look.get("outline") is not False
     img = Image.open(src).convert("RGB")
     img = ImageEnhance.Color(img).enhance(1.18)
     img = ImageEnhance.Contrast(img).enhance(1.08)
@@ -62,7 +74,10 @@ def add_text(src: Path, text: str, place: str, style_id: str, out: Path) -> Path
     place = _place(place, w, h)
 
     # The area the words sit in, and a dark fade behind it.
-    if place in ("top", "bottom"):
+    if place == "center":
+        box_w, box_h = int(w * 0.9), int(h * (0.3 if h > w else 0.42))
+        x0, y0 = (w - box_w) // 2, (h - box_h) // 2
+    elif place in ("top", "bottom"):
         box_w, box_h = int(w * 0.9), int(h * (0.3 if h > w else 0.38))
         x0 = (w - box_w) // 2
         y0 = int(h * 0.04) if place == "top" else h - box_h - int(h * 0.05)
@@ -84,10 +99,13 @@ def add_text(src: Path, text: str, place: str, style_id: str, out: Path) -> Path
         elif place == "left":
             x = int((x0 + box_w * 1.2) * i / steps)
             sd.rectangle([x, 0, x + w // steps + 2, h], fill=a)
-        else:
+        elif place == "right":
             x = w - int((w - x0 + box_w * 0.2) * i / steps)
             sd.rectangle([x - w // steps - 2, 0, x, h], fill=a)
-    img = Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), img, shade.filter(ImageFilter.GaussianBlur(w // 60)))
+    if place == "center" and not boxc:  # words over the middle: a soft dark glow behind them only
+        sd.ellipse([x0, y0, x0 + box_w, y0 + box_h], fill=110)
+    if not boxc:  # a solid box already makes the words readable
+        img = Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), img, shade.filter(ImageFilter.GaussianBlur(w // 60)))
 
     # Fit the words: as big as the area allows, at most 3 lines.
     draw = ImageDraw.Draw(img)
@@ -107,7 +125,7 @@ def add_text(src: Path, text: str, place: str, style_id: str, out: Path) -> Path
 
     # A short line on a narrow frame reads bigger when broken in two, so try both and keep the bigger words.
     size, font, lines, asc, line_h, total = max((fit(box_w), fit(int(box_w * 0.6))), key=lambda r: r[0])
-    stroke = max(3, size // 11)
+    stroke = max(3, size // 11) if outline and not boxc else 0
     gap = line_h * 0.14
     y = y0 + (box_h - total) / 2 - asc[1]
     space = draw.textlength(" ", font=font)
@@ -123,10 +141,14 @@ def add_text(src: Path, text: str, place: str, style_id: str, out: Path) -> Path
             x = x0 + box_w - lw
         else:
             x = x0 + (box_w - lw) / 2
+        if boxc:  # a solid box behind the line, like the original
+            pad = size * 0.16
+            ld.rounded_rectangle([x - pad, y + asc[1] - pad, x + lw + pad, y + asc[3] + pad], radius=int(pad), fill=boxc + (255,))
         for word, hi in ln:
             off = max(4, size // 14)
-            shd.text((x + off, y + off), word, font=font, fill=(0, 0, 0, 200), stroke_width=stroke, stroke_fill=(0, 0, 0, 200))
-            ld.text((x, y), word, font=font, fill=HIGHLIGHT if hi else WHITE, stroke_width=stroke, stroke_fill=(0, 0, 0))
+            if not boxc:
+                shd.text((x + off, y + off), word, font=font, fill=(0, 0, 0, 200), stroke_width=stroke, stroke_fill=(0, 0, 0, 200))
+            ld.text((x, y), word, font=font, fill=hilite if hi else fill, stroke_width=stroke, stroke_fill=(0, 0, 0))
             x += draw.textlength(word, font=font) + space
         y += line_h + gap
     img = img.convert("RGBA")

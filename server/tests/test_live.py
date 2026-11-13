@@ -640,3 +640,59 @@ def test_template_from_an_image_made_in_the_app(monkeypatch):
     r = TestClient(app).post("/api/live/style-from-images", json={"images": ["/media/images/madehere.jpg"], "name": "Mine"})
     assert r.status_code == 200 and r.json()["name"] == "Mine" and len(r.json()["palette"]) == 4
     assert seen[0][0]["inlineData"]["mimeType"] == "image/jpeg"
+
+
+def test_thumbnail_of_the_same_type_and_captions_like_the_original(monkeypatch):
+    import io
+    import httpx
+    from fastapi.testclient import TestClient
+    from PIL import Image
+    from app import live, render
+    from app.main import app
+    buf = io.BytesIO()
+    Image.effect_noise((320, 180), 60).convert("RGB").save(buf, "JPEG", quality=95)
+    jpg = buf.getvalue()
+    got = []
+
+    class FakeClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url):
+            got.append(url)
+            return httpx.Response(200, content=jpg)
+
+    async def fake_json(model, parts, max_tokens=0, low_media=False):
+        return {"layout": "huge shocked face on the right, glowing box on the left", "subject": "a man, mouth open", "mood": "bright",
+                "extras": "red arrow", "text": "IT WAS EMPTY", "words": 3, "place": "left", "text_color": "#FFFFFF",
+                "highlight_color": "#FF0000", "box_color": "nope", "outline": True}, 0.0004
+
+    seen = []
+
+    async def fake_write(writer_id, progress, prompt):
+        seen.append(prompt)
+        return {"titles": ["A"], "captions": ["c"], "descriptions": ["d"], "tags": ["t"],
+                "thumbnails": [{"formula": "Like the original", "concept": "x", "text": "IT WAS *GOLD*", "place": "left"}]}, 0.01, "Claude", None
+
+    monkeypatch.setattr(live.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(live.google, "generate_json", fake_json)
+    monkeypatch.setattr(live, "write_json", fake_write)
+    c = TestClient(app)
+    thumb = "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg"
+    r = _run_job(c, "/api/live/publish-kit", {"writer": "claude-opus-5-5", "story": "S.", "thumb": thumb,
+                                               "source": {"title": "Orig", "description": "Wow 😱\n#a #b"}})["result"]
+    st = r["source_thumb"]
+    assert got[0].endswith("/maxresdefault.jpg") and st["ref"].startswith("/media/images/src_")
+    assert st["look"]["place"] == "left" and st["look"]["highlight_color"] == "#FF0000" and st["look"]["box_color"] == ""
+    assert "SAME TYPE" in seen[0] and "huge shocked face" in seen[0] and "same use of emoji" in seen[0]
+    assert r["thumbnails"][0]["formula"] == "Like the original"
+    # read once per link
+    _run_job(c, "/api/live/publish-kit", {"writer": "claude-opus-5-5", "story": "S.", "thumb": thumb})
+    assert len(got) == 1
+    # captions in the original's look
+    look = live.clean_captions_look({"present": True, "words": 2, "case": "upper", "text_color": "#FFFFFF", "highlight_color": "#00FF00",
+                                     "position": "middle", "size": "large"})
+    assert look["words"] == 2 and live.clean_captions_look({"present": False}) is None
+    ass = render.captions_ass([(0.0, 1.0, ["big", "news"])], "source", 720, 1280, look)
+    assert "{\\c&H0000FF00}BIG{\\r} NEWS" in ass and ",5,60,60,0,1" in ass  # spoken word green, centred
+    assert render.look_words(look) == 2

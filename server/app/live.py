@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import re
@@ -15,6 +16,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -233,7 +235,8 @@ async def ingest(body: IngestBody):
             ' "beats": [{"t": "m:ss", "text": "story beat"}] (5 to 8),'
             ' "pacing": "cut rhythm and structure", "why_it_worked": ["3 to 5 short reasons"],'
             ' "gaps": [{"kind": "Unanswered question | Unfinished thread | Audience request | Skipped perspective | Unexplored visual",'
-            ' "text": "the gap", "from_comment": "comment id or null"}] (4 to 8)}'
+            ' "text": "the gap", "from_comment": "comment id or null"}] (4 to 8),'
+            ' "captions_look": ' + CAPTIONS_LOOK_SCHEMA + '}'
         )
         parts = [google.youtube_part(body.url), {"text": prompt}]
         try:
@@ -269,7 +272,7 @@ async def ingest(body: IngestBody):
                          "pacing": report.get("pacing", ""), "why_it_worked": [str(x) for x in (report.get("why_it_worked") or [])],
                          "gaps": [{"kind": g.get("kind", "Gap"), "text": g.get("text", ""), "from": g.get("from_comment") if g.get("from_comment") in ids else None}
                                   for g in (report.get("gaps") or []) if isinstance(g, dict)],
-                         "analyzed_by": an},
+                         "analyzed_by": an, "captions_look": clean_captions_look(report.get("captions_look"))},
             "angles": angles, "written_by": wn, "cost": round(cost + wcost, 4), "warning": warning,
             "angles_v": ANGLES_VERSION, "handoff": handoff,
         }
@@ -278,6 +281,108 @@ async def ingest(body: IngestBody):
         return result
 
     return _job("Analyzing reference video", work)
+
+
+# ---------- The original video's look: its on-screen captions and its thumbnail
+
+CAPTIONS_LOOK_SCHEMA = (
+    '{"present": true or false (are there spoken-word captions burned into the video),'
+    ' "words": how many words are on screen at once (1-8), "case": "upper | sentence | lower",'
+    ' "text_color": "#RRGGBB", "highlight_color": "#RRGGBB colour of the word being spoken, or empty if none",'
+    ' "box_color": "#RRGGBB of a solid box behind the words, or empty", "outline": true or false (dark outline round the letters),'
+    ' "position": "top | middle | bottom", "size": "small | medium | large", "weight": "bold | regular",'
+    ' "describe": "one short sentence describing the caption look, e.g. big white capitals, yellow active word, centre"}')
+HEX = re.compile(r"#[0-9a-fA-F]{6}")
+
+
+def clean_captions_look(c) -> dict | None:
+    if not isinstance(c, dict) or c.get("present") is False:
+        return None
+    pick = lambda k, opts, d: c.get(k) if c.get(k) in opts else d  # noqa: E731
+    col = lambda k: c.get(k) if isinstance(c.get(k), str) and HEX.fullmatch(c.get(k).strip()) else ""  # noqa: E731
+    try:
+        words = max(1, min(8, int(c.get("words") or 3)))
+    except (TypeError, ValueError):
+        words = 3
+    return {"words": words, "case": pick("case", ("upper", "sentence", "lower"), "sentence"), "text_color": col("text_color") or "#FFFFFF",
+            "highlight_color": col("highlight_color"), "box_color": col("box_color"), "outline": c.get("outline") is not False,
+            "position": pick("position", ("top", "middle", "bottom"), "bottom"), "size": pick("size", ("small", "medium", "large"), "medium"),
+            "weight": pick("weight", ("bold", "regular"), "bold"), "describe": str(c.get("describe") or "")[:160]}
+
+
+class SourceCaptionsBody(BaseModel):
+    url: str
+
+
+@router.post("/source-captions")
+async def source_captions(body: SourceCaptionsBody):
+    """For videos analyzed before captions were read: Gemini Flash watches the original once (low resolution) for its caption look."""
+    youtube.video_id(body.url)
+
+    async def work(progress):
+        hit = storage.kv_get("captions_look", body.url)
+        if hit is not None:
+            return {**hit, "cost": 0}
+        progress("Gemini Flash is reading the original video's captions")
+        data, cost = await google.generate_json("gemini-flash", [google.youtube_part(body.url), {"text": (
+            "Look only at the words burned into this video that follow the speech (its captions or subtitles), not titles or "
+            "signs. Return JSON: " + CAPTIONS_LOOK_SCHEMA)}], max_tokens=1024, low_media=True)
+        if isinstance(data, list):
+            data = data[0] if data and isinstance(data[0], dict) else {}
+        out = {"look": clean_captions_look(data)}
+        storage.kv_put("captions_look", body.url, out)
+        return {**out, "cost": round(cost, 4)}
+
+    return _job("Reading the original's captions", work)
+
+
+THUMB_LOOK_PROMPT = (
+    "This is the thumbnail of a viral video. A creator will make a thumbnail of the SAME TYPE for their own new video "
+    "(same layout and design, new picture and words). Describe how it is built. Return JSON: "
+    '{"layout": "where the main subject sits and how big, framing (close-up face, wide, split screen, before/after...), the '
+    'background, and how the eye moves", "subject": "who or what is shown and the expression or action", "mood": "the '
+    'feeling and colour grade in a few words", "extras": "arrows, circles, emoji, borders, glow or props, or empty", '
+    '"text": "the exact words printed on it, or empty", "words": number of printed words, "place": "where the words '
+    'sit: top | bottom | left | right | center", "text_color": "#RRGGBB", "highlight_color": "#RRGGBB of a word printed in '
+    'another colour, or empty", "box_color": "#RRGGBB of a solid box behind the words, or empty", "outline": true or false}')
+
+
+async def source_thumb_look(thumb_url: str) -> tuple[dict | None, str, float]:
+    """Reads the original video's thumbnail (once per link): (how it is built, the saved picture's URL, cost)."""
+    if not thumb_url or not re.match(r"https://i\d?\.ytimg\.com/", thumb_url):
+        return None, "", 0.0
+    hit = storage.kv_get("thumb_look", thumb_url)
+    if hit is not None:
+        return hit.get("look"), hit.get("ref", ""), 0.0
+    data = b""
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        for u in (re.sub(r"/[a-z]*default\.jpg$", "/maxresdefault.jpg", thumb_url), thumb_url):
+            try:
+                r = await c.get(u)
+                if r.status_code == 200 and len(r.content) > 3000:
+                    data = r.content
+                    break
+            except httpx.HTTPError:
+                pass
+    if not data:
+        return None, "", 0.0
+    path = MEDIA / "images" / f"src_{hashlib.sha1(thumb_url.encode()).hexdigest()[:16]}.jpg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    try:
+        look, cost = await google.generate_json("gemini-flash", [{"inlineData": {"mimeType": "image/jpeg", "data": base64.b64encode(data).decode()}},
+                                                                  {"text": THUMB_LOOK_PROMPT}], max_tokens=1024)
+    except ProviderError:
+        return None, media_url(path), 0.0
+    if isinstance(look, list):
+        look = look[0] if look and isinstance(look[0], dict) else {}
+    col = lambda k: look.get(k).strip() if isinstance(look.get(k), str) and HEX.fullmatch(look.get(k).strip()) else ""  # noqa: E731
+    look = {k: str(look.get(k) or "")[:300] for k in ("layout", "subject", "mood", "extras", "text")} | {
+        "place": look.get("place") if look.get("place") in thumbs_mod.PLACES else "top",
+        "text_color": col("text_color"), "highlight_color": col("highlight_color"), "box_color": col("box_color"),
+        "outline": look.get("outline") is not False, "words": look.get("words") if isinstance(look.get("words"), int) else 0}
+    storage.kv_put("thumb_look", thumb_url, {"look": look, "ref": media_url(path)})
+    return look, media_url(path), cost
 
 
 # ---------- 2. Write the story
@@ -742,6 +847,7 @@ class ThumbTextBody(BaseModel):
     text: str
     place: str = "top"
     style: str = ""
+    look: dict = {}  # the original thumbnail's words: text_color, highlight_color, box_color, outline
 
 
 @router.post("/thumb-text")
@@ -752,7 +858,7 @@ def thumb_text(body: ThumbTextBody):
         raise HTTPException(422, "The thumbnail picture is missing on the server. Make it again.")
     out = MEDIA / "images" / f"{uuid.uuid4().hex}.jpg"
     out.parent.mkdir(parents=True, exist_ok=True)
-    thumbs_mod.add_text(path, body.text[:60], body.place, body.style, out)
+    thumbs_mod.add_text(path, body.text[:60], body.place, body.style, out, body.look)
     return {"url": media_url(out)}
 
 class KitBody(BaseModel):
@@ -762,12 +868,24 @@ class KitBody(BaseModel):
     source_title: str = ""
     tags: list[str] = []
     source: dict = {}    # the analyzed video: title, channel, tags, description, summary, hook, why it worked
+    thumb: str = ""      # the analyzed video's thumbnail picture, to make thumbnails of the same type
 
 
 @router.post("/publish-kit")
 async def publish_kit(body: KitBody):
     async def work(progress):
+        look, look_ref, look_cost = None, "", 0.0
+        if body.thumb:
+            progress("Gemini Flash is reading the original video's thumbnail")
+            look, look_ref, look_cost = await source_thumb_look(body.thumb)
         progress("Writing titles, captions, descriptions and thumbnail ideas from your story")
+        same_type = (
+            f"THUMBNAILS: the original video's thumbnail is built like this: {json.dumps(look)}. Make all 3 thumbnails the SAME "
+            "TYPE: the same layout, framing, subject size, kind of expression, extras (arrows, circles, emoji, split screen) and "
+            f"the same kind of words ({look.get('words') or 'a few'} words, same tone, e.g. a claim, a question or a number), "
+            "but with this video's own subject and moment and new words, so it looks like a sibling of the original, never a "
+            "copy. Use formula \"Like the original\" for the first one, and for the other two the closest proven formulas. "
+            f"Put the words where the original has them (place \"{look.get('place', 'top')}\").\n" if look else "")
         data, cost, wn, warning = await write_json(body.writer, progress, (
             f"A creator finished this video. Its story:\n---\n{body.story[:12000]}\n---\n"
             f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'pitch', 'reason', 'keeps', 'changes')})}. "
@@ -776,7 +894,11 @@ async def publish_kit(body: KitBody):
                "Make the titles, captions, descriptions and thumbnails clearly related to that video: echo its title "
                "pattern, its main keywords and tags, its hook and its thumbnail style (subject, emotion, bold short text), "
                "so viewers and the platform connect the two. Do not copy its title word for word, and do not claim to be "
-               "that creator or a part 2.\n" if body.source.get("title") else "")
+               "that creator or a part 2.\n"
+               "POST CAPTIONS AND DESCRIPTIONS: write them in the same form as the original's description above: about the same "
+               "length, the same structure (hook line, line breaks, lists, questions, calls to action), the same use of emoji and "
+               "the same kind and number of hashtags, with this video's own content.\n" if body.source.get("title") else "")
+            + same_type
             + "Write options the creator can choose from. Everything must honestly describe this video. Return "
             '{"titles": [4 different titles under 70 characters],'
             ' "captions": [3 different post captions/descriptions, each 2-4 sentences that hook, summarize and invite a comment, '
@@ -801,7 +923,8 @@ async def publish_kit(body: KitBody):
                 "thumbnails": [{"concept": str(t["concept"]), "text": str(t.get("text", ""))[:48], "formula": str(t.get("formula", ""))[:40],
                                 "emotion": str(t.get("emotion", ""))[:60], "focus": str(t.get("focus", ""))[:120],
                                 "place": t.get("place") if t.get("place") in thumbs_mod.PLACES else "top"} for t in thumbs],
-                "tags": [str(t) for t in (data.get("tags") or [])][:10], "written_by": wn, "cost": round(cost, 4), "warning": warning}
+                "tags": [str(t) for t in (data.get("tags") or [])][:10], "written_by": wn, "cost": round(cost + look_cost, 4), "warning": warning,
+                "source_thumb": {"look": look, "ref": look_ref} if look else None}
 
     return _job("Writing the publish kit", work)
 

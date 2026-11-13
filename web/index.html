@@ -652,8 +652,21 @@ const CAPTIONS = [
   { id: 'typewriter', name: 'Typewriter', per: 6 },
   { id: 'clean', name: 'Clean bar', per: 12 },
   { id: 'minimal', name: 'Minimal', per: 10 },
+  { id: 'source', name: 'Like the original', source: true },
   { id: 'none', name: 'No captions' },
 ];
+// The caption look read from the analyzed video (colours, words at a time, position), when there is one.
+const capLook = p => (p && p.analysis && p.analysis.captions_look) || null;
+const capPer = (p, id) => id === 'source' ? ((capLook(p) || {}).words || 3) : (capById(id).per || 4);
+const capList = p => CAPTIONS.filter(c => c.id !== 'none' && (!c.source || capLook(p)));
+// A caption in the original video's look: its colours, box or outline, case and position, the spoken word highlighted.
+function SourceCaption({ look, chunk, on, sample }) {
+  const lk = look || {}; const up = lk.case === 'upper'; const box = lk.box_color;
+  const pos = sample ? { position: 'static' } : lk.position === 'top' ? { top: '12%', bottom: 'auto' } : lk.position === 'middle' ? { top: '45%', bottom: 'auto' } : {};
+  return html`<div className="caption" style=${{ ...pos, fontFamily: 'var(--f-display)', fontWeight: lk.weight === 'regular' ? 500 : 800, fontSize: sample ? 15 : { small: 'clamp(12px, 4.5cqw, 18px)', large: 'clamp(18px, 8cqw, 30px)' }[lk.size] || 'clamp(15px, 6cqw, 24px)', lineHeight: 1.15 }}>
+    <span style=${{ color: lk.text_color || '#fff', background: box || 'transparent', padding: box ? '0.08em 0.3em' : 0, borderRadius: 6, textShadow: box || lk.outline === false ? 'none' : '0 2px 0 #000, 0 0 6px rgba(0,0,0,0.85)', WebkitTextStroke: box || lk.outline === false ? '0' : '1px #000', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}>${chunk.map((w, k) => html`<span key=${k} style=${{ color: k === on && lk.highlight_color ? lk.highlight_color : null }}>${(up ? w.toUpperCase() : lk.case === 'lower' ? w.toLowerCase() : w) + (k < chunk.length - 1 ? ' ' : '')}</span>`)}</span>
+  </div>`;
+}
 // What the writer needs to know about the analyzed video, so titles, thumbnails and channels relate to it.
 const sourceBrief = p => !p.source || p.source.own ? {} : { title: p.source.title, channel: p.source.channel, tags: (p.source.tags || []).slice(0, 15), description: (p.source.description || '').slice(0, 1200),
   summary: p.analysis && p.analysis.summary, hook: p.analysis && p.analysis.hook, why_it_worked: p.analysis && p.analysis.why_it_worked, views: p.source.views };
@@ -691,6 +704,19 @@ function CardView({ p, card }) {
   </div>`;
 }
 const capById = id => CAPTIONS.find(c => c.id === id) || CAPTIONS[0];
+// For videos analyzed before the caption look was read: one cheap look at the original, then "Like the original" is chosen.
+function SourceCaptionsNote({ p }) {
+  const [busy, setBusy] = useState(false);
+  if (!p.source || p.source.own || !p.source.url) return null;
+  const lk = capLook(p);
+  if (lk) return html`<p className="note">\u201cLike the original\u201d copies the captions of \u201c${p.source.title}\u201d${lk.describe ? ': ' + lk.describe.replace(/[.\s]+$/, '') : ''}.</p>`;
+  if (p.analysis && p.analysis.captions_checked) return html`<p className="note">The original video has no spoken-word captions to copy, so pick any style.</p>`;
+  if (!LIVE) return null;
+  const go = async () => { setBusy(true); try { const r = await liveJob(p.id, 'Reading the original\u2019s captions', 'source-captions', { url: p.source.url }, ['Gemini Flash is reading the original video\u2019s captions']);
+    updateP(p.id, q => { q.analysis = { ...(q.analysis || {}), captions_look: r.look, captions_checked: true }; if (r.look) { q.audio.caption_style = 'source'; q.scenes.forEach(sc => { sc.caption_style = 'source'; }); } addCost(q, r.cost || 0); });
+    toast(r.look ? 'Captions now match the original video.' : 'The original video has no spoken-word captions to copy.'); } catch (e) { toast(e.message); } setBusy(false); };
+  return html`<div className="row"><button type="button" className="btn sm" disabled=${busy} onClick=${go}>${busy ? html`<span className="spinner"></span> Reading the original` : html`<${Fragment}><${Icon} n="spark" />Match the original video\u2019s captions<span className="tag">~$0.01</span></${Fragment}>`}</button></div>`;
+}
 // A scene's caption: your edit if you made one, otherwise its words from the story.
 const captionOf = (p, sc) => sc.caption_text != null ? sc.caption_text : sceneText(p, sc);
 // Frame shapes. Chosen on the Visual style step, before any image is made.
@@ -952,7 +978,9 @@ const textImageModel = p => isTextOnly(p.models.image) ? 'nano-banana-2' : p.mod
 const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); return idea ? { ...st, prefix: (st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix) + '. Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') } : st; };
 // A thumbnail picture built on a click formula: one big subject with a strong emotion, a clear open area for the words
 // (drawn on afterwards, so the image model prints none), punchy contrast, and one red circle or arrow on the mystery.
-const thumbPrompt = (st, t) => st.prefix + '. A scroll-stopping video thumbnail' + (t.formula ? ' (' + t.formula + ')' : '') + ': ' + t.concept.replace(/[.\s]+$/, '')
+const thumbPrompt = (st, t, look) => st.prefix + '. A scroll-stopping video thumbnail' + (t.formula ? ' (' + t.formula + ')' : '') + ': ' + t.concept.replace(/[.\s]+$/, '')
+  + (look ? '. Build it the SAME WAY as the original video\u2019s thumbnail: ' + [look.layout, look.subject && 'subject: ' + look.subject, look.extras && 'extras: ' + look.extras, look.mood && 'mood: ' + look.mood].filter(Boolean).join('; ').replace(/[.\s]+$/, '')
+    + '. The last reference image is that original thumbnail: copy only its layout, framing, subject size and composition; draw this video\u2019s own new characters and objects, never its people, words or logos' : '')
   + '. The main subject is large and close, filling about half the frame' + (t.emotion ? ', showing ' + t.emotion + ' clearly, eyes and expression easy to read' : '')
   + '. Freeze the moment of highest tension; do not show how it ends.'
   + (t.focus ? ' One bright red circle or thick red arrow points at ' + t.focus + '.' : '')
@@ -1374,7 +1402,7 @@ async function liveRender(pid, final, attempt = 0) {
   try {
     const res = final ? (p.render.res || 1080) : 480;
     const tr = liveTrack(p); const music = tr ? { url: tr.url, volume: p.audio.music_volume, duck: p.audio.duck !== false } : {};
-    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style, scenes, lines, music, card_style: cardStyle(p) },
+    const r = await liveJob(pid, final ? 'Rendering final ' + res + 'p MP4' : 'Building draft', 'render', { final, res, aspect: p.format.aspect_ratio, caption_style: p.audio.caption_style === 'source' && !capLook(p) ? 'bold' : p.audio.caption_style, caption_look: capLook(p), scenes, lines, music, card_style: cardStyle(p) },
       ['Measuring the narration', 'Zoom and pan for ' + scenes.length + ' scenes', 'Burning in captions', final ? 'Normalizing loudness and encoding' : 'Encoding the draft']);
     updateP(pid, q => { q.rendering = null; if (final) { q.render.final_path = r.url; q.render.final_srt = r.srt; q.render.final_caps = sig; q.render.final_at = Date.now(); q.render.final_res = r.res || res; q.render.final_from_draft = false; q.status = 'rendered'; q.step = 'export'; } else { q.render.draft_path = r.url; q.render.draft_srt = r.srt; q.render.draft_caps = sig; q.render.draft_at = Date.now(); }
       addVideo(q, { url: r.url, srt: r.srt, kind: final ? 'final' : 'draft', res: r.res || res });
@@ -1414,6 +1442,7 @@ const api = {
           ['YouTube Data API: title, stats and comments', an + ' is watching the video', wr.name + ' is writing angle cards']);
         updateP(pid, (p, s) => {
           p.source = r.source; p.analysis = r.analysis; p.angles_written_by = r.written_by;
+          if (r.analysis && r.analysis.captions_look && p.audio.caption_style !== 'none') { p.audio.caption_style = 'source'; p.analysis.captions_checked = true; }
           p.angles = r.angles.map(a => ({ ...a, saved: false })); p.selected_angle_ids = [];
           p.ingesting = false; p.step = 'angles'; addCost(p, r.cost || 0);
           if (p.title === 'Untitled project') p.title = r.source.title.slice(0, 60);
@@ -1543,8 +1572,8 @@ const api = {
     try {
       let kit;
       if (LIVE) {
-        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [], source: sourceBrief(p0) }, ['Writing titles, captions, descriptions and thumbnail ideas from your story']);
-        kit = { titles: r.titles, captions: r.captions, descriptions: r.descriptions || [], tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
+        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [], source: sourceBrief(p0), thumb: p0.source && !p0.source.own ? p0.source.thumb || '' : '' }, ['Reading the original thumbnail', 'Writing titles, captions, descriptions and thumbnail ideas from your story']);
+        kit = { source_thumb: r.source_thumb || null, titles: r.titles, captions: r.captions, descriptions: r.descriptions || [], tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
         if (r.warning) toast(r.warning);
       } else {
         await runJob(pid, 'Writing the publish kit', ['Reading your story', 'Writing titles and captions', 'Sketching thumbnails'], 500);
@@ -1599,9 +1628,11 @@ const api = {
     const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = projStyle(p0);
     updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; p.kit.thumbnails[i].error = null; });
     try {
-      const prompt = thumbPrompt(st, t);
+      const src = p0.kit.source_thumb; const prompt = thumbPrompt(st, t, src && src.look);
       const anchor = lookAnchor(p0, null);
-      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs: templateRefs(st).concat(anchor ? [anchor] : []) });
+      // the original thumbnail goes last, for its layout only (the template's pictures set the drawing style)
+      const refs = templateRefs(st).slice(0, 2).concat(src && src.ref ? [src.ref] : []).concat(anchor ? [anchor] : []).slice(0, 4);
+      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs });
       updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { raw: r.url }); addCost(p, r.cost || 0); });
       await api.thumbText(pid, i);
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
@@ -1613,7 +1644,8 @@ const api = {
     if (!t.raw) return;
     updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; });
     try {
-      const r = await post('thumb-text', { image: t.raw, text: text != null ? text : t.text, place: t.place || 'top', style: styleById(p0.style).base || p0.style });
+      const lk = (p0.kit.source_thumb && p0.kit.source_thumb.look) || {};
+      const r = await post('thumb-text', { image: t.raw, text: text != null ? text : t.text, place: t.place || 'top', style: styleById(p0.style).base || p0.style, look: { text_color: lk.text_color || '', highlight_color: lk.highlight_color || '', box_color: lk.box_color || '', outline: lk.outline !== false } });
       updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'ready', url: r.url, error: null }); });
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
   },
@@ -1630,7 +1662,7 @@ const api = {
     const old = clone(STATE.projects[pid].kit);
     await api.publishKit(pid);
     const k = STATE.projects[pid].kit;
-    if (k && k.thumbnails && !k.error) updateP(pid, p => { p.kit = { ...old, thumbnails: k.thumbnails, sel: { ...old.sel, thumb: 0 } }; });
+    if (k && k.thumbnails && !k.error) updateP(pid, p => { p.kit = { ...old, thumbnails: k.thumbnails, source_thumb: k.source_thumb || old.source_thumb || null, sel: { ...old.sel, thumb: 0 } }; });
     else updateP(pid, p => { p.kit = old; });
   },
   async generateAudio(pid, lineIds) {
@@ -2601,8 +2633,9 @@ function VoiceScreen({ p, s }) {
 /* ======================================================================
    6. Format (aspect, animated or static, captions, music)
    ====================================================================== */
-function CapSample({ id }) {
+function CapSample({ id, p }) {
   const st = { position: 'static' };
+  if (id === 'source') return html`<${SourceCaption} look=${capLook(p)} chunk=${['Three', 'hours', 'of', 'sun'].slice(0, Math.max(1, Math.min(4, capPer(p, 'source'))))} on=${1} sample=${true} />`;
   if (id === 'bold') return html`<div className="caption bold" style=${st}><span>Three</span><span className="on">hours</span><span>of sun</span></div>`;
   if (id === 'clean') return html`<div className="caption clean" style=${st}>Three hours of sun.</div>`;
   if (id === 'karaoke') return html`<div className="caption karaoke" style=${st}><span className="past">Three </span><span className="past">hours </span><span>of sun</span></div>`;
@@ -2679,7 +2712,8 @@ function FormatScreen({ p, s }) {
       <section className="panel stack fmt-caps">
         <div className="panel-h" style=${{ marginBottom: 0 }}><h3>Captions</h3><${Seg} label="Captions on or off" value=${p.audio.caption_style === 'none' ? 'off' : 'on'} onChange=${v => !locked && set(q => setCaptions(q, v === 'on'))} options=${[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} /></div>
         ${p.audio.caption_style === 'none' ? html`<p className="note">No captions on the video. A captions file (.srt) is still saved with each render, in case you want to upload it separately.</p>` : html`<${Fragment}>
-          <div className="capopts">${CAPTIONS.filter(c => c.id !== 'none').map(c => html`<button key=${c.id} type="button" className="capopt" aria-pressed=${p.audio.caption_style === c.id} disabled=${locked} onClick=${() => set(q => { q.audio.caption_style = c.id; q.scenes.forEach(sc => { sc.caption_style = c.id; }); })}><span className="lbl">${c.name}</span><${CapSample} id=${c.id} /></button>`)}</div>
+          <div className="capopts">${capList(p).map(c => html`<button key=${c.id} type="button" className="capopt" aria-pressed=${p.audio.caption_style === c.id} disabled=${locked} onClick=${() => set(q => { q.audio.caption_style = c.id; q.scenes.forEach(sc => { sc.caption_style = c.id; }); })}><span className="lbl">${c.name}</span><${CapSample} id=${c.id} p=${p} /></button>`)}</div>
+          <${SourceCaptionsNote} p=${p} />
           <p className="note">You can also change the style, edit the words, or turn captions off on the Compile step.</p>
         </${Fragment}>`}
       </section>
@@ -3028,6 +3062,7 @@ function Player({ p, mode }) {
   if (cap === 'none') caption = null;
   else if (cap === 'bold') { const start = Math.floor(wi / 3) * 3; caption = html`<div className="caption bold">${ws.slice(start, start + 3).map((w, k) => html`<span key=${k} className=${start + k === wi ? 'on' : ''}>${w}</span>`)}</div>`; }
   else if (cap === 'clean') caption = html`<div className="caption clean">${text}</div>`;
+  else if (cap === 'source') { const per = capPer(p, 'source'); const start = Math.floor(Math.max(0, wi) / per) * per; caption = html`<${SourceCaption} key=${start} look=${capLook(p)} chunk=${ws.slice(start, start + per)} on=${wi - start} />`; }
   else if (cap !== 'karaoke') {
     const per = capById(cap).per || 4; const start = Math.floor(Math.max(0, wi) / per) * per; const chunk = ws.slice(start, start + per);
     if (cap === 'typewriter') caption = html`<div className="caption typewriter">${ws.slice(start, wi + 1).join(' ')}<span className="cursor">▌</span></div>`;
@@ -3068,7 +3103,7 @@ function CaptionEditor({ p }) {
   return html`<section className="panel stack">
     <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Captions</h2><${Seg} label="Captions" value=${on ? 'on' : 'off'} onChange=${v => setOn(v === 'on')} options=${[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} /></div>
     ${on ? html`<${Fragment}>
-      <label className="row note" htmlFor="cap-style">Style <select id="cap-style" className="select" style=${{ width: 'auto' }} value=${p.audio.caption_style} onChange=${e => updateP(p.id, q => { q.audio.caption_style = e.target.value; q.scenes.forEach(sc => { sc.caption_style = e.target.value; }); })}>${CAPTIONS.filter(c => c.id !== 'none').map(c => html`<option key=${c.id} value=${c.id}>${c.name}</option>`)}</select></label>
+      <label className="row note" htmlFor="cap-style">Style <select id="cap-style" className="select" style=${{ width: 'auto' }} value=${p.audio.caption_style} onChange=${e => updateP(p.id, q => { q.audio.caption_style = e.target.value; q.scenes.forEach(sc => { sc.caption_style = e.target.value; }); })}>${capList(p).map(c => html`<option key=${c.id} value=${c.id}>${c.name}</option>`)}</select></label>
       <p className="note">Edit any scene\u2019s caption. Untouched captions follow the narration word by word. ${edited ? edited + ' edited.' : ''} Rebuild the draft to see changes.</p>
       <div className="caplist">${p.scenes.map((sc, i) => html`<div key=${sc.id} className="capline">
         <span className="idx">${i + 1}</span>
@@ -3173,7 +3208,8 @@ function PublishKit({ p }) {
   const title = k.titles[k.sel.title] || ''; const cap = k.captions[k.sel.caption] || ''; const descs = k.descriptions || []; const desc = descs[k.sel.desc || 0] || ''; const tags = k.tags || [];
   return html`<${Fragment}>
     <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} Each uses a different click formula, made in your video\u2019s style with ${im.name}; the suspense words are added sharp on top, and you can change them for free.</span>${LIVE ? html`<button type="button" className="btn sm" style=${{ marginLeft: 'auto' }} onClick=${() => api.rewriteThumbs(p.id)}><${Icon} n="redo" />New thumbnail ideas</button>` : null}</div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} ${k.source_thumb ? 'The same type of thumbnail as the original video (its layout, framing and words), in your video\u2019s style with ' + im.name : 'Each uses a different click formula, made in your video\u2019s style with ' + im.name}; the words are added sharp on top, and you can change them for free.</span>${LIVE ? html`<button type="button" className="btn sm" style=${{ marginLeft: 'auto' }} onClick=${() => api.rewriteThumbs(p.id)}><${Icon} n="redo" />New thumbnail ideas</button>` : null}</div>
+      ${k.source_thumb && k.source_thumb.ref ? html`<div className="row" style=${{ gap: 10, alignItems: 'center' }}><img src=${k.source_thumb.ref} alt="The original video's thumbnail" style=${{ width: 132, borderRadius: 8, display: 'block' }} /><span className="note">Original thumbnail. Yours copy its layout${k.source_thumb.look && k.source_thumb.look.text ? ' and kind of words (\u201c' + k.source_thumb.look.text + '\u201d)' : ''}, with your own picture and words.</span></div>` : null}
       <div className="kthumbs">${k.thumbnails.map((t, i) => { const sc = t.scene != null && p.scenes[t.scene]; const v = sc && sceneVersion(p, sc); return html`<div key=${i} className="kthumb" role="radio" tabIndex="0" aria-pressed=${k.sel.thumb === i} aria-checked=${k.sel.thumb === i} onClick=${() => sel('thumb', i)} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel('thumb', i); } }}>
         <div className=${'frame' + frameCls(p)}>
           ${t.url ? html`<img src=${t.url} alt=${t.concept} />` : LIVE && t.status !== 'generating' ? html`<div className="overlay" style=${{ background: 'var(--sunk)', color: 'var(--muted)' }}>Not drawn yet</div>` : v ? html`<${Fragment}><${Art} seed=${v.seed} styleId=${p.style} upload=${v.upload || v.url} /><div className="caption bold" style=${{ bottom: '10%' }}>${t.text.split(' ').map((w, j) => html`<span key=${j} style=${/^\*.*\*$/.test(w) ? { color: '#FFD600' } : null}>${w.replace(/\*/g, '').toUpperCase()}</span>`)}</div></${Fragment}>` : null}

@@ -86,10 +86,39 @@ def caption_cues(scenes: list[dict], line_texts: list[str], line_times: list[tup
 
 # Words per caption chunk for each style.
 CAPTION_WORDS = {"bold": 3, "clean": 12, "karaoke": 7, "word": 1, "boxed": 3, "neon": 4, "comic": 2, "typewriter": 6, "minimal": 10}
-CAPTION_STYLE_IDS = set(CAPTION_WORDS) | {"none"}
+CAPTION_STYLE_IDS = set(CAPTION_WORDS) | {"none", "source"}
 
 
-def _style_line(style: str, w: int, h: int) -> str:
+def _ass_color(hexc: str, default: str) -> str:
+    """'#RRGGBB' -> ASS '&H00BBGGRR'."""
+    m = re.fullmatch(r"#?([0-9a-fA-F]{6})", (hexc or "").strip())
+    if not m:
+        return default
+    c = m.group(1)
+    return f"&H00{c[4:6]}{c[2:4]}{c[0:2]}".upper()
+
+
+def look_words(look: dict | None) -> int:
+    try:
+        return max(1, min(8, int((look or {}).get("words") or 3)))
+    except (TypeError, ValueError):
+        return 3
+
+
+def _source_style(look: dict, w: int, h: int) -> dict:
+    """The caption look read from the original video: colours, box or outline, position, size and case."""
+    base = min(w, h)
+    size = {"small": 0.045, "medium": 0.062, "large": 0.085}.get(look.get("size"), 0.065)
+    box = _ass_color(look.get("box_color", ""), "")
+    pos = look.get("position")
+    return dict(font="DejaVu Sans", size=int(base * size), primary=_ass_color(look.get("text_color", ""), "&H00FFFFFF"),
+                outline=box or "&H00000000", back=box or "&H80000000", bold=0 if look.get("weight") == "regular" else 1,
+                spacing=0, angle=0, border=3 if box else 1, ol=int(base * size * 0.22) if box else (0 if look.get("outline") is False else max(3, int(base * size * 0.09))),
+                sh=0 if box else 2, align=8 if pos == "top" else 5 if pos == "middle" else 2,
+                mv=int(h * 0.12) if pos == "top" else 0 if pos == "middle" else int(h * 0.18))
+
+
+def _style_line(style: str, w: int, h: int, look: dict | None = None) -> str:
     base = min(w, h)
     f = "Style: Default,{font},{size},{primary},{secondary},{outline},{back},{bold},0,0,0,100,100,{spacing},{angle},{border},{ol},{sh},{align},60,60,{mv},1"
     styles = {
@@ -103,23 +132,34 @@ def _style_line(style: str, w: int, h: int) -> str:
         "minimal": dict(font="DejaVu Sans", size=int(base * 0.038), primary="&H00FFFFFF", outline="&H00000000", back="&H64000000", bold=0, spacing=1, angle=0, border=1, ol=0, sh=2, align=2, mv=int(h * 0.06)),
     }
     bold = dict(font="DejaVu Sans", size=int(base * 0.075), primary="&H00FFFFFF", outline="&H00000000", back="&H00000000", bold=1, spacing=0, angle=0, border=1, ol=6, sh=2, align=2, mv=int(h * 0.18))
-    st = styles.get(style, bold)
+    st = _source_style(look or {}, w, h) if style == "source" else styles.get(style, bold)
     return f.format(secondary="&H00FFFFFF" if style == "karaoke" else st["primary"], **st)
 
 
-def captions_ass(cues: list[tuple[float, float, list[str]]], style: str, w: int, h: int) -> str:
+def captions_ass(cues: list[tuple[float, float, list[str]]], style: str, w: int, h: int, look: dict | None = None) -> str:
     out = ["[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {h}", "WrapStyle: 0", "",
            "[V4+ Styles]",
            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, "
            "StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-           _style_line(style, w, h), "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
+           _style_line(style, w, h, look), "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
 
     def ev(a: float, b: float, text: str) -> None:
         out.append(f"Dialogue: 0,{_ts(a)},{_ts(b)},Default,,0,0,0,,{text}")
 
     for a, b, ch in cues:
         words = [_ass_text(x) for x in ch]
-        if style == "karaoke":
+        if style == "source":
+            case = (look or {}).get("case")
+            words = [x.upper() if case == "upper" else x.lower() if case == "lower" else x for x in words]
+            hi = _ass_color((look or {}).get("highlight_color", ""), "")
+            if hi and len(words) > 1:  # the word being spoken takes the highlight colour, like the original
+                step = (b - a) / len(words)
+                for i in range(len(words)):
+                    ev(a + i * step, a + (i + 1) * step if i < len(words) - 1 else b,
+                       " ".join(("{\\c%s}%s{\\r}" % (hi, x)) if j == i else x for j, x in enumerate(words)))
+            else:
+                ev(a, b, ("{\\c%s}" % hi if hi else "") + " ".join(words))
+        elif style == "karaoke":
             k = max(1, int((b - a) * 100 / len(ch)))
             ev(a, b, "".join("{\\k%d}%s " % (k, x) for x in words).strip())
         elif style == "typewriter":  # words appear one by one
@@ -232,7 +272,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
 
     stem = f"{'final' if final else 'draft'}_{uuid.uuid4().hex[:8]}"
     cues = caption_cues(scenes, [l.get("text", "") for l in lines], line_times, starts, durs,
-                        CAPTION_WORDS.get(style, 6))
+                        look_words(payload.get("caption_look")) if style == "source" else CAPTION_WORDS.get(style, 6))
     srt_url = None
     if cues:
         (media / "renders" / f"{stem}.srt").write_text(captions_srt(cues))
@@ -267,7 +307,7 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         if burn:  # this scene's slice of the captions, timed from the start of the clip
             part = [(max(0.0, ca - t0), min(cb, t1) - t0, ch) for ca, cb, ch in cues if cb > t0 + 1e-3 and ca < t1 - 1e-3]
             if part:
-                ass = captions_ass(part, style, w, h)
+                ass = captions_ass(part, style, w, h, payload.get("caption_look"))
                 (work / f"cap{i}.ass").write_text(ass)
                 vf += f",ass=cap{i}.ass"
         if sc.get("card"):  # drawn here, free: the template's colours and font
