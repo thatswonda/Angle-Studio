@@ -47,10 +47,10 @@ LAYOUTS = ("big", "number", "question", "quote")
 # Template -> display font. Anything not listed uses Anton (bold condensed).
 HAND = {"stickman", "wiresketch", "lineart", "papercut"}
 COMIC = {"comic", "cartoonexplain", "animated3d", "clay"}
-SERIF = {"documentary", "historypaint", "watercolor", "botanical", "photoreal", "silhouette"}
+SERIF = {"documentary", "docarchive", "historyepic", "historypaint", "watercolor", "botanical", "photoreal", "silhouette"}
 PIXEL = {"pixel"}
 # Templates whose cards look best on their dark colour.
-DARK = {"cinematic", "retro", "silhouette", "toyworld", "anime"}
+DARK = {"cinematic", "retro", "silhouette", "toyworld", "anime", "horror", "finance3d", "historyepic", "motiongfx"}
 
 
 def _hex(c: str, default=(30, 30, 30)) -> tuple[int, int, int]:
@@ -204,13 +204,18 @@ def make_card(card: dict, style: dict, w: int, h: int, out: Path) -> Path:
     top_space = 0
 
     if layout == "number":  # big accent numeral, words under it
-        num = re.search(r"\d+", small or text)
-        numeral = num.group(0) if num else "1"
-        nf = ImageFont.truetype(str(FONTS / font_file), int(short * 0.42))
+        # the whole figure: "$1,000", "3x", "40%", "#1", "2.5k" (not just its first digits)
+        num = re.search(r"#?[$€£]?\d[\d,.]*(?:%|x|k|m|bn)?", (small or text).replace("*", ""), re.I)
+        numeral = num.group(0).rstrip(".,") if num else "1"
+        size = int(short * 0.42)
+        nf = ImageFont.truetype(str(FONTS / font_file), size)
+        while d.textlength(numeral, font=nf) > W * 0.86 and size > 20:  # long figures shrink to fit
+            size = int(size * 0.9)
+            nf = ImageFont.truetype(str(FONTS / font_file), size)
         nb = d.textbbox((0, 0), numeral, font=nf)
         nw, nh = nb[2] - nb[0], nb[3] - nb[1]
         top_space = nh + short * 0.06
-        words = [x for x in words if x[0] != numeral and x[0] != "#" + numeral] or words
+        words = [x for x in words if x[0].strip(".,!?").lower() not in (numeral.lower(), "#" + numeral.lower())] or words
     em = _emoji(emoji, int(short * (0.2 if layout == "number" else 0.3)))
     em_h = em.height + short * 0.07 if em else 0
     font, lines, line_h = _fit(words, font_file, box_w, H * 0.36, d, int(short * (0.22 if layout != "quote" else 0.15)),

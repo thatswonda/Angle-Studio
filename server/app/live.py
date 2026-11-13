@@ -29,7 +29,7 @@ from .providers.openai_writer import OpenAIWriter
 
 router = APIRouter(prefix="/api/live")
 MEDIA = storage.ROOT / "media"
-STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette", "cartoonexplain", "historypaint"]
+STYLE_IDS = ["photoreal", "cinematic", "documentary", "botanical", "clay", "animated3d", "anime", "comic", "watercolor", "infographic", "retro", "papercut", "lineart", "stickman", "toyworld", "wiresketch", "pixel", "silhouette", "cartoonexplain", "historypaint", "docarchive", "finance3d", "historyepic", "horror", "motiongfx"]
 # Ways to recreate what made the reference video go viral, so the new video is recommended beside it.
 # Never a sequel or "part 2": each one is a stand-alone video built on the same proven idea.
 ANGLE_TYPES = ["Fill a gap", "Same video, new niche", "Same video, new character", "Same format, new topic",

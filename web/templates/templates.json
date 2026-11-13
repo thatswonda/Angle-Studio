@@ -1,322 +1,427 @@
 {
-  "subjects": [
-    "a young woman tending herbs on a small city balcony at sunrise",
-    "a lone hiker standing on a rocky ridge above a misty valley",
-    "close-up of weathered hands holding an old brass compass over a paper map",
-    "a busy night market street with glowing lanterns and food stalls"
-  ],
-  "styles": [
-    {
-      "id": "photoreal",
-      "name": "Cinematic photoreal",
-      "kind": "soft",
-      "mood": "True to life, premium, film-like",
-      "best": "Stories, explainers, travel, true events",
-      "palette": [
-        "#1E2A33",
-        "#5E7A8A",
-        "#E9DCC9",
-        "#C9853F"
-      ],
-      "prefix": "cinematic photorealistic film still, shot on a full-frame cinema camera with a 35mm lens, natural motivated lighting, shallow depth of field, rich true-to-life colors, subtle film grain, high dynamic range, crisp fine detail",
-      "avoid": "cartoon, illustration, oversaturated colors, plastic-looking skin, distorted hands or faces"
-    },
-    {
-      "id": "cinematic",
-      "name": "Moody cinematic",
-      "kind": "soft",
-      "mood": "Dark, dramatic, high stakes",
-      "best": "Mystery, history, true crime, tension",
-      "palette": [
-        "#0E1A24",
-        "#1F4E5A",
-        "#E7B15A",
-        "#C2563A"
-      ],
-      "prefix": "moody cinematic film still, low-key lighting with deep shadows, teal and amber color grade, anamorphic lens with soft flares, atmospheric haze, dramatic composition, rich contrast",
-      "avoid": "flat lighting, bright cheerful colors, cartoon look, blown-out highlights"
-    },
-    {
-      "id": "documentary",
-      "name": "Documentary",
-      "kind": "soft",
-      "mood": "Authentic, observed, real",
-      "best": "Nature, culture, how-to, field reports",
-      "palette": [
-        "#2F3B2C",
-        "#7C8B5E",
-        "#E6DFCF",
-        "#B9773C"
-      ],
-      "prefix": "documentary photograph for a nature and travel magazine, available light, candid unposed moment, authentic textures, natural colors, sharp focus, environmental storytelling, 50mm lens",
-      "avoid": "staged studio look, heavy filters, fantasy elements, cartoon style"
-    },
-    {
-      "id": "botanical",
-      "name": "Warm lifestyle",
-      "kind": "soft",
-      "mood": "Calm, cozy, inviting",
-      "best": "Home, food, gardening, wellness, routines",
-      "palette": [
-        "#3E4A3B",
-        "#A7C4A0",
-        "#F4ECDD",
-        "#D9895B"
-      ],
-      "prefix": "warm lifestyle photograph, soft window light, airy and bright, gentle warm pastel tones, cozy natural materials like linen and wood, shallow depth of field, inviting and calm atmosphere",
-      "avoid": "harsh shadows, neon colors, gloomy mood, cluttered backgrounds"
-    },
-    {
-      "id": "clay",
-      "name": "Clay animation",
-      "kind": "soft",
-      "mood": "Polished, charming, character-led",
-      "best": "Character stories, comedy, kids, explainers with personality",
-      "palette": [
-        "#4A3B2C",
-        "#B07A48",
-        "#EADBC4",
-        "#5E9E96"
-      ],
-      "prefix": "polished clay animation film still, smooth clean sculpted characters with flawless soft matte surfaces and crisp tidy edges, appealing well-designed characters with simple rounded shapes, big expressive eyes and clear readable poses, premium stop-motion feature film quality, neat miniature set with clean handcrafted details, soft warm studio lighting with gentle shadows, shallow depth of field, rich harmonious colors",
-      "avoid": "fingerprints, lumpy or messy clay, cracks, rough unfinished textures, photorealistic people, flat 2D illustration, recognizable characters from existing films or shows"
-    },
-    {
-      "id": "animated3d",
-      "name": "3D animated film",
-      "kind": "flat",
-      "mood": "Playful, bright, family friendly",
-      "best": "Kids, character stories, fun facts",
-      "palette": [
-        "#2B3A67",
-        "#5DA9E9",
-        "#FFF1D0",
-        "#FF8C42"
-      ],
-      "prefix": "stylized 3D animated film still, soft global illumination, appealing rounded character design with expressive faces, vibrant harmonious colors, subsurface scattering on skin, cinematic depth of field, polished family-film quality",
-      "avoid": "photorealism, live action, creepy uncanny faces, copyrighted characters"
-    },
-    {
-      "id": "anime",
-      "name": "Anime-inspired",
-      "kind": "comic",
-      "mood": "Vivid, emotional, epic skies",
-      "best": "Stories, motivation, adventure, lofi",
-      "palette": [
-        "#24305E",
-        "#6C8EEF",
-        "#FDE8E9",
-        "#F76C6C"
-      ],
-      "prefix": "anime-inspired illustration, clean cel shading, crisp confident line art, luminous painted sky, vibrant saturated palette, dramatic rim lighting, richly detailed background art",
-      "avoid": "photorealism, 3D render look, muddy colors, copyrighted characters"
-    },
-    {
-      "id": "comic",
-      "name": "Graphic novel",
-      "kind": "comic",
-      "mood": "Bold, punchy, dramatic",
-      "best": "Rivalries, history, action, explainers with attitude",
-      "palette": [
-        "#1B1B1E",
-        "#D7263D",
-        "#F4E9CD",
-        "#1B998B"
-      ],
-      "prefix": "graphic novel panel, bold ink outlines, halftone shading, dramatic camera angles, limited bold palette with strong blacks and one spot color, dynamic composition, hand-inked texture",
-      "avoid": "photorealism, soft gradients, speech bubbles, lettering"
-    },
-    {
-      "id": "watercolor",
-      "name": "Watercolor storybook",
-      "kind": "watercolor",
-      "mood": "Gentle, nostalgic, handmade",
-      "best": "Bedtime stories, journaling, travel memories",
-      "palette": [
-        "#5B7B7A",
-        "#C8D5B9",
-        "#FAF3E3",
-        "#E08D79"
-      ],
-      "prefix": "loose watercolor storybook illustration on cold-press paper, soft bleeding edges, granulating pigments, delicate hand-drawn pencil lines, gentle muted palette, white paper showing through",
-      "avoid": "photorealism, hard digital edges, neon colors, heavy black outlines"
-    },
-    {
-      "id": "infographic",
-      "name": "Clean explainer",
-      "kind": "flat",
-      "mood": "Clear, modern, informative",
-      "best": "Finance, science, tech, step-by-step guides",
-      "palette": [
-        "#12355B",
-        "#4F8BC9",
-        "#EAF2FA",
-        "#F2B134"
-      ],
-      "prefix": "clean flat vector illustration for an explainer video, simple geometric shapes, generous negative space, a calm palette of navy, sky blue and off-white with one golden accent, subtle long shadows, modern and tidy",
-      "avoid": "photorealism, clutter, tiny details, written labels"
-    },
-    {
-      "id": "retro",
-      "name": "Retro 80s",
-      "kind": "soft",
-      "mood": "Neon, nostalgic, energetic",
-      "best": "Tech, music, gaming, nostalgia",
-      "palette": [
-        "#1A1033",
-        "#7B2CBF",
-        "#FF5D8F",
-        "#2EC4F1"
-      ],
-      "prefix": "1980s retro aesthetic, VHS camcorder look, neon magenta and cyan lighting, synthwave sunset colors, soft bloom, slight chromatic aberration and scanlines, nostalgic analog grain",
-      "avoid": "modern minimal look, muted earthy colors, clean digital sharpness"
-    },
-    {
-      "id": "papercut",
-      "name": "Paper cut-out",
-      "kind": "flat",
-      "mood": "Crafty, charming, tactile",
-      "best": "Kids, education, light-hearted stories",
-      "palette": [
-        "#3D405B",
-        "#81B29A",
-        "#F4F1DE",
-        "#E07A5F"
-      ],
-      "prefix": "layered paper cut-out diorama, handcrafted colored paper with visible fibers, soft drop shadows between layers, playful stop-motion craft feel, warm cheerful craft palette, shot from the front with gentle studio light",
-      "avoid": "photorealistic people, glossy plastic, digital gradients"
-    },
-    {
-      "id": "lineart",
-      "name": "Minimal line art",
-      "kind": "flat",
-      "mood": "Elegant, calm, thoughtful",
-      "best": "Quotes, philosophy, psychology, mindfulness",
-      "palette": [
-        "#222222",
-        "#9A8C7B",
-        "#F7F3EC",
-        "#C98B6B"
-      ],
-      "prefix": "minimal continuous line art, single-weight black ink lines on a warm off-white background, one muted terracotta accent color, lots of empty space, elegant and simple composition",
-      "avoid": "shading, busy backgrounds, many colors, photorealism"
-    },
-    {
-      "id": "stickman",
-      "name": "Stick figure",
-      "kind": "flat",
-      "mood": "Funny, simple, fast to read",
-      "best": "Explainers, storytimes, life lessons, comedy",
-      "palette": [
-        "#1A1A1A",
-        "#9AA0A6",
-        "#FAF8F3",
-        "#E4572E"
-      ],
-      "prefix": "stick figure animation frame, expressive stick-figure characters with thin black line bodies and hollow outlined round heads (white inside, never filled in), dot eyes and simple expressive mouths, clean confident marker lines, minimal props drawn in the same simple line style, plain warm white paper background, one bright orange accent color on key objects, lots of empty space, funny readable poses",
-      "avoid": "realistic anatomy, shading, detailed backgrounds, 3D render, photorealism, words or letters"
-    },
-    {
-      "id": "toyworld",
-      "name": "Toy figures, virtual set",
-      "kind": "soft",
-      "mood": "Sleek, playful, futuristic",
-      "best": "Tech, gaming, business stories, product explainers",
-      "palette": [
-        "#141A3A",
-        "#5B5BD6",
-        "#E8E6FF",
-        "#2FE0C4"
-      ],
-      "prefix": "stylized designer vinyl toy characters with smooth satin finish and simple cute proportions, placed in a sleek virtual 3D environment like a digital stage, soft glowing gradients, floating geometric shapes and translucent holographic panels, clean cinematic lighting with colored rim light, crisp high-end CG render, vivid harmonious colors",
-      "avoid": "photorealistic people, messy textures, real brand logos, copyrighted characters, words or letters"
-    },
-    {
-      "id": "wiresketch",
-      "name": "Wire figures on sketch",
-      "kind": "flat",
-      "mood": "Artsy, thoughtful, unusual",
-      "best": "Psychology, philosophy, poetry, personal stories",
-      "palette": [
-        "#2B2B2B",
-        "#8C8C8C",
-        "#F2EEE6",
-        "#C0663A"
-      ],
-      "prefix": "characters sculpted from shiny silver and copper metal wire, three-dimensional wire sculpture figures made of a few continuous bent strands with hollow see-through bodies and simple looped faces, catching small specular highlights and casting crisp shadows, placed inside a flat hand-drawn pencil sketch world on textured off-white paper with loose graphite hatching and construction lines, the solid metal figures clearly standing out from the drawn background, gentle warm light",
-      "avoid": "pencil-drawn people, solid filled bodies, skin, clothing, photorealistic people, heavy color, glossy plastic, words or letters"
-    },
-    {
-      "id": "pixel",
-      "name": "Pixel art",
-      "kind": "flat",
-      "mood": "Retro, cozy, nostalgic",
-      "best": "Gaming, nostalgia, lofi, fun facts, kids",
-      "palette": [
-        "#1F1B3A",
-        "#3F6EA8",
-        "#F3E7C9",
-        "#E9724C"
-      ],
-      "prefix": "detailed 16-bit pixel art scene, crisp square pixels with a limited harmonious palette, charming chunky characters with clear silhouettes, layered background with depth, soft dithered gradients in the sky, cozy retro video game atmosphere",
-      "avoid": "blurry or smooth rendering, photorealism, 3D render, user interface, health bars, copyrighted game characters, words or letters"
-    },
-    {
-      "id": "silhouette",
-      "name": "Shadow puppets",
-      "kind": "flat",
-      "mood": "Elegant, dramatic, timeless",
-      "best": "Folk tales, history, myths, bedtime stories",
-      "palette": [
-        "#0F0A08",
-        "#7A2E1E",
-        "#F6B256",
-        "#E0602B"
-      ],
-      "prefix": "shadow puppet theatre style, solid black silhouette characters and props with intricate cut-out details and visible articulated joints, backlit by a glowing warm screen fading from amber to deep red, layered silhouette scenery for depth, elegant storybook composition",
-      "avoid": "detailed faces, photorealism, full color characters, 3D render, signs, banners, lettering, words or letters"
-    },
-    {
-      "id": "cartoonexplain",
-      "name": "Ancient cartoon explainer",
-      "kind": "comic",
-      "mood": "Bold, funny, dramatic",
-      "best": "Ancient history, what-if stories, myths, fun facts",
-      "palette": [
-        "#2B2A28",
-        "#E4B15E",
-        "#2E9CC2",
-        "#F2E3C2"
-      ],
-      "prefix": "bold cartoon explainer illustration of the ancient world, like popular history and what-if animation channels: ancient Egyptian, Roman, Greek or Mesopotamian characters in period clothing, clean thick black ink outlines, flat bright colors with simple cel shading, slightly cartoonish faces with big readable emotions and exaggerated reactions, epic wide landscapes with deep perspective, warm sunny daylight, crisp digital comic finish",
-      "avoid": "photorealism, 3D render, muddy colors, speech bubbles, words or letters, copyrighted characters",
-      "subjects": [
-        "a pharaoh standing on a rocky desert cliff, staring in shock at something enormous in the distance",
-        "workers pulling a huge stone block on a wooden sledge toward pyramids under construction",
-        "a busy ancient marketplace with merchants selling spices, pottery and colorful fabric",
-        "an ancient Roman family sharing dinner together in their courtyard home"
-      ]
-    },
-    {
-      "id": "historypaint",
-      "name": "Ancient life illustration",
-      "kind": "soft",
-      "mood": "Grand, detailed, warm",
-      "best": "Ancient civilizations, daily life in history, how things were built",
-      "palette": [
-        "#5A4632",
-        "#C9A36B",
-        "#EADCC3",
-        "#8FA6B2"
-      ],
-      "prefix": "detailed digital illustration of daily life in an ancient civilization, wide busy scenes full of people working, building, trading and living, slightly stylized cartoon-like people with simple friendly faces and period-accurate clothing and tools, clean soft linework with painterly shading, warm hazy sunlight with long shadows, sandy earth-tone palette, like an illustrated children's history book",
-      "avoid": "modern objects, photorealistic photo look, glossy 3D render, harsh black outlines, words, labels or letters, signatures",
-      "subjects": [
-        "a pharaoh standing on a rocky desert cliff, staring in shock at something enormous in the distance",
-        "workers pulling a huge stone block on a wooden sledge toward pyramids under construction",
-        "a busy ancient marketplace with merchants selling spices, pottery and colorful fabric",
-        "an ancient Roman family sharing dinner together in their courtyard home"
-      ]
-    }
-  ]
+ "subjects": [
+  "a young woman tending herbs on a small city balcony at sunrise",
+  "a lone hiker standing on a rocky ridge above a misty valley",
+  "close-up of weathered hands holding an old brass compass over a paper map",
+  "a busy night market street with glowing lanterns and food stalls"
+ ],
+ "styles": [
+  {
+   "id": "photoreal",
+   "name": "Cinematic photoreal",
+   "kind": "soft",
+   "mood": "True to life, premium, film-like",
+   "best": "Stories, explainers, travel, true events",
+   "palette": [
+    "#1E2A33",
+    "#5E7A8A",
+    "#E9DCC9",
+    "#C9853F"
+   ],
+   "prefix": "cinematic photorealistic film still, shot on a full-frame cinema camera with a 35mm lens, natural motivated lighting, shallow depth of field, rich true-to-life colors, subtle film grain, high dynamic range, crisp fine detail",
+   "avoid": "cartoon, illustration, oversaturated colors, plastic-looking skin, distorted hands or faces"
+  },
+  {
+   "id": "cinematic",
+   "name": "Moody cinematic",
+   "kind": "soft",
+   "mood": "Dark, dramatic, high stakes",
+   "best": "Mystery, history, true crime, tension",
+   "palette": [
+    "#0E1A24",
+    "#1F4E5A",
+    "#E7B15A",
+    "#C2563A"
+   ],
+   "prefix": "moody cinematic film still, low-key lighting with deep shadows, teal and amber color grade, anamorphic lens with soft flares, atmospheric haze, dramatic composition, rich contrast",
+   "avoid": "flat lighting, bright cheerful colors, cartoon look, blown-out highlights"
+  },
+  {
+   "id": "documentary",
+   "name": "Documentary",
+   "kind": "soft",
+   "mood": "Authentic, observed, real",
+   "best": "Nature, culture, how-to, field reports",
+   "palette": [
+    "#2F3B2C",
+    "#7C8B5E",
+    "#E6DFCF",
+    "#B9773C"
+   ],
+   "prefix": "documentary photograph for a nature and travel magazine, available light, candid unposed moment, authentic textures, natural colors, sharp focus, environmental storytelling, 50mm lens",
+   "avoid": "staged studio look, heavy filters, fantasy elements, cartoon style"
+  },
+  {
+   "id": "botanical",
+   "name": "Warm lifestyle",
+   "kind": "soft",
+   "mood": "Calm, cozy, inviting",
+   "best": "Home, food, gardening, wellness, routines",
+   "palette": [
+    "#3E4A3B",
+    "#A7C4A0",
+    "#F4ECDD",
+    "#D9895B"
+   ],
+   "prefix": "warm lifestyle photograph, soft window light, airy and bright, gentle warm pastel tones, cozy natural materials like linen and wood, shallow depth of field, inviting and calm atmosphere",
+   "avoid": "harsh shadows, neon colors, gloomy mood, cluttered backgrounds"
+  },
+  {
+   "id": "clay",
+   "name": "Clay animation",
+   "kind": "soft",
+   "mood": "Polished, charming, character-led",
+   "best": "Character stories, comedy, kids, explainers with personality",
+   "palette": [
+    "#4A3B2C",
+    "#B07A48",
+    "#EADBC4",
+    "#5E9E96"
+   ],
+   "prefix": "polished clay animation film still, smooth clean sculpted characters with flawless soft matte surfaces and crisp tidy edges, appealing well-designed characters with simple rounded shapes, big expressive eyes and clear readable poses, premium stop-motion feature film quality, neat miniature set with clean handcrafted details, soft warm studio lighting with gentle shadows, shallow depth of field, rich harmonious colors",
+   "avoid": "fingerprints, lumpy or messy clay, cracks, rough unfinished textures, photorealistic people, flat 2D illustration, recognizable characters from existing films or shows"
+  },
+  {
+   "id": "animated3d",
+   "name": "3D animated film",
+   "kind": "flat",
+   "mood": "Playful, bright, family friendly",
+   "best": "Kids, character stories, fun facts",
+   "palette": [
+    "#2B3A67",
+    "#5DA9E9",
+    "#FFF1D0",
+    "#FF8C42"
+   ],
+   "prefix": "stylized 3D animated film still, soft global illumination, appealing rounded character design with expressive faces, vibrant harmonious colors, subsurface scattering on skin, cinematic depth of field, polished family-film quality",
+   "avoid": "photorealism, live action, creepy uncanny faces, copyrighted characters"
+  },
+  {
+   "id": "anime",
+   "name": "Anime-inspired",
+   "kind": "comic",
+   "mood": "Vivid, emotional, epic skies",
+   "best": "Stories, motivation, adventure, lofi",
+   "palette": [
+    "#24305E",
+    "#6C8EEF",
+    "#FDE8E9",
+    "#F76C6C"
+   ],
+   "prefix": "anime-inspired illustration, clean cel shading, crisp confident line art, luminous painted sky, vibrant saturated palette, dramatic rim lighting, richly detailed background art",
+   "avoid": "photorealism, 3D render look, muddy colors, copyrighted characters"
+  },
+  {
+   "id": "comic",
+   "name": "Graphic novel",
+   "kind": "comic",
+   "mood": "Bold, punchy, dramatic",
+   "best": "Rivalries, history, action, explainers with attitude",
+   "palette": [
+    "#1B1B1E",
+    "#D7263D",
+    "#F4E9CD",
+    "#1B998B"
+   ],
+   "prefix": "graphic novel panel, bold ink outlines, halftone shading, dramatic camera angles, limited bold palette with strong blacks and one spot color, dynamic composition, hand-inked texture",
+   "avoid": "photorealism, soft gradients, speech bubbles, lettering"
+  },
+  {
+   "id": "watercolor",
+   "name": "Watercolor storybook",
+   "kind": "watercolor",
+   "mood": "Gentle, nostalgic, handmade",
+   "best": "Bedtime stories, journaling, travel memories",
+   "palette": [
+    "#5B7B7A",
+    "#C8D5B9",
+    "#FAF3E3",
+    "#E08D79"
+   ],
+   "prefix": "loose watercolor storybook illustration on cold-press paper, soft bleeding edges, granulating pigments, delicate hand-drawn pencil lines, gentle muted palette, white paper showing through",
+   "avoid": "photorealism, hard digital edges, neon colors, heavy black outlines"
+  },
+  {
+   "id": "infographic",
+   "name": "Clean explainer",
+   "kind": "flat",
+   "mood": "Clear, modern, informative",
+   "best": "Finance, science, tech, step-by-step guides",
+   "palette": [
+    "#12355B",
+    "#4F8BC9",
+    "#EAF2FA",
+    "#F2B134"
+   ],
+   "prefix": "clean flat vector illustration for an explainer video, simple geometric shapes, generous negative space, a calm palette of navy, sky blue and off-white with one golden accent, subtle long shadows, modern and tidy",
+   "avoid": "photorealism, clutter, tiny details, written labels"
+  },
+  {
+   "id": "retro",
+   "name": "Retro 80s",
+   "kind": "soft",
+   "mood": "Neon, nostalgic, energetic",
+   "best": "Tech, music, gaming, nostalgia",
+   "palette": [
+    "#1A1033",
+    "#7B2CBF",
+    "#FF5D8F",
+    "#2EC4F1"
+   ],
+   "prefix": "1980s retro aesthetic, VHS camcorder look, neon magenta and cyan lighting, synthwave sunset colors, soft bloom, slight chromatic aberration and scanlines, nostalgic analog grain",
+   "avoid": "modern minimal look, muted earthy colors, clean digital sharpness"
+  },
+  {
+   "id": "papercut",
+   "name": "Paper cut-out",
+   "kind": "flat",
+   "mood": "Crafty, charming, tactile",
+   "best": "Kids, education, light-hearted stories",
+   "palette": [
+    "#3D405B",
+    "#81B29A",
+    "#F4F1DE",
+    "#E07A5F"
+   ],
+   "prefix": "layered paper cut-out diorama, handcrafted colored paper with visible fibers, soft drop shadows between layers, playful stop-motion craft feel, warm cheerful craft palette, shot from the front with gentle studio light",
+   "avoid": "photorealistic people, glossy plastic, digital gradients"
+  },
+  {
+   "id": "lineart",
+   "name": "Minimal line art",
+   "kind": "flat",
+   "mood": "Elegant, calm, thoughtful",
+   "best": "Quotes, philosophy, psychology, mindfulness",
+   "palette": [
+    "#222222",
+    "#9A8C7B",
+    "#F7F3EC",
+    "#C98B6B"
+   ],
+   "prefix": "minimal continuous line art, single-weight black ink lines on a warm off-white background, one muted terracotta accent color, lots of empty space, elegant and simple composition",
+   "avoid": "shading, busy backgrounds, many colors, photorealism"
+  },
+  {
+   "id": "stickman",
+   "name": "Stick figure",
+   "kind": "flat",
+   "mood": "Funny, simple, fast to read",
+   "best": "Explainers, storytimes, life lessons, comedy",
+   "palette": [
+    "#1A1A1A",
+    "#9AA0A6",
+    "#FAF8F3",
+    "#E4572E"
+   ],
+   "prefix": "stick figure animation frame, expressive stick-figure characters with thin black line bodies and hollow outlined round heads (white inside, never filled in), dot eyes and simple expressive mouths, clean confident marker lines, minimal props drawn in the same simple line style, plain warm white paper background, one bright orange accent color on key objects, lots of empty space, funny readable poses",
+   "avoid": "realistic anatomy, shading, detailed backgrounds, 3D render, photorealism, words or letters"
+  },
+  {
+   "id": "toyworld",
+   "name": "Toy figures, virtual set",
+   "kind": "soft",
+   "mood": "Sleek, playful, futuristic",
+   "best": "Tech, gaming, business stories, product explainers",
+   "palette": [
+    "#141A3A",
+    "#5B5BD6",
+    "#E8E6FF",
+    "#2FE0C4"
+   ],
+   "prefix": "stylized designer vinyl toy characters with smooth satin finish and simple cute proportions, placed in a sleek virtual 3D environment like a digital stage, soft glowing gradients, floating geometric shapes and translucent holographic panels, clean cinematic lighting with colored rim light, crisp high-end CG render, vivid harmonious colors",
+   "avoid": "photorealistic people, messy textures, real brand logos, copyrighted characters, words or letters"
+  },
+  {
+   "id": "wiresketch",
+   "name": "Wire figures on sketch",
+   "kind": "flat",
+   "mood": "Artsy, thoughtful, unusual",
+   "best": "Psychology, philosophy, poetry, personal stories",
+   "palette": [
+    "#2B2B2B",
+    "#8C8C8C",
+    "#F2EEE6",
+    "#C0663A"
+   ],
+   "prefix": "characters sculpted from shiny silver and copper metal wire, three-dimensional wire sculpture figures made of a few continuous bent strands with hollow see-through bodies and simple looped faces, catching small specular highlights and casting crisp shadows, placed inside a flat hand-drawn pencil sketch world on textured off-white paper with loose graphite hatching and construction lines, the solid metal figures clearly standing out from the drawn background, gentle warm light",
+   "avoid": "pencil-drawn people, solid filled bodies, skin, clothing, photorealistic people, heavy color, glossy plastic, words or letters"
+  },
+  {
+   "id": "pixel",
+   "name": "Pixel art",
+   "kind": "flat",
+   "mood": "Retro, cozy, nostalgic",
+   "best": "Gaming, nostalgia, lofi, fun facts, kids",
+   "palette": [
+    "#1F1B3A",
+    "#3F6EA8",
+    "#F3E7C9",
+    "#E9724C"
+   ],
+   "prefix": "detailed 16-bit pixel art scene, crisp square pixels with a limited harmonious palette, charming chunky characters with clear silhouettes, layered background with depth, soft dithered gradients in the sky, cozy retro video game atmosphere",
+   "avoid": "blurry or smooth rendering, photorealism, 3D render, user interface, health bars, copyrighted game characters, words or letters"
+  },
+  {
+   "id": "silhouette",
+   "name": "Shadow puppets",
+   "kind": "flat",
+   "mood": "Elegant, dramatic, timeless",
+   "best": "Folk tales, history, myths, bedtime stories",
+   "palette": [
+    "#0F0A08",
+    "#7A2E1E",
+    "#F6B256",
+    "#E0602B"
+   ],
+   "prefix": "shadow puppet theatre style, solid black silhouette characters and props with intricate cut-out details and visible articulated joints, backlit by a glowing warm screen fading from amber to deep red, layered silhouette scenery for depth, elegant storybook composition",
+   "avoid": "detailed faces, photorealism, full color characters, 3D render, signs, banners, lettering, words or letters"
+  },
+  {
+   "id": "cartoonexplain",
+   "name": "Ancient cartoon explainer",
+   "kind": "comic",
+   "mood": "Bold, funny, dramatic",
+   "best": "Ancient history, what-if stories, myths, fun facts",
+   "palette": [
+    "#2B2A28",
+    "#E4B15E",
+    "#2E9CC2",
+    "#F2E3C2"
+   ],
+   "prefix": "bold cartoon explainer illustration of the ancient world, like popular history and what-if animation channels: ancient Egyptian, Roman, Greek or Mesopotamian characters in period clothing, clean thick black ink outlines, flat bright colors with simple cel shading, slightly cartoonish faces with big readable emotions and exaggerated reactions, epic wide landscapes with deep perspective, warm sunny daylight, crisp digital comic finish",
+   "avoid": "photorealism, 3D render, muddy colors, speech bubbles, words or letters, copyrighted characters",
+   "subjects": [
+    "a pharaoh standing on a rocky desert cliff, staring in shock at something enormous in the distance",
+    "workers pulling a huge stone block on a wooden sledge toward pyramids under construction",
+    "a busy ancient marketplace with merchants selling spices, pottery and colorful fabric",
+    "an ancient Roman family sharing dinner together in their courtyard home"
+   ]
+  },
+  {
+   "id": "historypaint",
+   "name": "Ancient life illustration",
+   "kind": "soft",
+   "mood": "Grand, detailed, warm",
+   "best": "Ancient civilizations, daily life in history, how things were built",
+   "palette": [
+    "#5A4632",
+    "#C9A36B",
+    "#EADCC3",
+    "#8FA6B2"
+   ],
+   "prefix": "detailed digital illustration of daily life in an ancient civilization, wide busy scenes full of people working, building, trading and living, slightly stylized cartoon-like people with simple friendly faces and period-accurate clothing and tools, clean soft linework with painterly shading, warm hazy sunlight with long shadows, sandy earth-tone palette, like an illustrated children's history book",
+   "avoid": "modern objects, photorealistic photo look, glossy 3D render, harsh black outlines, words, labels or letters, signatures",
+   "subjects": [
+    "a pharaoh standing on a rocky desert cliff, staring in shock at something enormous in the distance",
+    "workers pulling a huge stone block on a wooden sledge toward pyramids under construction",
+    "a busy ancient marketplace with merchants selling spices, pottery and colorful fabric",
+    "an ancient Roman family sharing dinner together in their courtyard home"
+   ]
+  },
+  {
+   "id": "docarchive",
+   "name": "Archive documentary",
+   "kind": "soft",
+   "mood": "Authentic, serious, timeless",
+   "best": "Documentaries, true stories, biographies, how things began",
+   "palette": [
+    "#1F1B16",
+    "#6E6252",
+    "#D9CDB8",
+    "#A4442E"
+   ],
+   "prefix": "archival documentary still like a premium history documentary: an authentic vintage photograph or film frame, black-and-white or faded sepia with a subtle hand-tinted color, visible film grain, dust specks and fine scratches, slightly soft vintage lens, natural available light, real people caught mid-action, authentic period clothing, vehicles and buildings, journalistic composition with a clear subject",
+   "avoid": "cartoon, illustration, 3D render, modern objects, bright saturated colors, glossy digital look, words, captions or dates, borders",
+   "subjects": [
+    "construction workers eating lunch on a steel beam high above a 1930s city",
+    "a crowded harbor as an ocean liner departs and families wave from the dock",
+    "a scientist in a lab coat studying a glowing sample in a 1950s laboratory",
+    "a farming family standing outside their wooden house as a huge dust storm approaches"
+   ]
+  },
+  {
+   "id": "finance3d",
+   "name": "Finance 3D explainer",
+   "kind": "soft",
+   "mood": "Premium, clear, confident",
+   "best": "Money, investing, business, economics, side hustles",
+   "palette": [
+    "#0B1F33",
+    "#14735E",
+    "#E8EEF2",
+    "#E8B63A"
+   ],
+   "prefix": "premium 3D render for a finance explainer channel: glossy stylized 3D objects such as gold coins, stacks of cash, piggy banks, rising and falling chart arrows, houses and city towers, simple faceless stylized 3D characters in smart casual clothes, one clear idea per image on a clean deep navy to teal gradient background, soft studio lighting with crisp rim light and reflections, emerald green and gold accents, minimal uncluttered composition",
+   "avoid": "real brand logos, readable numbers or prices, words or letters, cluttered backgrounds, photoreal human faces, cartoon outlines, dull grey lighting",
+   "subjects": [
+    "a person standing on a growing tower of gold coins beside a big rising green chart arrow",
+    "a piggy bank cracking open with coins spilling across the floor",
+    "a small house on one side of a balance scale and a pile of cash on the other",
+    "a nervous investor watching a huge red arrow crash down through the floor"
+   ]
+  },
+  {
+   "id": "historyepic",
+   "name": "Epic history",
+   "kind": "soft",
+   "mood": "Grand, dramatic, cinematic",
+   "best": "History, wars, empires, legends, famous moments",
+   "palette": [
+    "#1C1A17",
+    "#6B5A45",
+    "#E2CFA8",
+    "#D9A441"
+   ],
+   "prefix": "epic historical painting with cinematic realism, like a modern history documentary reconstruction: dramatic chiaroscuro light with god rays through smoke and dust, rich painterly oil textures, accurate period costumes, armor, weapons and architecture, sweeping wide composition with a clear hero subject, muted earth tones with deep crimson and gold accents, sense of scale and drama",
+   "avoid": "modern objects, cartoon, anime, flat colors, bright cheerful palette, fantasy creatures, words, banners with letters, signatures",
+   "subjects": [
+    "a medieval army charging across a misty battlefield at dawn",
+    "a Roman emperor addressing a vast crowd from a marble palace balcony",
+    "Viking longships landing on a rocky shore under a stormy sky",
+    "a candlelit war council leaning over a map table in a stone castle hall"
+   ]
+  },
+  {
+   "id": "horror",
+   "name": "Dark horror",
+   "kind": "soft",
+   "mood": "Eerie, tense, unsettling",
+   "best": "Horror stories, creepy facts, mysteries, unsolved cases",
+   "palette": [
+    "#07090B",
+    "#1E2B2E",
+    "#9FB2AE",
+    "#B8322A"
+   ],
+   "prefix": "dark atmospheric horror scene with eerie cinematic realism: deep blacks, cold desaturated blue-green tones with one sickly warm accent light, heavy fog, harsh flashlight or moonlight beams and long shadows, unsettling empty space, subtle film grain and vignette, suspense rather than gore, a mysterious presence only half visible in the darkness",
+   "avoid": "gore, blood, visible wounds, cartoon, cute, bright colors, daylight, clear monster close-ups, words or letters",
+   "subjects": [
+    "a lone house at the end of a foggy road with one window lit",
+    "a flashlight beam revealing a long abandoned hospital corridor",
+    "a tall figure standing at the edge of a dark forest watching a campsite",
+    "an old porcelain doll sitting in a rocking chair in a dusty attic"
+   ]
+  },
+  {
+   "id": "motiongfx",
+   "name": "Motion graphics",
+   "kind": "flat",
+   "mood": "Bold, energetic, modern",
+   "best": "Explainers, tech, science, business, fast facts",
+   "palette": [
+    "#1B1446",
+    "#2F6BFF",
+    "#FFF4E0",
+    "#FF6B5A"
+   ],
+   "prefix": "bold flat motion-graphics frame in a modern 2D vector style like premium animated explainers: clean geometric shapes, thick rounded strokes, simple flat characters with expressive poses, strong color blocking in a vivid limited palette of electric blue, coral and sunny yellow on deep indigo, subtle long shadows and fine grain texture, dynamic diagonal composition with motion lines, floating shapes and sparkles",
+   "avoid": "photorealism, 3D render, gradients that look muddy, thin sketchy lines, cluttered details, words, letters or numbers",
+   "subjects": [
+    "a person launching a paper airplane that turns into a real rocket",
+    "a brain made of turning gears with bright ideas popping out",
+    "a delivery truck racing across a map along glowing route lines",
+    "a phone screen bursting into floating notification bubbles and app shapes"
+   ]
+  }
+ ]
 }
