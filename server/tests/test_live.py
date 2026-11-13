@@ -696,3 +696,28 @@ def test_thumbnail_of_the_same_type_and_captions_like_the_original(monkeypatch):
     ass = render.captions_ass([(0.0, 1.0, ["big", "news"])], "source", 720, 1280, look)
     assert "{\\c&H0000FF00}BIG{\\r} NEWS" in ass and ",5,60,60,0,1" in ass  # spoken word green, centred
     assert render.look_words(look) == 2
+
+
+def test_text_cards_are_spread_evenly(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    from app.live import spread_cards
+
+    # the writer likes cards only at the start and the end: they still land in every part of the video
+    picks = spread_cards(list(range(1, 41)), {2, 3, 4, 5, 6, 36, 37, 38, 39, 40}, 40, 0.3)
+    assert len(picks) == 12 and picks[0] > 1 and all(b - a > 1 for a, b in zip(picks, picks[1:]))
+    thirds = [sum(1 for n in picks if lo <= n < lo + 14) for lo in (1, 15, 29)]
+    assert min(thirds) >= 3, thirds  # beginning, middle and end each get their share
+    assert max(b - a for a, b in zip(picks, picks[1:])) <= 6
+
+    async def fake_write(writer_id, progress, prompt):
+        return {"scenes": [{"n": n, "visual": "v", "text": "t", "key": False, "card": n <= 4 or n >= 27,
+                            "card_text": "big *idea*", "card_emoji": "💡", "card_layout": "big"} for n in range(1, 31)]}, 0.01, "Claude", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    r = _run_job(TestClient(app), "/api/live/scene-visuals", {"writer": "claude-opus-5-5", "cards_share": 0.3, "total": 30,
+                                                             "scenes": [{"n": n, "text": f"line {n}"} for n in range(1, 31)]})["result"]
+    cards = sorted(int(k) for k, v in r["scenes"].items() if v["card"])
+    assert len(cards) == 9 and any(10 <= n <= 20 for n in cards) and 1 not in cards
+    assert all("liked" not in v for v in r["scenes"].values())

@@ -684,6 +684,31 @@ const hasMusic = p => LIVE ? !!liveTrack(p) : p.audio.music_path !== 'none';
 // A mood that usually fits the video, from its script type and look.
 const suggestMood = p => { const t = p.script_type || 'story'; const st = styleById(p.style); if (/ancient|histor/i.test(st.name)) return 'Ancient / world'; return { narration: 'Mystery', explainer: 'Upbeat', documentary: 'Cinematic', list: 'Upbeat', pov: 'Cinematic', motivational: 'Inspiring', story: /comedy|funny|kids/i.test(st.best) ? 'Funny' : 'Cinematic' }[t] || 'Calm'; };
 // Text cards: scenes drawn for free as designed words in the template's colours and font.
+// Text cards spaced evenly from the first scene to the last (same rule as the server): the video is cut into equal
+// stretches with one card each, on the scene nearest the middle that suits it (already a card, then no image yet).
+// Scenes the creator set by hand stay as they are. Returns the scene numbers that should be cards.
+function spreadCardNums(p) {
+  const n = p.scenes.length; const want = Math.round(cardsShare(p) * n); if (!want) return [];
+  const fixed = new Set(p.scenes.map((sc, i) => sc.kind_user && isCard(sc) ? i + 1 : 0).filter(Boolean));
+  const free = p.scenes.map((sc, i) => !sc.kind_user && !sc.reuse_of && !p.scenes.some(x => x.reuse_of === sc.id) ? i + 1 : 0).filter(Boolean);
+  const gap = n / want; const taken = new Set(fixed); const out = [...fixed];
+  for (let i = 0; i < want; i++) {
+    const lo = 1 + i * gap, hi = 1 + (i + 1) * gap, mid = (lo + hi - 1) / 2;
+    if ([...fixed].some(e => e >= lo && e < hi)) continue;
+    const ok = free.filter(k => k >= lo - 0.5 && k < hi + 0.5 && k !== 1 && !taken.has(k) && !taken.has(k - 1) && !taken.has(k + 1));
+    if (!ok.length) continue;
+    const score = k => { const sc = p.scenes[k - 1]; return (isCard(sc) ? 0 : sc.image_versions.length ? 2 : 1) * 1000 + Math.abs(k - mid) * 10 + k / 1000; };
+    const best = ok.sort((a, b) => score(a) - score(b))[0]; taken.add(best); out.push(best);
+  }
+  return out.sort((a, b) => a - b);
+}
+function spreadCards(pid) {
+  const p = STATE.projects[pid]; const keep = new Set(spreadCardNums(p)); let toImage = 0;
+  updateP(pid, q => { q.scenes.forEach((sc, i) => { if (sc.kind_user || sc.reuse_of) return; const want = keep.has(i + 1);
+    if (want && !isCard(sc)) { sc.kind = 'card'; sc.card = sc.card && sc.card.text ? sc.card : fallbackCard(q, sc); sc.image_status = 'ready'; }
+    else if (!want && isCard(sc)) { sc.kind = 'image'; sc.image_status = sc.image_versions.length ? 'ready' : 'pending'; if (!sc.image_versions.length) toImage++; } }); });
+  toast('Text cards are now spread evenly: ' + keep.size + ' of ' + p.scenes.length + ' scenes.' + (toImage ? ' ' + toImage + ' scene' + (toImage === 1 ? '' : 's') + ' changed back to images and need' + (toImage === 1 ? 's' : '') + ' an image: use Generate.' : ''));
+}
 const cardsShare = p => (p.format && p.format.cards != null ? p.format.cards : 0.3);
 const isCard = sc => sc && sc.kind === 'card';
 // A card carries only its 1 to 3 most important words (stars mark the highlighted word).
@@ -1747,7 +1772,7 @@ const api = {
     const nOf = sc => p0.scenes.findIndex(x => x.id === sc.id) + 1;
     let res = {}, cost = 0;
     if (LIVE) {
-      const r = await liveJob(pid, 'Picturing the scenes', 'scene-visuals', { cards_share: cardsShare(p0), writer: wr.id, story: p0.script.story, scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc) })), style_name: st.name, idea: ideaOf(p0), words_max: wordLimit(ideaOf(p0)),
+      const r = await liveJob(pid, 'Picturing the scenes', 'scene-visuals', { cards_share: cardsShare(p0), total: p0.scenes.length, card_scenes: p0.scenes.map((sc, i) => isCard(sc) && !list.includes(sc) ? i + 1 : 0).filter(Boolean), writer: wr.id, story: p0.script.story, scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc) })), style_name: st.name, idea: ideaOf(p0), words_max: wordLimit(ideaOf(p0)),
         characters: p0.video_type === 'character' ? p0.characters.map(c => ({ name: c.name, description: c.description })) : [] }, [wr.name + ' is picturing each scene']);
       res = r.scenes || {}; cost = r.cost || 0; if (r.warning) toast(r.warning);
     } else {
@@ -2906,7 +2931,8 @@ function ScenesScreen({ p, s }) {
     </section>`}
     <section className="panel row words-bar" style=${{ paddingBlock: 10 }}>
       <span className="note"><strong style=${{ color: 'var(--ink)' }}>Text cards</strong></span><${Seg} label="Text cards" value=${cardsShare(p)} onChange=${v => updateP(p.id, q => { q.format.cards = v; })} options=${[{ value: 0, label: 'None' }, { value: 0.2, label: '20%' }, { value: 0.3, label: '30%' }, { value: 0.4, label: '40%' }]} />
-      <span className="note">${cardsShare(p) ? 'About ' + Math.round(cardsShare(p) * 100) + '% of scenes become free text cards in the template\u2019s colours (key points, numbers, questions). ' + (nCards ? nCards + ' now. ' : '') + 'Applies when image ideas are written; switch any scene in its Edit panel.' : 'Every scene gets an image.'}</span>
+      <span className="note">${cardsShare(p) ? 'About ' + Math.round(cardsShare(p) * 100) + '% of scenes become free text cards in the template\u2019s colours (key points, numbers, questions). ' + (nCards ? nCards + ' now. ' : '') + 'Spread evenly over the whole video; switch any scene in its Edit panel.' : 'Every scene gets an image.'}</span>
+      ${cardsShare(p) && nCards ? html`<button type="button" className="btn sm" onClick=${() => spreadCards(p.id)} title="Re-spaces the text cards evenly from the first scene to the last. Free.">Spread evenly<span className="tag">free</span></button>` : null}
     </section>
     <section className="panel row words-bar" style=${{ paddingBlock: 10 }}>
       <span className="note"><strong style=${{ color: 'var(--ink)' }}>Words on images</strong></span><${Seg} label="Words on images" value=${wordsMode(p)} onChange=${v => updateP(p.id, q => { q.format.image_text = v; })} options=${[{ value: 'off', label: 'None' }, { value: 'some', label: 'Key scenes' }, { value: 'all', label: 'Every scene' }]} />

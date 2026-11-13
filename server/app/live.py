@@ -550,6 +550,36 @@ class SceneVisualsBody(BaseModel):
     characters: list[dict] = []
     words_max: int = 3          # most words to print on an image (an idea like "one or two words" sets 2)
     cards_share: float = 0.0    # share of scenes to make free text cards (0.3 = about 30%)
+    total: int = 0              # scenes in the whole video (these may be only some of them)
+    card_scenes: list[int] = [] # scenes outside this list that are already text cards
+
+
+def spread_cards(avail: list[int], liked: set[int], total: int, share: float, existing: set[int] | None = None) -> list[int]:
+    """Text cards spaced evenly from the start of the video to the end: the video is cut into equal stretches, one card
+    per stretch, on the scene nearest the middle of it that suits a card best (the writer's picks first). Never scene 1,
+    never two cards in a row, and stretches that already hold a card are left as they are."""
+    existing = set(existing or ())
+    total = max(total, max(avail or [0]), 1)
+    want = round(share * total)
+    if want <= 0 or not avail:
+        return []
+    gap = total / want
+    taken = set(existing)
+    picked: list[int] = []
+    pool = set(avail)
+    for i in range(want):
+        lo, hi = 1 + i * gap, 1 + (i + 1) * gap  # this stretch: [lo, hi)
+        mid = (lo + hi - 1) / 2
+        if any(lo <= e < hi for e in existing):
+            continue
+        ok = [n for n in pool if lo - 0.5 <= n < hi + 0.5 and n != 1 and n - 1 not in taken and n + 1 not in taken]
+        if not ok:
+            continue
+        best = min(ok, key=lambda n: (n not in liked, abs(n - mid), n))
+        picked.append(best)
+        taken.add(best)
+        pool.discard(best)
+    return sorted(picked)
 
 
 def _no_words(visual: str) -> str:
@@ -584,10 +614,11 @@ async def scene_visuals(body: SceneVisualsBody):
                 "focal point, no collage, no split screen, never app icons, buttons or logos. Do not put any words, signs, labels "
                 "or captions in the visual itself. Separately, give " + ("1 word" if body.words_max <= 1 else f"1 to {min(3, body.words_max)} words") + " that sum up "
                 "the scene's message, and mark about one scene in three as key (where printed words would help most).\n"
-                + (f"Also mark about {round(body.cards_share * 100)}% of the scenes as TEXT CARDS: scenes whose message lands best as bold "
-                   "words on a plain background (a key point, a number, a question, a strong statement, a turning point). Never the "
-                   "first scene, never two text cards in a row, and keep scenes with people, places or actions as images. For a "
-                   "card give card_text (1 to 3 words only: the most important words of that scene, nothing else; wrap the one "
+                + (f"About {round(body.cards_share * 100)}% of the scenes will become TEXT CARDS (bold words on a plain background), "
+                   "spread evenly from the start of the video to the end. Mark card: true on the scenes whose message lands best "
+                   "that way (a key point, a number, a question, a strong statement, a turning point), in every part of the story, "
+                   "beginning, middle and end alike; keep scenes with people, places or actions as images. For EVERY scene "
+                   "(so any can become a card) give card_text (1 to 3 words only: the most important words of that scene, nothing else; wrap the one "
                    "word to highlight in *stars*), card_emoji (exactly one emoji that fits the scene), card_small (only for a "
                    "countdown: 'Number 3'; otherwise empty) and card_layout: big, number (for a countdown or a numbered point) "
                    "or question (if it asks something).\n" if body.cards_share > 0 else "")
@@ -602,27 +633,26 @@ async def scene_visuals(body: SceneVisualsBody):
             for item in data.get("scenes") or []:
                 if isinstance(item, dict) and item.get("visual"):
                     card = None
-                    if body.cards_share > 0 and item.get("card") and str(item.get("card_text", "")).strip():
+                    if body.cards_share > 0 and str(item.get("card_text", "")).strip():
                         from .cards import first_emoji
                         card = {"text": " ".join(str(item["card_text"]).replace('"', "").split()[:3])[:40],
                                 "emoji": first_emoji(str(item.get("card_emoji") or "")),
                                 "small": str(item.get("card_small") or "")[:24],
                                 "layout": item.get("card_layout") if item.get("card_layout") in ("big", "number", "question", "quote") else "big"}
                     out[str(item.get("n"))] = {"card": card, "visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).replace('"', "").replace("*", "").split()[:max(1, min(3, body.words_max))])[:40],
-                                               "key": bool(item.get("key"))}
+                                               "key": bool(item.get("key")), "liked": bool(item.get("card"))}
         if not out:
             raise ProviderError(f"{wn} returned no image ideas. Try again.")
-        # keep cards where they belong: not the first scene, never two in a row, about the share asked for
+        # text cards spread evenly over the whole video (not bunched where the writer happened to mark them)
         if body.cards_share > 0:
-            nums = sorted(int(k) for k in out if k.isdigit())
-            cap = max(1, round(body.cards_share * len(scenes) + 0.5))
-            used, prev = 0, None
-            for n in nums:
-                item = out[str(n)]
-                if item.get("card") and (n == 1 or prev == n - 1 or used >= cap):
+            avail = sorted(int(k) for k in out if k.isdigit() and out[k].get("card"))
+            keep = set(spread_cards(avail, {n for n in avail if out[str(n)].get("liked")}, body.total or len(scenes),
+                                    body.cards_share, set(body.card_scenes)))
+            for k, item in out.items():
+                if not (k.isdigit() and int(k) in keep):
                     item["card"] = None
-                if item.get("card"):
-                    used, prev = used + 1, n
+        for item in out.values():
+            item.pop("liked", None)
         return {"scenes": out, "written_by": wn, "cost": round(cost, 4), "warning": warn}
 
     return _job("Picturing the scenes", work)
