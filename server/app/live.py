@@ -735,6 +735,7 @@ class ImageBody(BaseModel):
     aspect: str = "9:16"
     model: str = "nano-banana-2"
     refs: list[str] = []  # style references: /media/... URLs or data: URLs (custom templates, the locked first scene)
+    base: bool = False    # the first ref is a picture to rework (a scene image the creator picked), not only a style guide
 
 
 def load_ref(ref: str) -> tuple[bytes, str]:
@@ -777,9 +778,10 @@ async def image(body: ImageBody):
         raise HTTPException(422, "Unsupported frame.")
     try:
         if fal.is_fal(body.model):  # FLUX schnell and dev read text only; FLUX Kontext gets the first style reference
-            ref = load_ref(kontext_ref(body.refs[0])) if body.model == "flux-kontext" and body.refs else None
+            first = body.refs[0] if body.base else kontext_ref(body.refs[0]) if body.refs else ""
+            ref = load_ref(first) if body.model == "flux-kontext" and body.refs else None
             refs = [load_ref(r) for r in body.refs[:4] if r] if body.model == "seedream" else None
-            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, ref, refs)
+            path, cost = await fal.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, ref, refs, body.base)
         else:
             refs = [load_ref(r) for r in body.refs[:4] if r]
             path, cost = await google.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, refs)
@@ -899,6 +901,9 @@ class KitBody(BaseModel):
     tags: list[str] = []
     source: dict = {}    # the analyzed video: title, channel, tags, description, summary, hook, why it worked
     thumb: str = ""      # the analyzed video's thumbnail picture, to make thumbnails of the same type
+    caption_note: str = ""   # the creator's direction for the post captions and descriptions
+    thumb_note: str = ""     # the creator's direction for the thumbnails
+    thumb_scenes: list[dict] = []  # scene pictures the creator wants thumbnails made from: [{"n": 4, "description": "..."}]
 
 
 @router.post("/publish-kit")
@@ -916,6 +921,15 @@ async def publish_kit(body: KitBody):
             "but with this video's own subject and moment and new words, so it looks like a sibling of the original, never a "
             "copy. Use formula \"Like the original\" for the first one, and for the other two the closest proven formulas. "
             f"Put the words where the original has them (place \"{look.get('place', 'top')}\").\n" if look else "")
+        mine = ""
+        if body.caption_note.strip():
+            mine += f"THE CREATOR'S DIRECTION FOR POST CAPTIONS AND DESCRIPTIONS (follow it exactly, it overrides other style hints): {body.caption_note.strip()[:800]}\n"
+        if body.thumb_note.strip():
+            mine += f"THE CREATOR'S DIRECTION FOR THUMBNAILS (follow it exactly, it overrides other hints): {body.thumb_note.strip()[:800]}\n"
+        if body.thumb_scenes:
+            mine += ("The creator picked these scene pictures to build the thumbnails from; each thumbnail reworks one of them "
+                     "(the same characters and setting, recomposed and pushed to its most dramatic), set \"scene\" to its n: "
+                     f"{json.dumps([{'n': s.get('n'), 'picture': str(s.get('description', ''))[:300]} for s in body.thumb_scenes[:3]])}\n")
         data, cost, wn, warning = await write_json(body.writer, progress, (
             f"A creator finished this video. Its story:\n---\n{body.story[:12000]}\n---\n"
             f"Angle: {json.dumps({k: body.angle.get(k) for k in ('title', 'pitch', 'reason', 'keeps', 'changes')})}. "
@@ -928,7 +942,7 @@ async def publish_kit(body: KitBody):
                "POST CAPTIONS AND DESCRIPTIONS: write them in the same form as the original's description above: about the same "
                "length, the same structure (hook line, line breaks, lists, questions, calls to action), the same use of emoji and "
                "the same kind and number of hashtags, with this video's own content.\n" if body.source.get("title") else "")
-            + same_type
+            + same_type + mine
             + "Write options the creator can choose from. Everything must honestly describe this video. Return "
             '{"titles": [4 different titles under 70 characters],'
             ' "captions": [3 different post captions/descriptions, each 2-4 sentences that hook, summarize and invite a comment, '
@@ -943,7 +957,8 @@ async def publish_kit(body: KitBody):
             '"text": "2-4 words of SUSPENSE in capitals that open a question the picture does not answer (an unfinished claim, a '
             'warning, a stake, a number, a twist); never repeat the title, never give away the ending; put *stars* around the '
             'one word to colour, e.g. \'IT WAS *ALIVE*\', \'DON\'T OPEN *IT*\', \'*3* DAYS LEFT\'", '
-            '"place": "where the words go so they never cover the face: top, bottom, left or right"}],'
+            '"place": "where the words go so they never cover the face: top, bottom, left or right", '
+            '"scene": "the n of the picked scene picture it reworks, or null when none were picked"}],'
             ' "tags": [8 search tags]}'))
         if isinstance(data, list):
             data = data[0] if data and isinstance(data[0], dict) else {}
@@ -952,7 +967,9 @@ async def publish_kit(body: KitBody):
                 "descriptions": [str(c) for c in (data.get("descriptions") or [])][:3],
                 "thumbnails": [{"concept": str(t["concept"]), "text": str(t.get("text", ""))[:48], "formula": str(t.get("formula", ""))[:40],
                                 "emotion": str(t.get("emotion", ""))[:60], "focus": str(t.get("focus", ""))[:120],
-                                "place": t.get("place") if t.get("place") in thumbs_mod.PLACES else "top"} for t in thumbs],
+                                "place": t.get("place") if t.get("place") in thumbs_mod.PLACES else "top",
+                                "scene": t.get("scene") if isinstance(t.get("scene"), int) and any(s.get("n") == t.get("scene") for s in body.thumb_scenes) else None}
+                               for t in thumbs],
                 "tags": [str(t) for t in (data.get("tags") or [])][:10], "written_by": wn, "cost": round(cost + look_cost, 4), "warning": warning,
                 "source_thumb": {"look": look, "ref": look_ref} if look else None}
 

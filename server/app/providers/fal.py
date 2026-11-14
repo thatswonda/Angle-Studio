@@ -30,6 +30,10 @@ KONTEXT_NOTE = ("Create a completely new image in exactly the same visual style 
                 "rendering, colours, background and texture. Only the style carries over: draw brand-new characters who do not "
                 "look like anyone in the reference (different hair, face and clothes), and do not keep its objects, text, setting "
                 "or layout. ")
+# When the creator starts from one of their own scene pictures: rework that picture, keep who and what is in it.
+BASE_NOTE = ("The first image is the picture to rework: keep its characters, their look, the setting and the drawing style, "
+             "and recompose it as asked below. Any other images are style references only. ")
+BASE_KONTEXT_NOTE = "Rework this picture as asked: keep its characters, their look, the setting and the drawing style. "
 SIZES = {"9:16": (1024, 1824), "16:9": (1824, 1024), "1:1": (1360, 1360), "4:5": (1216, 1520)}
 PRESETS = {"9:16": "portrait_16_9", "16:9": "landscape_16_9", "1:1": "square_hd", "4:5": "portrait_4_3"}
 
@@ -72,7 +76,7 @@ def _data_url(ref: tuple[bytes, str]) -> str:
 
 
 async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tuple[bytes, str] | None = None,
-               refs: list[tuple[bytes, str]] | None = None) -> tuple[Path, float]:
+               refs: list[tuple[bytes, str]] | None = None, base: bool = False) -> tuple[Path, float]:
     key = os.getenv("FAL_KEY", "")
     if not key:
         raise ProviderError("FLUX needs a fal API key. Add FAL_KEY to the server's environment (on Render: Environment > Add variable).")
@@ -82,7 +86,7 @@ async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tup
         refs = refs or ([ref] if ref else [])
         if not refs:
             raise ProviderError("Seedream needs a template with example pictures. Pick a built-in template, or another image model.")
-        body = {"prompt": (SEEDREAM_NOTE + flux_prompt(prompt))[:3500], "image_urls": [_data_url(r) for r in refs[:4]],
+        body = {"prompt": ((BASE_NOTE if base else SEEDREAM_NOTE) + flux_prompt(prompt))[:3500], "image_urls": [_data_url(r) for r in refs[:4]],
                 "image_size": {"width": w, "height": h}, "num_images": 1, "enable_safety_checker": True, "sync_mode": True}
     elif model_id == "qwen-image":
         qw, qh = QWEN_SIZES.get(aspect, QWEN_SIZES["9:16"])
@@ -92,7 +96,7 @@ async def draw(prompt: str, aspect: str, model_id: str, out_stem: Path, ref: tup
         if not ref:
             raise ProviderError("FLUX Kontext needs a template with example pictures. Pick a built-in template, or use FLUX dev.")
         data, mime = ref
-        body = {"prompt": (KONTEXT_NOTE + flux_prompt(prompt))[:3500], "image_url": f"data:{mime};base64,{base64.b64encode(data).decode()}",
+        body = {"prompt": ((BASE_KONTEXT_NOTE if base else KONTEXT_NOTE) + flux_prompt(prompt))[:3500], "image_url": f"data:{mime};base64,{base64.b64encode(data).decode()}",
                 "aspect_ratio": aspect if aspect in ("9:16", "16:9", "1:1", "4:5") else "9:16", "num_images": 1,
                 "enable_safety_checker": True, "sync_mode": True, "output_format": "jpeg", **extra}
     else:

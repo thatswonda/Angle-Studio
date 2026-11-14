@@ -1602,8 +1602,10 @@ const api = {
     try {
       let kit;
       if (LIVE) {
-        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [], source: sourceBrief(p0), thumb: p0.source && !p0.source.own ? p0.source.thumb || '' : '' }, ['Reading the original thumbnail', 'Writing titles, captions, descriptions and thumbnail ideas from your story']);
-        kit = { source_thumb: r.source_thumb || null, titles: r.titles, captions: r.captions, descriptions: r.descriptions || [], tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map(t => ({ ...t, status: 'pending' })), cost: r.cost };
+        const r = await liveJob(pid, 'Writing the publish kit', 'publish-kit', { writer: wr.id, story: p0.script.story, angle: a, source_title: p0.source.title, tags: a.tags || [], source: sourceBrief(p0), thumb: p0.source && !p0.source.own ? p0.source.thumb || '' : '', caption_note: kitDir(p0).caption, thumb_note: kitDir(p0).thumb,
+          thumb_scenes: scenePics(p0).filter(x => kitDir(p0).scenes.includes(x.id)).map(x => ({ n: x.n, description: x.description })) }, ['Reading the original thumbnail', 'Writing titles, captions, descriptions and thumbnail ideas from your story']);
+        kit = { source_thumb: r.source_thumb || null, titles: r.titles, captions: r.captions, descriptions: r.descriptions || [], tags: r.tags.length ? r.tags : (a.tags || []), thumbnails: r.thumbnails.map((t, j) => { const picked = kitDir(p0).scenes; const byN = t.scene && p0.scenes[t.scene - 1];
+          return { ...t, scene: undefined, scene_id: byN && picked.includes(byN.id) ? byN.id : picked.length ? picked[j % picked.length] : null, status: 'pending' }; }), cost: r.cost };
         if (r.warning) toast(r.warning);
       } else {
         await runJob(pid, 'Writing the publish kit', ['Reading your story', 'Writing titles and captions', 'Sketching thumbnails'], 500);
@@ -1658,11 +1660,16 @@ const api = {
     const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i]; const st = projStyle(p0);
     updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; p.kit.thumbnails[i].error = null; });
     try {
-      const src = p0.kit.source_thumb; const prompt = thumbPrompt(st, t, src && src.look);
+      const src = p0.kit.source_thumb; const pic = t.scene_id && scenePics(p0).find(x => x.id === t.scene_id);
+      const notes = [kitDir(p0).thumb, t.note].map(x => (x || '').trim()).filter(Boolean);
+      let prompt = thumbPrompt(st, t, src && src.look);
+      if (pic) prompt = 'The FIRST reference image is this video\u2019s own scene ' + pic.n + ': rework it into the thumbnail. Keep its characters, their faces and clothes, the setting and the drawing style; recompose, reframe and push it to its most dramatic moment as described. ' + prompt;
+      if (notes.length) prompt += ' The creator wants (follow exactly): ' + notes.join('. ').replace(/[.\s]+$/, '') + '.';
       const anchor = lookAnchor(p0, null);
-      // the original thumbnail goes last, for its layout only (the template's pictures set the drawing style)
-      const refs = templateRefs(st).slice(0, 2).concat(src && src.ref ? [src.ref] : []).concat(anchor ? [anchor] : []).slice(0, 4);
-      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model: p0.models.image, refs });
+      // a picked scene picture goes first (to rework); the template's pictures set the drawing style; the original thumbnail, last, gives the layout
+      const refs = (pic ? [pic.src] : []).concat(templateRefs(st).slice(0, 2)).concat(src && src.ref ? [src.ref] : []).concat(!pic && anchor ? [anchor] : []).slice(0, 4);
+      const model = pic && isTextOnly(p0.models.image) ? 'nano-banana-2' : p0.models.image;  // models that read text only cannot start from a picture
+      const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model, refs, base: !!pic });
       updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { raw: r.url }); addCost(p, r.cost || 0); });
       await api.thumbText(pid, i);
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
@@ -1686,6 +1693,14 @@ const api = {
     update(x => { x.customStyles = (x.customStyles || []).concat({ id, name: r.name, kind: 'soft', mood: r.mood, best: 'Your own channel look', prefix: r.prefix, avoid: r.avoid, palette: r.palette, refs: images.slice(0, 3), custom: true, at: Date.now() }); });
     if (pid && r.cost) updateP(pid, q => { addCost(q, r.cost); });
     return { id, name: r.name };
+  },
+  // Rewrites only one part of the kit (here: the post captions and descriptions); the rest stays as it is.
+  async rewriteKit(pid, part) {
+    const old = clone(STATE.projects[pid].kit);
+    await api.publishKit(pid);
+    const k = STATE.projects[pid].kit;
+    if (k && k.captions && !k.error) updateP(pid, p => { p.kit = { ...old, captions: k.captions, descriptions: k.descriptions, sel: { ...old.sel, caption: 0, desc: 0 } }; });
+    else updateP(pid, p => { p.kit = old; });
   },
   // New thumbnail ideas only; titles, captions and descriptions stay as they are.
   async rewriteThumbs(pid) {
@@ -3242,6 +3257,48 @@ function CopyBtn({ text }) {
 function Choice({ on, onClick, children }) {
   return html`<button type="button" className="hookopt" aria-pressed=${on} onClick=${onClick}><span className="radio"></span><span style=${{ whiteSpace: 'pre-wrap', minWidth: 0 }}>${children}</span></button>`;
 }
+// Scene pictures that can be picked for a thumbnail (scenes with their own image).
+const scenePics = p => p.scenes.map((sc, i) => { const v = !isCard(sc) && sceneVersion(p, sc); const src = v && (v.url || v.upload); return src ? { id: sc.id, n: i + 1, src, description: sc.description || sceneText(p, sc) } : null; }).filter(Boolean);
+const kitDir = p => ({ caption: '', thumb: '', scenes: [], ...(p.kit_dir || {}) });
+// Small grid of this video's scene pictures to pick from (max: how many can be picked).
+function ScenePicker({ p, value, onChange, max }) {
+  const pics = scenePics(p);
+  if (!pics.length) return html`<p className="note" style=${{ margin: 0 }}>No scene pictures yet. Make the scene images first.</p>`;
+  const toggle = id => onChange(value.includes(id) ? value.filter(x => x !== id) : max === 1 ? [id] : value.length >= max ? value : value.concat(id));
+  return html`<div className="pickgrid" style=${{ maxHeight: 220, gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>${pics.map(x => { const k = value.indexOf(x.id); return html`<button key=${x.id} type="button" aria-pressed=${k >= 0} title=${'Scene ' + x.n} aria-label=${'Scene ' + x.n} onClick=${e => { e.stopPropagation(); toggle(x.id); }}><img src=${x.src} alt="" loading="lazy" />${k >= 0 ? html`<span className="pnum">${x.n}</span>` : null}</button>`; })}</div>`;
+}
+// The creator's own direction for the post captions and thumbnails, used whenever they are written or drawn.
+function KitDirection({ p, written }) {
+  const d = kitDir(p); const set = (k, v) => updateP(p.id, q => { q.kit_dir = { ...kitDir(q), [k]: v }; });
+  const [busy, setBusy] = useState('');
+  const run = async (what, fn) => { setBusy(what); try { await fn(); } finally { setBusy(''); } };
+  return html`<section className="panel stack">
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Your direction</h2><span className="note">Optional. Followed every time captions and thumbnails are written or drawn.</span></div>
+    <label className="field" htmlFor="kit-cap-note">How should the post captions and descriptions be?
+      <textarea id="kit-cap-note" className="input" rows="2" placeholder="e.g. Short and mysterious, start with a question, 2 emojis, end with \u201cFollow for part 2\u201d, 3 hashtags" value=${d.caption} onInput=${e => set('caption', e.target.value)}></textarea></label>
+    <label className="field" htmlFor="kit-thumb-note">How should the thumbnail be?
+      <textarea id="kit-thumb-note" className="input" rows="2" placeholder="e.g. Close-up of the main character\u2019s shocked face on the right, the glowing box on the left, red arrow, dark background" value=${d.thumb} onInput=${e => set('thumb', e.target.value)}></textarea></label>
+    <div className="stack" style=${{ gap: 6 }}><span className="note">Make the thumbnails from these scene pictures (up to 3). Their characters and setting are kept and reworked into a thumbnail.</span>
+      <${ScenePicker} p=${p} value=${d.scenes} onChange=${v => set('scenes', v)} max=${3} /></div>
+    ${written && LIVE ? html`<div className="row">
+      <button type="button" className="btn sm" disabled=${!!busy} onClick=${() => run('cap', () => api.rewriteKit(p.id, 'captions'))}>${busy === 'cap' ? html`<span className="spinner"></span>` : html`<${Icon} n="redo" />`}Rewrite captions and descriptions</button>
+      <button type="button" className="btn sm" disabled=${!!busy} onClick=${() => run('th', () => api.rewriteThumbs(p.id))}>${busy === 'th' ? html`<span className="spinner"></span>` : html`<${Icon} n="redo" />`}New thumbnail ideas</button>
+      <span className="note">Uses your direction; the rest stays as it is.</span></div>` : null}
+  </section>`;
+}
+// One thumbnail's own change: pick a scene picture to start from and say what to change, then redraw it.
+function ThumbChange({ p, t, i }) {
+  const [open, setOpen] = useState(false); const [note, setNote] = useState(t.note || ''); const [sid, setSid] = useState(t.scene_id ? [t.scene_id] : []);
+  if (!open) return html`<button type="button" className="btn sm ghost" onClick=${e => { e.stopPropagation(); setOpen(true); }}><${Icon} n="edit" />Change it</button>`;
+  return html`<div className="stack" style=${{ gap: 6, width: '100%' }} onClick=${e => e.stopPropagation()} onKeyDown=${e => e.stopPropagation()}>
+    <span className="note">Start from a scene picture (optional):</span>
+    <${ScenePicker} p=${p} value=${sid} onChange=${setSid} max=${1} />
+    <textarea className="input" rows="2" aria-label="How you want this thumbnail" placeholder="How you want it, e.g. zoom in on her face, make the sky red, add a red circle on the key" value=${note} onInput=${e => setNote(e.target.value)}></textarea>
+    <div className="row" style=${{ gap: 4 }}>
+      <button type="button" className="btn sm primary" disabled=${t.status === 'generating' || (!note.trim() && !sid.length)} onClick=${() => { updateP(p.id, q => { Object.assign(q.kit.thumbnails[i], { note: note.trim(), scene_id: sid[0] || null }); }); setOpen(false); api.makeThumb(p.id, i); }}>Redraw with this<span className="tag">${fmt$(modelOf(p, 'image').cost)}</span></button>
+      <button type="button" className="btn sm ghost" onClick=${() => setOpen(false)}>Cancel</button></div>
+  </div>`;
+}
 // The words on a thumbnail: edit them, *star* the word to colour yellow; redrawn on the same picture for free.
 function ThumbWords({ t, onSave }) {
   const [v, setV] = useState(t.text); useEffect(() => setV(t.text), [t.text]);
@@ -3258,13 +3315,15 @@ function PublishKit({ p }) {
     <h2>Titles, captions, descriptions and thumbnails</h2>
     <p className="note">Written from your story${p.source && !p.source.own ? ' and matched to \u201c' + p.source.title + '\u201d (its keywords, title style and thumbnail look), so the two get recommended together' : ''}: four titles, three post captions with hashtags, three video descriptions and three thumbnail ideas. You then draw only the thumbnails you want.</p>
     ${k && k.error ? html`<div className="warnbox">${k.error}</div>` : null}
+    <${KitDirection} p=${p} written=${false} />
     <div><${CostGate} p=${p} label="Write options" cost=${modelOf(p, 'writer').perVideo * 0.2} rows=${[[modelOf(p, 'writer').name, 'titles, captions, descriptions and 3 thumbnail ideas'], ['Thumbnail images', 'made one at a time, only the ones you want']]} onGo=${() => api.publishKit(p.id)} /></div>
   </section>`;
   if (k.loading) return html`<section className="panel stack"><h2>Titles, captions, descriptions and thumbnails</h2><div className="row note"><span className="spinner"></span> Writing options from your story</div></section>`;
   const title = k.titles[k.sel.title] || ''; const cap = k.captions[k.sel.caption] || ''; const descs = k.descriptions || []; const desc = descs[k.sel.desc || 0] || ''; const tags = k.tags || [];
   return html`<${Fragment}>
+    <${KitDirection} p=${p} written=${true} />
     <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} ${k.source_thumb ? 'The same type of thumbnail as the original video (its layout, framing and words), in your video\u2019s style with ' + im.name : 'Each uses a different click formula, made in your video\u2019s style with ' + im.name}; the words are added sharp on top, and you can change them for free.</span>${LIVE ? html`<button type="button" className="btn sm" style=${{ marginLeft: 'auto' }} onClick=${() => api.rewriteThumbs(p.id)}><${Icon} n="redo" />New thumbnail ideas</button>` : null}</div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} ${k.source_thumb ? 'The same type of thumbnail as the original video (its layout, framing and words), in your video\u2019s style with ' + im.name : 'Each uses a different click formula, made in your video\u2019s style with ' + im.name}; the words are added sharp on top, and you can change them for free.</span></div>
       ${k.source_thumb && k.source_thumb.ref ? html`<div className="row" style=${{ gap: 10, alignItems: 'center' }}><img src=${k.source_thumb.ref} alt="The original video's thumbnail" style=${{ width: 132, borderRadius: 8, display: 'block' }} /><span className="note">Original thumbnail. Yours copy its layout${k.source_thumb.look && k.source_thumb.look.text ? ' and kind of words (\u201c' + k.source_thumb.look.text + '\u201d)' : ''}, with your own picture and words.</span></div>` : null}
       <div className="kthumbs">${k.thumbnails.map((t, i) => { const sc = t.scene != null && p.scenes[t.scene]; const v = sc && sceneVersion(p, sc); return html`<div key=${i} className="kthumb" role="radio" tabIndex="0" aria-pressed=${k.sel.thumb === i} aria-checked=${k.sel.thumb === i} onClick=${() => sel('thumb', i)} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel('thumb', i); } }}>
         <div className=${'frame' + frameCls(p)}>
@@ -3274,11 +3333,13 @@ function PublishKit({ p }) {
         </div>
         ${t.formula ? html`<span className="tag" style=${{ alignSelf: 'flex-start' }}>${t.formula.split(':')[0]}</span>` : null}
         <span className="note">${t.concept}</span>
+        ${t.scene_id && scenePics(p).find(x => x.id === t.scene_id) ? html`<span className="note">From scene ${scenePics(p).find(x => x.id === t.scene_id).n}${t.note ? ' \u00b7 \u201c' + t.note + '\u201d' : ''}</span>` : t.note ? html`<span className="note">\u201c${t.note}\u201d</span>` : null}
         ${LIVE ? html`<${ThumbWords} t=${t} onSave=${txt => api.thumbText(p.id, i, txt)} />` : html`<span className="note"><strong>${t.text.replace(/\*/g, '')}</strong></span>`}
         <div className="row" style=${{ gap: 4 }}>
           ${LIVE ? html`<button type="button" className=${'btn sm' + (t.url ? '' : ' primary')} disabled=${t.status === 'generating'} onClick=${e => { e.stopPropagation(); api.makeThumb(p.id, i); }}><${Icon} n=${t.url ? 'redo' : 'spark'} />${t.url ? 'Redo' : 'Make this thumbnail'}<span className="tag">${fmt$(im.cost)}</span></button>` : null}
           ${LIVE && t.url ? html`<a className="btn sm" href=${t.url} download=${'thumbnail-' + (i + 1) + '.jpg'} onClick=${e => e.stopPropagation()}><${Icon} n="download" />Download</a>` : null}
           ${t.raw ? html`<button type="button" className="btn sm ghost" onClick=${e => { e.stopPropagation(); setTplFrom(t.raw); }}><${Icon} n="spark" />Make a template</button>` : null}
+          ${LIVE ? html`<${ThumbChange} p=${p} t=${t} i=${i} />` : null}
         </div>
       </div>`; })}</div>
     </section>

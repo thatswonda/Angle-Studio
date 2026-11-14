@@ -733,3 +733,38 @@ def test_zoom_and_pan_strength_and_type():
     a, b = motion_filter(0, 90, {"type": "pan"}), motion_filter(1, 90, {"type": "pan"})
     assert "x='(iw-iw/zoom)*(" in a and a != b  # pans alternate direction
     assert "0.0750" in motion_filter(3, 90, {"strength": "dramatic"}, card=True)  # cards stay gentle
+
+
+def test_kit_follows_the_creators_direction_and_scene_pictures(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    from app.providers import fal
+    seen = []
+
+    async def fake_write(writer_id, progress, prompt):
+        seen.append(prompt)
+        return {"titles": ["A"], "captions": ["c"], "descriptions": ["d"], "tags": ["t"],
+                "thumbnails": [{"concept": "x", "text": "NO *WAY*", "scene": 4}, {"concept": "y", "text": "Y", "scene": 9}]}, 0.01, "Claude", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    c = TestClient(app)
+    r = _run_job(c, "/api/live/publish-kit", {"writer": "claude-opus-5-5", "story": "S.", "caption_note": "Start with a question, 2 emojis",
+                                               "thumb_note": "shocked face on the right", "thumb_scenes": [{"n": 4, "description": "a girl opens a box"}]})["result"]
+    assert "Start with a question, 2 emojis" in seen[0] and "shocked face on the right" in seen[0] and "a girl opens a box" in seen[0]
+    assert r["thumbnails"][0]["scene"] == 4 and r["thumbnails"][1]["scene"] is None  # only scenes the creator picked
+
+    # a picked scene picture is reworked (not only used for style)
+    sent = {}
+
+    async def fake_draw(prompt, aspect, model_id, out_stem, ref=None, refs=None, base=False):
+        sent.update(prompt=prompt, ref=ref, refs=refs, base=base)
+        out = out_stem.with_suffix(".jpg"); out.parent.mkdir(parents=True, exist_ok=True); out.write_bytes(b"x")
+        return out, 0.03
+
+    monkeypatch.setattr(fal, "draw", fake_draw)
+    from PIL import Image
+    pic = live.MEDIA / "images" / "scene4.jpg"; pic.parent.mkdir(parents=True, exist_ok=True); Image.new("RGB", (40, 40)).save(pic)
+    r = c.post("/api/live/image", json={"prompt": "p", "model": "flux-kontext", "refs": ["/media/images/scene4.jpg", "templates/stickman-1.jpg"], "base": True})
+    assert r.status_code == 200 and sent["base"] is True and sent["ref"][0] == pic.read_bytes()  # the scene itself, not the style swatch
+    assert fal.BASE_NOTE.startswith("The first image is the picture to rework")
