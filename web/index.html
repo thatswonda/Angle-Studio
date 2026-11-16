@@ -291,9 +291,15 @@ label.mrow { grid-template-columns: auto 1fr; cursor: pointer; }
 .zoom-img { height: min(82vh, 900px); aspect-ratio: 9 / 16; } .zoom-img.r16x9 { height: auto; width: min(62vw, 1100px); aspect-ratio: 16 / 9; } .zoom-img.r1x1 { aspect-ratio: 1; } .zoom-img.r4x5 { aspect-ratio: 4 / 5; }
 .zoom-img .frame { width: 100%; height: 100%; }
 .pickgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 46vh; overflow: auto; padding: 2px; }
-.pickgrid button { position: relative; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--sunk); cursor: pointer; aspect-ratio: 1; }
-.pickgrid button[aria-pressed="true"] { border-color: var(--accent); }
-.pickgrid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pickgrid .pk { position: relative; }
+.pickgrid .pksel { position: relative; width: 100%; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #101215; cursor: pointer; aspect-ratio: 1; display: block; }
+.pickgrid .pksel[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.pickgrid img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pickgrid .pzoom { position: absolute; left: 4px; bottom: 4px; width: 26px; height: 26px; padding: 0; border-radius: 999px; border: 0; background: rgba(0,0,0,0.62); color: #fff; display: grid; place-items: center; cursor: zoom-in; }
+.pickgrid .pzoom svg { width: 14px; height: 14px; }
+.lightbox { position: fixed; inset: 0; z-index: 120; background: rgba(5,7,10,0.9); display: grid; place-items: center; padding: 16px; cursor: zoom-out; }
+.lightbox img { max-width: min(96vw, 1400px); max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+.lightbox .lbcap { color: #fff; margin-top: 8px; text-align: center; font-size: 14px; }
 .pickgrid .pnum { position: absolute; top: 4px; right: 4px; background: var(--accent); color: #fff; border-radius: 999px; width: 20px; height: 20px; font-size: 12px; display: grid; place-items: center; font-weight: 700; }
 .tplbox { background: var(--surface); border-radius: var(--r); padding: 16px; width: min(720px, 100%); max-height: 100%; overflow: auto; }
 .zoom-nav { font-size: 28px; line-height: 1; padding: 6px 10px; }
@@ -1008,15 +1014,31 @@ const textImageModel = p => isTextOnly(p.models.image) ? 'nano-banana-2' : p.mod
 const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); return idea ? { ...st, prefix: (st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix) + '. Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') } : st; };
 // A thumbnail picture built on a click formula: one big subject with a strong emotion, a clear open area for the words
 // (drawn on afterwards, so the image model prints none), punchy contrast, and one red circle or arrow on the mystery.
-const thumbPrompt = (st, t, look) => st.prefix + '. A scroll-stopping video thumbnail' + (t.formula ? ' (' + t.formula + ')' : '') + ': ' + t.concept.replace(/[.\s]+$/, '')
+// How the words get on a thumbnail: designed into the picture by the image model (bold, placed where it grabs attention,
+// like YouTube thumbnails), or added on top afterwards (clean, free to change).
+const thumbTextMode = k => (k && k.text_mode) || 'design';
+// The model a thumbnail is drawn with: text-only models cannot start from a picture and FLUX spells poorly, so Nano Banana 2 does those.
+const thumbModel = (p, t) => { const pic = t && t.scene_id && scenePics(p).find(x => x.id === t.scene_id); const design = thumbTextMode(p.kit) === 'design';
+  return (pic || design) && (isTextOnly(p.models.image) || /^flux-(schnell|dev)$/.test(p.models.image)) ? 'nano-banana-2' : p.models.image; };
+const thumbCost = (p, t) => (MODELS.image.find(m => m.id === thumbModel(p, t)) || modelOf(p, 'image')).cost;
+// The words, designed as part of the thumbnail: huge bold letters placed wherever they catch the eye best.
+const thumbDesignWords = (t, look) => { const words = (t.text || '').replace(/\*/g, '').toUpperCase().trim(); const hi = ((t.text || '').match(/\*([^*]+)\*/) || [])[1];
+  if (!words) return ' Draw no words, letters, numbers or logos anywhere.';
+  return ' Design the thumbnail title INTO the image like a top YouTube thumbnail: the words "' + words + '", spelled exactly, and no other words, letters or numbers anywhere.'
+    + ' Huge, heavy, bold display letters (about a quarter to a third of the frame height), with a thick dark outline and a strong drop shadow or slight 3D depth so they pop off the picture'
+    + (hi ? '; the word "' + hi.toUpperCase() + '" in a vivid contrasting colour' + (look && look.highlight_color ? ' (' + look.highlight_color + ')' : ' such as bright yellow or red') + ' and a little bigger' : '')
+    + (look && look.text_color ? '; the other words in ' + look.text_color : '')
+    + '. Put the words wherever they grab attention best for this picture (in open space beside, above or below the main subject, they may be slightly tilted, sit on a bold colour band, or overlap the subject\u2019s edge), never covering the face or the key detail. Readable at phone size. No logos or watermarks.'; };
+const thumbPrompt = (st, t, look, design) => st.prefix + '. A scroll-stopping video thumbnail' + (t.formula ? ' (' + t.formula + ')' : '') + ': ' + t.concept.replace(/[.\s]+$/, '')
   + (look ? '. Build it the SAME WAY as the original video\u2019s thumbnail: ' + [look.layout, look.subject && 'subject: ' + look.subject, look.extras && 'extras: ' + look.extras, look.mood && 'mood: ' + look.mood].filter(Boolean).join('; ').replace(/[.\s]+$/, '')
     + '. The last reference image is that original thumbnail: copy only its layout, framing, subject size and composition; draw this video\u2019s own new characters and objects, never its people, words or logos' : '')
   + '. The main subject is large and close, filling about half the frame' + (t.emotion ? ', showing ' + t.emotion + ' clearly, eyes and expression easy to read' : '')
   + '. Freeze the moment of highest tension; do not show how it ends.'
   + (t.focus ? ' One bright red circle or thick red arrow points at ' + t.focus + '.' : '')
   + ' Bold, saturated colours with strong contrast between the subject and a simple, slightly darker background; a rim of light separates the subject.'
-  + ' Keep the ' + ({ top: 'top third', bottom: 'bottom third', left: 'left half', right: 'right half' }[t.place] || 'top third') + ' of the frame simple and free of important detail, for a title added later.'
-  + ' Draw no words, letters, numbers or logos anywhere. Still in the exact visual style described at the start.';
+  + (design ? thumbDesignWords(t, look)
+    : ' Keep the ' + ({ top: 'top third', bottom: 'bottom third', left: 'left half', right: 'right half' }[t.place] || 'top third') + ' of the frame simple and free of important detail, for a title added later. Draw no words, letters, numbers or logos anywhere.')
+  + ' Still in the exact visual style described at the start.';
 // The prompt every scene image is made from: the template's recipe, the scene, and what to keep out.
 // Words on images: off, on key scenes, or on every scene. A creator's idea that mentions words turns them on.
 const TEXT_IDEA = /\b(text|texts|word|words|label|labels|caption|captions|title|titles|written|writing|letters?|typography|headline|headlines)\b/i;
@@ -1662,22 +1684,25 @@ const api = {
     try {
       const src = p0.kit.source_thumb; const pic = t.scene_id && scenePics(p0).find(x => x.id === t.scene_id);
       const notes = [kitDir(p0).thumb, t.note].map(x => (x || '').trim()).filter(Boolean);
-      let prompt = thumbPrompt(st, t, src && src.look);
-      if (pic) prompt = 'The FIRST reference image is this video\u2019s own scene ' + pic.n + ': rework it into the thumbnail. Keep its characters, their faces and clothes, the setting and the drawing style; recompose, reframe and push it to its most dramatic moment as described. ' + prompt;
+      const design = thumbTextMode(p0.kit) === 'design';
+      let prompt = thumbPrompt(st, t, src && src.look, design);
+      if (pic) prompt = 'The FIRST reference image is this video\u2019s own scene ' + pic.n + '. Use it as the reference to design an eye-catching thumbnail for the video: keep its characters (faces, clothes), the setting and the drawing style, but do not just copy it: reframe it closer, push the emotion and the moment to their most dramatic, boost contrast and colour, and compose it the way top YouTube thumbnails are. ' + prompt;
       if (notes.length) prompt += ' The creator wants (follow exactly): ' + notes.join('. ').replace(/[.\s]+$/, '') + '.';
       const anchor = lookAnchor(p0, null);
       // a picked scene picture goes first (to rework); the template's pictures set the drawing style; the original thumbnail, last, gives the layout
       const refs = (pic ? [pic.src] : []).concat(templateRefs(st).slice(0, 2)).concat(src && src.ref ? [src.ref] : []).concat(!pic && anchor ? [anchor] : []).slice(0, 4);
-      const model = pic && isTextOnly(p0.models.image) ? 'nano-banana-2' : p0.models.image;  // models that read text only cannot start from a picture
+      // models that read text only cannot start from a picture, and FLUX models spell poorly: Nano Banana 2 designs those
+      const model = thumbModel(p0, t);
       const r = await post('image', { prompt, aspect: p0.format.aspect_ratio, model, refs, base: !!pic });
-      updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { raw: r.url }); addCost(p, r.cost || 0); });
-      await api.thumbText(pid, i);
+      if (design) updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { url: r.url, raw: null, design: true, status: 'ready', error: null }); addCost(p, r.cost || 0); });
+      else { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { raw: r.url, design: false }); addCost(p, r.cost || 0); }); await api.thumbText(pid, i); }
     } catch (e) { updateP(pid, p => { Object.assign(p.kit.thumbnails[i], { status: 'failed', error: e.message }); }); }
   },
   // The suspense words are drawn on the picture by the server (free), so they are spelled right and can be changed any time.
   async thumbText(pid, i, text) {
     const p0 = STATE.projects[pid]; const t = p0.kit.thumbnails[i];
     if (text != null) updateP(pid, p => { p.kit.thumbnails[i].text = text; });
+    if (t.design && text != null) return api.makeThumb(pid, i);  // the words are part of the picture: draw it again
     if (!t.raw) return;
     updateP(pid, p => { p.kit.thumbnails[i].status = 'generating'; });
     try {
@@ -2801,8 +2826,9 @@ function madeImages(p) {
 // Makes a new template from 1 to 3 images you made (built-in templates stay as they are). start: the image it was opened from.
 function MakeTemplate({ p, start, onClose }) {
   const all = madeImages(p); if (start && !all.some(x => x.src === start)) all.unshift({ src: start, label: 'This image' });
+  const [big, setBig] = useState(null);
   const [sel, setSel] = useState(start ? [start] : []); const [name, setName] = useState(''); const [busy, setBusy] = useState(false); const [made, setMade] = useState(null);
-  useEffect(() => { const k = e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }; document.addEventListener('keydown', k, true); return () => document.removeEventListener('keydown', k, true); });
+  useEffect(() => { const k = e => { if (e.key === 'Escape' && !big) { e.stopPropagation(); onClose(); } }; document.addEventListener('keydown', k, true); return () => document.removeEventListener('keydown', k, true); });
   const toggle = src => setSel(s => s.includes(src) ? s.filter(x => x !== src) : s.length >= 3 ? s : s.concat(src));
   const go = async () => { setBusy(true); try { const r = await api.templateFromImages(sel, name, p.id); setMade(r); toast('Template \u201c' + r.name + '\u201d saved. It is in Visual style for every video.'); } catch (e) { toast(e.message); } setBusy(false); };
   return html`<div className="zoom-back" style=${{ zIndex: 90 }} onClick=${e => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label="Make a template from your images">
@@ -2813,13 +2839,14 @@ function MakeTemplate({ p, start, onClose }) {
         <div className="row"><button type="button" className="btn primary" onClick=${() => { updateP(p.id, q => { q.style = made.id; }); toast('This video now uses \u201c' + made.name + '\u201d for new and redone images.'); onClose(); }}>Use it for this video</button><button type="button" className="btn" onClick=${onClose}>Done</button></div>
       </${Fragment}>` : html`<${Fragment}>
         <p className="note" style=${{ margin: 0 }}>Pick 1 to 3 images in the look you want. Two or three in the same look give the closest match. Only the style is copied, never the people or objects.</p>
-        ${all.length ? html`<div className="pickgrid">${all.map(x => { const n = sel.indexOf(x.src); return html`<button key=${x.src.slice(-60)} type="button" aria-pressed=${n >= 0} title=${x.label} aria-label=${x.label} onClick=${() => toggle(x.src)}><img src=${x.src} alt="" loading="lazy" />${n >= 0 ? html`<span className="pnum">${n + 1}</span>` : null}</button>`; })}</div>` : html`<p className="note">No images made yet. Make some scene images first, or upload your own.</p>`}
+        ${all.length ? html`<div className="pickgrid">${all.map(x => { const n = sel.indexOf(x.src); return html`<${PickTile} key=${x.src.slice(-60)} src=${x.src} label=${x.label} on=${n >= 0} num=${n + 1} onPick=${() => toggle(x.src)} onZoom=${() => setBig(x)} />`; })}</div>` : html`<p className="note">No images made yet. Make some scene images first, or upload your own.</p>`}
         <div className="row">
           <input className="input" style=${{ flex: 1, minWidth: 160 }} placeholder="Template name (optional)" value=${name} onInput=${e => setName(e.target.value)} aria-label="Template name" />
           <button type="button" className="btn primary" disabled=${!sel.length || busy} onClick=${go}>${busy ? html`<span className="spinner"></span> Reading the style` : 'Create template (' + sel.length + '/3)'}</button>
         </div>
       </${Fragment}>`}
     </div>
+    ${big ? html`<${Lightbox} src=${big.src} caption=${big.label} onClose=${() => setBig(null)} />` : null}
   </div>`;
 }
 function readImage(file) {
@@ -3257,15 +3284,27 @@ function CopyBtn({ text }) {
 function Choice({ on, onClick, children }) {
   return html`<button type="button" className="hookopt" aria-pressed=${on} onClick=${onClick}><span className="radio"></span><span style=${{ whiteSpace: 'pre-wrap', minWidth: 0 }}>${children}</span></button>`;
 }
+// A picture shown as large as the screen allows; click anywhere or press Esc to close.
+function Lightbox({ src, caption, onClose }) {
+  useEffect(() => { const k = e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }; document.addEventListener('keydown', k, true); return () => document.removeEventListener('keydown', k, true); });
+  return html`<div className="lightbox" role="dialog" aria-modal="true" aria-label=${caption || 'Picture'} onClick=${e => { e.stopPropagation(); onClose(); }}><div><img src=${src} alt=${caption || ''} />${caption ? html`<div className="lbcap">${caption}</div>` : null}</div></div>`;
+}
+// One picture in a picker: the whole picture (no cropping), a number when picked, and a magnifier to see it larger.
+function PickTile({ src, label, on, num, ratio, onPick, onZoom }) {
+  return html`<div className="pk"><button type="button" className="pksel" style=${ratio ? { aspectRatio: ratio } : null} aria-pressed=${on} title=${label} aria-label=${label} onClick=${e => { e.stopPropagation(); onPick(); }}><img src=${src} alt="" loading="lazy" />${on ? html`<span className="pnum">${num}</span>` : null}</button>
+    <button type="button" className="pzoom" aria-label=${'See ' + label + ' larger'} title="See it larger" onClick=${e => { e.stopPropagation(); onZoom(); }}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="8.5" cy="8.5" r="5.5" /><path d="M13 13l4.5 4.5M8.5 6v5M6 8.5h5" /></svg></button></div>`;
+}
 // Scene pictures that can be picked for a thumbnail (scenes with their own image).
 const scenePics = p => p.scenes.map((sc, i) => { const v = !isCard(sc) && sceneVersion(p, sc); const src = v && (v.url || v.upload); return src ? { id: sc.id, n: i + 1, src, description: sc.description || sceneText(p, sc) } : null; }).filter(Boolean);
 const kitDir = p => ({ caption: '', thumb: '', scenes: [], ...(p.kit_dir || {}) });
 // Small grid of this video's scene pictures to pick from (max: how many can be picked).
 function ScenePicker({ p, value, onChange, max }) {
-  const pics = scenePics(p);
+  const pics = scenePics(p); const [big, setBig] = useState(null);
   if (!pics.length) return html`<p className="note" style=${{ margin: 0 }}>No scene pictures yet. Make the scene images first.</p>`;
   const toggle = id => onChange(value.includes(id) ? value.filter(x => x !== id) : max === 1 ? [id] : value.length >= max ? value : value.concat(id));
-  return html`<div className="pickgrid" style=${{ maxHeight: 220, gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>${pics.map(x => { const k = value.indexOf(x.id); return html`<button key=${x.id} type="button" aria-pressed=${k >= 0} title=${'Scene ' + x.n} aria-label=${'Scene ' + x.n} onClick=${e => { e.stopPropagation(); toggle(x.id); }}><img src=${x.src} alt="" loading="lazy" />${k >= 0 ? html`<span className="pnum">${x.n}</span>` : null}</button>`; })}</div>`;
+  const [ra, rb] = (p.format.aspect_ratio || '9:16').split(':').map(Number); const wide = ra > rb;
+  return html`<${Fragment}><div className="pickgrid" style=${{ maxHeight: 360, gridTemplateColumns: 'repeat(auto-fill, minmax(' + (wide ? 150 : 96) + 'px, 1fr))' }}>${pics.map(x => { const k = value.indexOf(x.id); return html`<${PickTile} key=${x.id} src=${x.src} label=${'Scene ' + x.n} on=${k >= 0} num=${x.n} ratio=${ra + ' / ' + rb} onPick=${() => toggle(x.id)} onZoom=${() => setBig(x)} />`; })}</div>
+    ${big ? html`<${Lightbox} src=${big.src} caption=${'Scene ' + big.n + ': ' + (big.description || '')} onClose=${() => setBig(null)} />` : null}</${Fragment}>`;
 }
 // The creator's own direction for the post captions and thumbnails, used whenever they are written or drawn.
 function KitDirection({ p, written }) {
@@ -3295,17 +3334,17 @@ function ThumbChange({ p, t, i }) {
     <${ScenePicker} p=${p} value=${sid} onChange=${setSid} max=${1} />
     <textarea className="input" rows="2" aria-label="How you want this thumbnail" placeholder="How you want it, e.g. zoom in on her face, make the sky red, add a red circle on the key" value=${note} onInput=${e => setNote(e.target.value)}></textarea>
     <div className="row" style=${{ gap: 4 }}>
-      <button type="button" className="btn sm primary" disabled=${t.status === 'generating' || (!note.trim() && !sid.length)} onClick=${() => { updateP(p.id, q => { Object.assign(q.kit.thumbnails[i], { note: note.trim(), scene_id: sid[0] || null }); }); setOpen(false); api.makeThumb(p.id, i); }}>Redraw with this<span className="tag">${fmt$(modelOf(p, 'image').cost)}</span></button>
+      <button type="button" className="btn sm primary" disabled=${t.status === 'generating' || (!note.trim() && !sid.length)} onClick=${() => { updateP(p.id, q => { Object.assign(q.kit.thumbnails[i], { note: note.trim(), scene_id: sid[0] || null }); }); setOpen(false); api.makeThumb(p.id, i); }}>Redraw with this<span className="tag">${fmt$(thumbCost(p, { ...t, scene_id: sid[0] || null }))}</span></button>
       <button type="button" className="btn sm ghost" onClick=${() => setOpen(false)}>Cancel</button></div>
   </div>`;
 }
 // The words on a thumbnail: edit them, *star* the word to colour yellow; redrawn on the same picture for free.
-function ThumbWords({ t, onSave }) {
+function ThumbWords({ t, onSave, cost }) {
   const [v, setV] = useState(t.text); useEffect(() => setV(t.text), [t.text]);
   const changed = v.trim() && v !== t.text;
   return html`<div className="row" style=${{ gap: 4 }} onClick=${e => e.stopPropagation()}>
     <input className="input" style=${{ flex: 1, minWidth: 0, fontWeight: 700 }} value=${v} maxLength="48" aria-label="Thumbnail words (put *stars* around the word to colour)" title="Put *stars* around the word to colour yellow" onInput=${e => setV(e.target.value)} onKeyDown=${e => { if (e.key === 'Enter' && changed) onSave(v.trim()); e.stopPropagation(); }} />
-    ${changed ? html`<button type="button" className="btn sm" disabled=${t.status === 'generating'} onClick=${() => onSave(v.trim())}>${t.raw ? 'Update words' : 'Save'}<span className="tag">free</span></button>` : null}
+    ${changed ? html`<button type="button" className="btn sm" disabled=${t.status === 'generating'} onClick=${() => onSave(v.trim())}>${t.design ? 'Redraw with these words' : t.raw ? 'Update words' : 'Save'}<span className="tag">${t.design ? fmt$(cost || 0) : 'free'}</span></button>` : null}
   </div>`;
 }
 function PublishKit({ p }) {
@@ -3323,7 +3362,8 @@ function PublishKit({ p }) {
   return html`<${Fragment}>
     <${KitDirection} p=${p} written=${true} />
     <section className="panel stack">
-      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} ${k.source_thumb ? 'The same type of thumbnail as the original video (its layout, framing and words), in your video\u2019s style with ' + im.name : 'Each uses a different click formula, made in your video\u2019s style with ' + im.name}; the words are added sharp on top, and you can change them for free.</span></div>
+      <div className="panel-h" style=${{ marginBottom: 0 }}><h2>Thumbnail</h2><span className="note">${LIVE ? 'Draw the ideas you like, then pick one.' : 'Pick one.'} ${k.source_thumb ? 'The same type of thumbnail as the original video (its layout, framing and words), in your video\u2019s style with ' + im.name : 'Each uses a different click formula, made in your video\u2019s style with ' + im.name}; ${thumbTextMode(k) === 'design' ? 'the bold title is designed into the picture where it grabs attention best.' : 'the words are added sharp on top, and you can change them for free.'}</span></div>
+      ${LIVE ? html`<div className="row" style=${{ gap: 8 }}><span className="note">Title words</span><${Seg} label="Thumbnail words" value=${thumbTextMode(k)} onChange=${v => updateP(p.id, q => { q.kit.text_mode = v; })} options=${[{ value: 'design', label: 'Designed into the picture' }, { value: 'overlay', label: 'Added on top (free to edit)' }]} /><span className="note">${thumbTextMode(k) === 'design' ? 'Like YouTube thumbnails: big bold title placed where it catches the eye. Changing the words redraws it.' : 'Clean words on top of the picture; change them any time for free.'}</span></div>` : null}
       ${k.source_thumb && k.source_thumb.ref ? html`<div className="row" style=${{ gap: 10, alignItems: 'center' }}><img src=${k.source_thumb.ref} alt="The original video's thumbnail" style=${{ width: 132, borderRadius: 8, display: 'block' }} /><span className="note">Original thumbnail. Yours copy its layout${k.source_thumb.look && k.source_thumb.look.text ? ' and kind of words (\u201c' + k.source_thumb.look.text + '\u201d)' : ''}, with your own picture and words.</span></div>` : null}
       <div className="kthumbs">${k.thumbnails.map((t, i) => { const sc = t.scene != null && p.scenes[t.scene]; const v = sc && sceneVersion(p, sc); return html`<div key=${i} className="kthumb" role="radio" tabIndex="0" aria-pressed=${k.sel.thumb === i} aria-checked=${k.sel.thumb === i} onClick=${() => sel('thumb', i)} onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel('thumb', i); } }}>
         <div className=${'frame' + frameCls(p)}>
@@ -3334,9 +3374,9 @@ function PublishKit({ p }) {
         ${t.formula ? html`<span className="tag" style=${{ alignSelf: 'flex-start' }}>${t.formula.split(':')[0]}</span>` : null}
         <span className="note">${t.concept}</span>
         ${t.scene_id && scenePics(p).find(x => x.id === t.scene_id) ? html`<span className="note">From scene ${scenePics(p).find(x => x.id === t.scene_id).n}${t.note ? ' \u00b7 \u201c' + t.note + '\u201d' : ''}</span>` : t.note ? html`<span className="note">\u201c${t.note}\u201d</span>` : null}
-        ${LIVE ? html`<${ThumbWords} t=${t} onSave=${txt => api.thumbText(p.id, i, txt)} />` : html`<span className="note"><strong>${t.text.replace(/\*/g, '')}</strong></span>`}
+        ${LIVE ? html`<${ThumbWords} t=${t} cost=${thumbCost(p, t)} onSave=${txt => api.thumbText(p.id, i, txt)} />` : html`<span className="note"><strong>${t.text.replace(/\*/g, '')}</strong></span>`}
         <div className="row" style=${{ gap: 4 }}>
-          ${LIVE ? html`<button type="button" className=${'btn sm' + (t.url ? '' : ' primary')} disabled=${t.status === 'generating'} onClick=${e => { e.stopPropagation(); api.makeThumb(p.id, i); }}><${Icon} n=${t.url ? 'redo' : 'spark'} />${t.url ? 'Redo' : 'Make this thumbnail'}<span className="tag">${fmt$(im.cost)}</span></button>` : null}
+          ${LIVE ? html`<button type="button" className=${'btn sm' + (t.url ? '' : ' primary')} disabled=${t.status === 'generating'} onClick=${e => { e.stopPropagation(); api.makeThumb(p.id, i); }}><${Icon} n=${t.url ? 'redo' : 'spark'} />${t.url ? 'Redo' : 'Make this thumbnail'}<span className="tag">${fmt$(thumbCost(p, t))}</span></button>` : null}
           ${LIVE && t.url ? html`<a className="btn sm" href=${t.url} download=${'thumbnail-' + (i + 1) + '.jpg'} onClick=${e => e.stopPropagation()}><${Icon} n="download" />Download</a>` : null}
           ${t.raw ? html`<button type="button" className="btn sm ghost" onClick=${e => { e.stopPropagation(); setTplFrom(t.raw); }}><${Icon} n="spark" />Make a template</button>` : null}
           ${LIVE ? html`<${ThumbChange} p=${p} t=${t} i=${i} />` : null}
