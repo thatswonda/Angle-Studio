@@ -1231,6 +1231,7 @@ function settle(s) {
       p.recovering = false;
       if (p.script) { p.script.picturing = false; p.script.revising = false; }
       (p.script && p.script.lines || []).forEach(l => { if (l.audio_status === 'generating') l.audio_status = 'failed'; });
+      p.img_queue = [];
       p.scenes.forEach(sc => { if (sc.image_status === 'generating') sc.image_status = 'failed'; if (sc.clip_status === 'generating') sc.clip_status = 'failed'; });
       if (p.rendering) p.rendering = null;
     });
@@ -1499,6 +1500,9 @@ function useDraft(pid) {
   updateP(pid, q => { if (!q.render.draft_path) return; q.render.final_path = q.render.draft_path; q.render.final_srt = q.render.draft_srt; q.render.final_caps = q.render.draft_caps; q.render.final_at = Date.now(); q.render.final_res = 480; q.render.final_from_draft = true; q.render_error = null; q.render_failed = null; q.status = 'rendered'; q.step = 'export'; (q.render.videos || []).forEach(x => { if (x.url === q.render.draft_path) x.kind = 'final'; }); if (!(q.render.videos || []).some(x => x.url === q.render.draft_path)) addVideo(q, { url: q.render.draft_path, srt: q.render.draft_srt, kind: 'final', res: 480 }); });
   toast('Continuing with the 480p draft as your video.');
 }
+// Scenes whose image is being made right now (one request per scene at a time).
+const IMG_BUSY = new Set();
+const imgBusy = (p, sc) => sc.image_status === 'generating' || (p.img_queue || []).includes(sc.id);
 const api = {
   async ingest(pid, url, manualTranscript) {
     if (LIVE) {
@@ -1847,26 +1851,43 @@ const api = {
     if (!ids.length) return;
     if (LIVE) {
       // A few at a time, so the provider is not flooded; stop early if the key is out of quota.
-      const queue = ids.slice();
+      // Scenes waiting in this batch are marked, so their redo buttons wait too (a click would pay for the same scene twice).
+      const queue = ids.filter(id => { const sc = STATE.projects[pid].scenes.find(x => x.id === id); return sc && sc.image_status !== 'generating' && !(STATE.projects[pid].img_queue || []).includes(id); });
+      if (!queue.length) return;
+      updateP(pid, q => { q.img_queue = (q.img_queue || []).concat(queue); });
+      const started = Date.now();
+      const take = () => { const id = queue.shift(); updateP(pid, q => { q.img_queue = (q.img_queue || []).filter(x => x !== id); }); return id; };
+      try {
       // Locked look: make the first scene alone, so it can guide every other scene.
-      if (STATE.projects[pid].style_lock !== false && !isTextOnly(STATE.projects[pid].models.image) && !lookAnchor(STATE.projects[pid], null) && queue.length > 1) await api.generateImage(pid, queue.shift());
+      if (STATE.projects[pid].style_lock !== false && !isTextOnly(STATE.projects[pid].models.image) && !lookAnchor(STATE.projects[pid], null) && queue.length > 1) await api.generateImage(pid, take(), false, true);
       const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
         while (queue.length) {
-          const id = queue.shift(); await api.generateImage(pid, id);
+          const id = take(); const sc0 = STATE.projects[pid].scenes.find(x => x.id === id);
+          if (!sc0 || sc0.image_versions.some(v => v.at >= started)) continue;  // already made since this batch began
+          await api.generateImage(pid, id, false, true);
           const sc = STATE.projects[pid].scenes.find(x => x.id === id);
           if (sc && sc.image_status === 'failed' && /quota|billing|free tier|refused/i.test(sc.error || '')) { queue.length = 0; toast(sc.error); }
         }
       });
-      await Promise.all(workers); return;
+      await Promise.all(workers);
+      } finally { updateP(pid, q => { q.img_queue = (q.img_queue || []).filter(x => !ids.includes(x)); }); }
+      return;
     }
     await Promise.all(ids.map((id, i) => sleep(i * 120).then(() => api.generateImage(pid, id))));
   },
-  async generateImage(pid, sceneId, noFail) {
+  async generateImage(pid, sceneId, noFail, fromBatch) {
     if (isCard(STATE.projects[pid].scenes.find(x => x.id === sceneId))) return;  // text cards are drawn free at render time
+    if (IMG_BUSY.has(sceneId)) return;
+    if (!fromBatch && (STATE.projects[pid].img_queue || []).includes(sceneId)) return;  // waiting in a batch that will make it  // already being made: a second request would pay twice for the same scene
+    IMG_BUSY.add(sceneId);
+    try { await api.drawSceneImage(pid, sceneId, noFail); } finally { IMG_BUSY.delete(sceneId); }
+  },
+  async drawSceneImage(pid, sceneId, noFail) {
     updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (x && x.reuse_of) x.reuse_of = null; });
     // a scene planned before image ideas existed gets one first, so its redo carries the message
     const sc1 = STATE.projects[pid].scenes.find(x => x.id === sceneId);
     if (sc1 && !sc1.visual_v && !sc1.user_edited) { try { await api.pictureScenes(pid, [sceneId]); } catch (e) { /* keep the current idea */ } }
+    if (isCard(STATE.projects[pid].scenes.find(x => x.id === sceneId))) return;  // the new idea made it a free text card: no image to pay for
     if (LIVE) {
       const p0 = STATE.projects[pid]; const sc0 = p0.scenes.find(x => x.id === sceneId); if (!sc0) return;
       updateP(pid, p => { const x = p.scenes.find(x => x.id === sceneId); if (x) { x.image_status = 'generating'; x.error = null; } });
@@ -2017,7 +2038,7 @@ function Wave({ seed, on = true, n = 28 }) {
    Shared UI
    ====================================================================== */
 function Pill({ status }) {
-  const label = { ready: 'Ready', generating: 'Generating', failed: 'Failed', pending: 'Not started' }[status] || status;
+  const label = { ready: 'Ready', generating: 'Generating', failed: 'Failed', pending: 'Not started', queued: 'Queued' }[status] || status;
   return html`<span className=${'pill ' + status}>${label}</span>`;
 }
 function StepHead({ title, sub, children }) {
@@ -2890,7 +2911,7 @@ function SceneZoom({ p, id, setId }) {
   const i = p.scenes.findIndex(x => x.id === id); const sc = p.scenes[i]; const im = modelOf(p, 'image'); const [tpl, setTpl] = useState(false);
   const go = d => { const j = (i + d + p.scenes.length) % p.scenes.length; setId(p.scenes[j].id); };
   useEffect(() => { const k = e => { if (tpl) return; if (e.key === 'Escape') setId(null); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); });
-  const own = imageScene(p, sc); const busy = sceneStatus(p, sc) === 'generating';
+  const own = imageScene(p, sc); const busy = imgBusy(p, own);
   const upload = async f => { if (!f) return; try { const data = await readImage(f); updateP(p.id, q => { const x = q.scenes.find(y => y.id === own.id); x.image_versions.push({ upload: data, at: Date.now(), model: 'upload' }); x.image_index = x.image_versions.length - 1; x.image_status = 'ready'; }); } catch (e) { toast('That file could not be read as an image.'); } };
   return html`<div className="zoom-back" onClick=${e => { if (e.target === e.currentTarget) setId(null); }} role="dialog" aria-modal="true" aria-label=${'Scene ' + (i + 1) + ' image'}>
     <div className="zoom-box">
@@ -3005,9 +3026,9 @@ function ScenesScreen({ p, s }) {
       return html`<article key=${sc.id} className=${'scard2' + (open ? ' open' : '')}>
         <div style=${{ minWidth: 0 }}>
           <div className="row sc-head">
-            <strong>${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span>${sc.reuse_of ? html`<span className="chip" title="Shows the image of the scene before, with a different zoom">Reuses ${p.scenes.findIndex(x => x.id === sc.reuse_of) + 1}</span>` : html`<${Pill} status=${sc.image_status} />`}
+            <strong>${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span>${sc.reuse_of ? html`<span className="chip" title="Shows the image of the scene before, with a different zoom">Reuses ${p.scenes.findIndex(x => x.id === sc.reuse_of) + 1}</span>` : html`<${Pill} status=${sc.image_status !== 'generating' && (p.img_queue || []).includes(sc.id) ? 'queued' : sc.image_status} />`}
             <span className="grow"></span>
-${isCard(sc) ? null : html`            <button type="button" className="btn ghost sm" aria-label=${(sc.reuse_of ? 'Give its own image to' : sc.image_versions.length ? 'Redo image for' : 'Generate image for') + ' scene ' + (i + 1)} title=${sc.reuse_of ? 'Make its own image instead of reusing' : sc.image_versions.length ? 'Redo this image' : 'Generate this image'} disabled=${sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" /></button>`}
+${isCard(sc) ? null : html`            <button type="button" className="btn ghost sm" aria-label=${(sc.reuse_of ? 'Give its own image to' : sc.image_versions.length ? 'Redo image for' : 'Generate image for') + ' scene ' + (i + 1)} title=${sc.reuse_of ? 'Make its own image instead of reusing' : sc.image_versions.length ? 'Redo this image' : 'Generate this image'} disabled=${imgBusy(p, sc)} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" /></button>`}
             <button type="button" className="btn sm" aria-expanded=${open} onClick=${() => setOpenId(open ? null : sc.id)}>${open ? 'Close' : 'Edit'}</button>
           </div>
           <p className="sc-line">${sc.split ? html`<span className="eyebrow" style=${{ fontSize: 10 }}>Part ${sc.split.index + 1}/${sc.split.of} · </span>` : null}${who ? html`<b>${who.name}: </b>` : null}${sceneText(p, sc)}</p>
@@ -3035,7 +3056,7 @@ ${isCard(sc) ? null : html`            <button type="button" className="btn ghos
                 <label className="switch" title="On Key scenes, only scenes marked here get words"><input type="checkbox" checked=${!!sc.overlay_key || wordsMode(p) === 'all'} disabled=${wordsMode(p) !== 'some'} onChange=${e => setI(sc.id, x => { x.overlay_key = e.target.checked; })} />Print on this image</label></div>
               ${wordsMode(p) === 'off' ? html`<p className="note">Words are off for this video. Turn on \u201cWords on images\u201d above the scenes to print them.</p>` : null}
               <div className="row">
-                <button type="button" className="btn sm" disabled=${sc.image_status === 'generating'} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Redo image' : 'Generate image'}</button>
+                <button type="button" className="btn sm" disabled=${imgBusy(p, sc)} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" />${sc.image_versions.length ? 'Redo image' : 'Generate image'}</button>
                 <label className="btn sm ghost" title="Upload your own image"><${Icon} n="upload" /><span>Upload</span><input type="file" accept="image/*" hidden onChange=${e => upload(sc.id, e.target.files[0])} /></label>
                 <button type="button" className="btn sm ghost" disabled=${locked || i === p.scenes.length - 1 || !!sc.split || !!(p.scenes[i + 1] && p.scenes[i + 1].split)} onClick=${() => { merge(i); }}><${Icon} n="merge" />Merge with next</button>
                 <button type="button" className="btn sm ghost" disabled=${locked || sc.line_ids.length < 2 || !!sc.split} onClick=${() => split(i)}><${Icon} n="split" />Split</button>
