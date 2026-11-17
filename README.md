@@ -75,6 +75,8 @@ Anyone can open the link and create an account (username, email, password). New 
 
 Every limit is checked on the server for every step, so it holds whatever the browser sends. The owner is the account registered with `ANGLE_STUDIO_ADMIN_EMAIL` (or, when that is not set, the first account); the owner has no limits and keeps the projects made before accounts existed. Each account's projects are saved separately, on the server and in the browser. `ANGLE_STUDIO_OPEN=1` turns accounts off (local use). `APP_PASSWORD` is no longer used.
 
+**Locked out of the owner account?** In Render, set `ANGLE_STUDIO_ADMIN_EMAIL` to your email and `ANGLE_STUDIO_ADMIN_PASSWORD` to a new password (8+ characters), and let it redeploy. When the server starts, the account with that email gets that password (it is created if it does not exist), and it is always the owner: approved, no limits, with your earlier projects, even if someone else signed up first. Sign in with your email and that password, then delete `ANGLE_STUDIO_ADMIN_PASSWORD` and change the password from the account menu.
+
 ## What is live
 
 | Step | Real service | Notes |

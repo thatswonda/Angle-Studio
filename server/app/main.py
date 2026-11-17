@@ -53,6 +53,13 @@ def healthz():
 
 app.include_router(live.router)
 app.include_router(accounts.router)
+
+
+@app.on_event("startup")
+def _owner_recovery():
+    name = auth.recover_owner()
+    if name:
+        print(f"Owner account '{name}': password set from ANGLE_STUDIO_ADMIN_PASSWORD. Remove that variable after signing in.")
 live.MEDIA.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=live.MEDIA), name="media")
 app.mount("/templates", StaticFiles(directory=Path(__file__).resolve().parents[2] / "web" / "templates"), name="templates")

@@ -849,3 +849,29 @@ def test_kit_follows_the_creators_direction_and_scene_pictures(monkeypatch):
     r = c.post("/api/live/image", json={"prompt": "p", "model": "flux-kontext", "refs": ["/media/images/scene4.jpg", "templates/stickman-1.jpg"], "base": True})
     assert r.status_code == 200 and sent["base"] is True and sent["ref"][0] == pic.read_bytes()  # the scene itself, not the style swatch
     assert fal.BASE_NOTE.startswith("The first image is the picture to rework")
+
+
+def test_owner_can_always_get_back_in(monkeypatch, tmp_path):
+    TestClient = _accounts(monkeypatch, tmp_path)
+    from app import auth
+    from app.main import app
+    # someone else signed up first (so they became the owner), and the real owner forgot their password
+    other = TestClient(app)
+    other.post("/api/auth/register", json={"username": "first", "email": "first@x.com", "password": "longpass1"})
+    me = TestClient(app)
+    me.post("/api/auth/register", json={"username": "boss", "email": "boss@x.com", "password": "forgotten1"})
+    assert me.get("/api/auth/me").json()["user"]["status"] == "pending"
+    # the owner sets their email (and a recovery password) on the server, which restarts
+    monkeypatch.setenv("ANGLE_STUDIO_ADMIN_EMAIL", "Boss@x.com")
+    monkeypatch.setenv("ANGLE_STUDIO_ADMIN_PASSWORD", "recovered1")
+    assert auth.recover_owner() == "boss"
+    me2 = TestClient(app)
+    assert me2.post("/api/auth/login", json={"login": "boss@x.com", "password": "forgotten1"}).status_code == 401
+    u = me2.post("/api/auth/login", json={"login": "boss@x.com", "password": "recovered1"}).json()["user"]
+    assert u["owner"] and u["role"] == "admin" and u["status"] == "approved" and u["credit"] is None
+    assert other.get("/api/admin/users").status_code == 403  # the account that signed up first is no longer the owner
+    assert me2.get("/api/admin/users").status_code == 200
+    # no account with that email yet: recovery creates it
+    monkeypatch.setenv("ANGLE_STUDIO_ADMIN_EMAIL", "new.owner@x.com")
+    name = auth.recover_owner()
+    assert name == "new.owner" and TestClient(app).post("/api/auth/login", json={"login": "new.owner@x.com", "password": "recovered1"}).status_code == 200

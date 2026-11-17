@@ -12,6 +12,8 @@ services:
     envVars:
       - key: ANGLE_STUDIO_ADMIN_EMAIL  # your email: the account registered with it is the owner (approves everyone else)
         sync: false
+      - key: ANGLE_STUDIO_ADMIN_PASSWORD  # only to get back in: sets the owner's password when the server starts; remove after
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: OPENAI_API_KEY

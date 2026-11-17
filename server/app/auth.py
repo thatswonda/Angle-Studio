@@ -82,8 +82,46 @@ def user_for_token(token: str | None) -> Optional[dict]:
 
 # ---------- users
 
+def admin_email() -> str:
+    return (os.getenv("ANGLE_STUDIO_ADMIN_EMAIL") or "").strip().lower()
+
+
+def _as_owner(u: dict) -> dict:
+    """When ANGLE_STUDIO_ADMIN_EMAIL is set, the account with that email is always the owner (approved, no limits),
+    and no other account is, whatever happened before (for example someone else signing up first)."""
+    em = admin_email()
+    if not u or not em:
+        return u
+    if u.get("email", "").lower() == em:
+        u.update(role="admin", owner=True, status="approved", credit=None, models=None, max_seconds=None)
+    elif u.get("owner"):
+        u.update(owner=False, role="user", status="pending",
+                 credit=DEFAULT_CREDIT, models={k: list(v) for k, v in DEFAULT_MODELS.items()}, max_seconds=DEFAULT_MAX_SECONDS)
+    return u
+
+
 def get_user(username: str) -> Optional[dict]:
-    return storage.kv_get("users", (username or "").lower())
+    return _as_owner(storage.kv_get("users", (username or "").lower()))
+
+
+def recover_owner() -> Optional[str]:
+    """Owner recovery, run when the server starts: with ANGLE_STUDIO_ADMIN_EMAIL and ANGLE_STUDIO_ADMIN_PASSWORD set,
+    the account with that email gets that password (and is created if it does not exist yet), so the owner can always
+    sign in again. Remove ANGLE_STUDIO_ADMIN_PASSWORD afterwards and change the password from the account menu."""
+    em, pw = admin_email(), os.getenv("ANGLE_STUDIO_ADMIN_PASSWORD") or ""
+    if not em or len(pw) < 8:
+        return None
+    with _lock:
+        u = next((x for x in all_users() if x.get("email", "").lower() == em), None)
+        if not u:
+            base = re.sub(r"[^A-Za-z0-9_.-]", "", em.split("@")[0])[:28] or "owner"
+            name = base if len(base) >= 3 else base + "123"
+            while get_user(name):
+                name = base + secrets.token_hex(2)
+            u = {"username": name, "email": em, "created_at": time.time(), "last_active": 0, "spent": 0.0, "usage": {}, "note": ""}
+        u["pw"] = hash_pw(pw)
+        save_user(_as_owner(u))
+        return u["username"]
 
 
 def save_user(u: dict) -> None:
@@ -91,7 +129,7 @@ def save_user(u: dict) -> None:
 
 
 def all_users() -> list[dict]:
-    return sorted(storage.kv_list("users"), key=lambda u: u.get("created_at", 0))
+    return sorted((_as_owner(u) for u in storage.kv_list("users")), key=lambda u: u.get("created_at", 0))
 
 
 def register(username: str, email: str, password: str) -> dict:
@@ -108,8 +146,7 @@ def register(username: str, email: str, password: str) -> dict:
         users = all_users()
         if any(u.get("email") == email for u in users):
             raise HTTPException(409, "An account with that email already exists.")
-        admin_email = (os.getenv("ANGLE_STUDIO_ADMIN_EMAIL") or "").strip().lower()
-        owner = (email == admin_email) if admin_email else not users
+        owner = (email == admin_email()) if admin_email() else not users
         u = {"username": username, "email": email, "pw": hash_pw(password), "created_at": time.time(), "last_active": 0,
              "role": "admin" if owner else "user", "owner": owner, "status": "approved" if owner else "pending",
              "credit": None if owner else DEFAULT_CREDIT, "spent": 0.0, "models": None if owner else {k: list(v) for k, v in DEFAULT_MODELS.items()},
