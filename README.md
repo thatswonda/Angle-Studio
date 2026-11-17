@@ -59,10 +59,21 @@ Vercel cannot run this app: it needs a server that stays on, FFmpeg, background 
 
 1. Sign in at render.com with GitHub and allow access to this repository.
 2. New > Blueprint, pick this repository. Render reads `render.yaml`.
-3. Fill in the secrets it asks for: `APP_PASSWORD` (choose one), `ANTHROPIC_API_KEY` (Claude, the writer), `GEMINI_API_KEY`, `OPENAI_API_KEY` (optional), `YOUTUBE_API_KEY`, and `FAL_KEY` for the FLUX image models.
-4. Deploy. The first build takes a few minutes. Open the `onrender.com` link, type any user name and your `APP_PASSWORD`.
+3. Fill in the values it asks for: `ANGLE_STUDIO_ADMIN_EMAIL` (your email, which makes your account the owner), `ANTHROPIC_API_KEY` (Claude, the writer), `GEMINI_API_KEY`, `OPENAI_API_KEY` (optional), `YOUTUBE_API_KEY`, and `FAL_KEY` for the FLUX image models.
+4. Deploy. The first build takes a few minutes. Open the `onrender.com` link and create your account with that email: it is the owner and approved at once.
 
 The blueprint uses the Starter plan (always on, about $7 a month) with a 5 GB persistent disk (about $1.25 a month) mounted at `/app/server/data`. Voice clips, images, videos and the analysis cache live there; without the disk every redeploy deletes them. If files are lost anyway, the Compile step lists them and offers to make only those again. Projects (story, scenes, settings) are saved in the browser and backed up to the server's disk, so a cleared browser or another device gets them back. Renders are kept under 300 MB of memory and run FFmpeg at low priority, so they fit Render's Starter plan (half a CPU) without starving its health checks. Each scene is encoded once, with its captions; finished scenes are kept on disk, so an interrupted render continues where it stopped (the app retries on its own) and unchanged scenes are reused next time. Final renders come in 720p or 1080p, or you can continue with the 480p draft.
+
+## Accounts
+
+Anyone can open the link and create an account (username, email, password). New accounts wait for the owner's approval. The owner's **Accounts** page (left menu) shows every account with its credit left, credit used, projects, final videos, drafts, images, voice clips, videos analyzed and last activity, and sets for each account:
+
+- **Approve / Turn off / Turn back on**, reset password (a temporary one to send them), delete
+- **Credit** in dollars (for example $50, or + $10 / + $25 / + $50), counted from what each step really costs, whatever is left on the API keys. When it runs out the account can still open and download its work but cannot generate anything
+- **Models they may use** at each step (video analysis, writing, voiceover, images, video clips); the others are greyed out for them
+- **Longest video** they may make
+
+Every limit is checked on the server for every step, so it holds whatever the browser sends. The owner is the account registered with `ANGLE_STUDIO_ADMIN_EMAIL` (or, when that is not set, the first account); the owner has no limits and keeps the projects made before accounts existed. Each account's projects are saved separately, on the server and in the browser. `ANGLE_STUDIO_OPEN=1` turns accounts off (local use). `APP_PASSWORD` is no longer used.
 
 ## What is live
 

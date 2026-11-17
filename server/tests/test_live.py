@@ -71,16 +71,97 @@ def test_render_matches_audio(tmp_path):
         render.render({"scenes": [{"image": img, "lines": [0], "caption": "x"}], "lines": [{"audio": ""}]}, media, lambda _: None)
 
 
-def test_password_protects_everything(monkeypatch, tmp_path):
-    monkeypatch.setenv("APP_PASSWORD", "s3cret")
+def _accounts(monkeypatch, tmp_path):
+    from app import storage
+    monkeypatch.delenv("ANGLE_STUDIO_OPEN", raising=False)
+    monkeypatch.delenv("ANGLE_STUDIO_ADMIN_EMAIL", raising=False)
+    monkeypatch.setattr(storage, "ROOT", tmp_path)
     from fastapi.testclient import TestClient
     from app.main import app
-    c = TestClient(app)
-    assert c.get("/").status_code == 401 and "WWW-Authenticate" in c.get("/").headers
-    assert c.get("/api/live/status").status_code == 401
-    assert c.get("/healthz").status_code == 200
-    assert c.get("/api/live/status", auth=("me", "wrong")).status_code == 401
-    assert c.get("/api/live/status", auth=("me", "s3cret")).status_code == 200
+    return TestClient
+
+
+def test_accounts_need_sign_in_and_owner_approval(monkeypatch, tmp_path):
+    TestClient = _accounts(monkeypatch, tmp_path)
+    from app.main import app
+    anon = TestClient(app)
+    assert anon.get("/").status_code == 200 and anon.get("/healthz").status_code == 200  # the page shows sign-in
+    assert anon.get("/api/live/status").json()["user"] is None
+    assert anon.post("/api/live/image", json={"prompt": "p"}).status_code == 401
+    assert anon.get("/api/projects").status_code == 401
+
+    owner = TestClient(app)  # the first account is the owner, approved at once
+    r = owner.post("/api/auth/register", json={"username": "boss", "email": "Boss@x.com", "password": "longpass1"})
+    assert r.status_code == 200 and r.json()["user"]["role"] == "admin" and r.json()["user"]["status"] == "approved"
+    assert "pw" not in r.json()["user"]
+
+    user = TestClient(app)
+    r = user.post("/api/auth/register", json={"username": "ann", "email": "ann@x.com", "password": "longpass2"})
+    assert r.json()["user"]["status"] == "pending"
+    assert user.post("/api/live/image", json={"prompt": "p"}).status_code == 403  # waiting for approval
+    assert user.get("/api/admin/users").status_code == 403
+    assert user.post("/api/auth/register", json={"username": "ann", "email": "z@x.com", "password": "longpass2"}).status_code == 409
+    assert user.post("/api/auth/register", json={"username": "bo", "email": "bad", "password": "x"}).status_code == 422
+
+    users = owner.get("/api/admin/users").json()["users"]
+    assert [u["username"] for u in users] == ["boss", "ann"]
+    r = owner.patch("/api/admin/users/ann", json={"status": "approved", "credit": 50, "max_seconds": 90,
+                                                   "models": {"image": ["seedream"], "writer": ["gemini-flash-writer"]}})
+    assert r.json()["user"]["remaining"] == 50
+    me = user.get("/api/auth/me").json()["user"]
+    assert me["status"] == "approved" and me["models"]["image"] == ["seedream"] and me["max_seconds"] == 90
+
+    # sign out and back in with the email
+    assert user.post("/api/auth/logout").status_code == 200 and user.get("/api/auth/me").json()["user"] is None
+    assert user.post("/api/auth/login", json={"login": "ann@x.com", "password": "nope"}).status_code == 401
+    assert user.post("/api/auth/login", json={"login": "ann@x.com", "password": "longpass2"}).status_code == 200
+    temp = owner.post("/api/admin/users/ann/reset-password").json()["password"]
+    assert TestClient(app).post("/api/auth/login", json={"login": "ann", "password": temp}).status_code == 200
+    assert owner.patch("/api/admin/users/boss", json={"status": "disabled"}).status_code == 400  # the owner stays on
+
+
+def test_credit_models_and_length_limits(monkeypatch, tmp_path):
+    TestClient = _accounts(monkeypatch, tmp_path)
+    from app import live
+    from app.main import app
+    from app.providers import fal
+    owner, user = TestClient(app), TestClient(app)
+    owner.post("/api/auth/register", json={"username": "boss", "email": "b@x.com", "password": "longpass1"})
+    user.post("/api/auth/register", json={"username": "ann", "email": "a@x.com", "password": "longpass2"})
+    owner.patch("/api/admin/users/ann", json={"status": "approved", "credit": 0.05, "max_seconds": 60,
+                                               "models": {"image": ["seedream"], "writer": ["gemini-flash-writer"], "voice": [], "analyst": [], "video": []}})
+    monkeypatch.setenv("FAL_KEY", "k")
+
+    async def fake_draw(prompt, aspect, model_id, out_stem, ref=None, refs=None, base=False):
+        out = out_stem.with_suffix(".jpg"); out.parent.mkdir(parents=True, exist_ok=True); out.write_bytes(b"x")
+        return out, 0.03
+
+    monkeypatch.setattr(fal, "draw", fake_draw)
+    r = user.post("/api/live/image", json={"prompt": "p", "model": "flux-schnell"})
+    assert r.status_code == 403 and "not turned on" in r.json()["detail"]  # a model the owner did not assign
+    assert user.post("/api/live/image", json={"prompt": "p", "model": "seedream", "refs": ["templates/stickman-1.jpg"]}).status_code == 200
+    assert user.post("/api/live/image", json={"prompt": "p", "model": "seedream", "refs": ["templates/stickman-1.jpg"]}).status_code == 200
+    me = user.get("/api/auth/me").json()["user"]
+    assert me["spent"] == 0.06 and me["remaining"] == 0 and me["usage"]["images"] == 2
+    r = user.post("/api/live/image", json={"prompt": "p", "model": "seedream"})
+    assert r.status_code == 402 and "credit is used up" in r.json()["detail"]
+    # more credit from the owner, then a story longer than the account allows is refused
+    owner.patch("/api/admin/users/ann", json={"add_credit": 5})
+    r = user.post("/api/live/story", json={"writer": "gemini-flash-writer", "angles": [{"title": "x"}], "target_seconds": 300})
+    assert r.status_code == 403 and "longer than your account allows" in r.json()["detail"]
+    # job steps are charged what they really cost
+    async def fake_write(writer_id, progress, prompt):
+        return {"titles": ["A"], "captions": ["c"], "descriptions": ["d"], "tags": ["t"], "thumbnails": []}, 0.02, "Gemini Flash", None
+    monkeypatch.setattr(live, "write_json", fake_write)
+    _run_job(user, "/api/live/publish-kit", {"writer": "gemini-flash-writer", "story": "S."})
+    me = user.get("/api/auth/me").json()["user"]
+    assert me["spent"] == 0.08 and me["usage"]["publish_kits"] == 1
+    # each account's saved work is its own
+    user.put("/api/live/state", json={"state": {"projects": {"p1": {"render": {"videos": [{"kind": "final"}]}}}}, "saved_at": 1})
+    assert owner.get("/api/live/state").json()["state"] is None
+    assert user.get("/api/live/state").json()["state"]["projects"]["p1"]
+    ann = [u for u in owner.get("/api/admin/users").json()["users"] if u["username"] == "ann"][0]
+    assert ann["projects"] == 1 and ann["videos"] == 1
 
 
 def test_broken_json_is_repaired_without_resending(monkeypatch):

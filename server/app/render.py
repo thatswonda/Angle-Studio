@@ -291,6 +291,10 @@ def render(payload: dict, media: Path, progress: Callable[[str], None]) -> dict:
         raise ProviderError("Every sentence needs its voiceover before rendering. Finish the Voice step first.")
     clips = [_clean_clip(local(l["audio"], f"a{i}"), work / f"clean{i}.wav") for i, l in enumerate(lines)]
     line_secs = [_wav_seconds(c) for c in clips]
+    cap = payload.get("max_seconds")
+    if cap and sum(line_secs) > cap * 1.15 + 5:
+        m, sec = divmod(int(cap), 60)
+        raise ProviderError(f"This video is {int(sum(line_secs))} seconds long; your account allows up to {m}:{sec:02d}. Shorten the story.")
     line_times, t = [], 0.0
     for d in line_secs:
         line_times.append((t, t + d))

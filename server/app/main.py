@@ -1,8 +1,6 @@
 """Angle Studio API. Run with: uvicorn app.main:app --reload (from server/)."""
 from __future__ import annotations
 
-import base64
-import hmac
 import os
 
 from pathlib import Path
@@ -14,30 +12,38 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from . import config  # noqa: F401  (loads server/.env before anything reads a key)
-from . import jobs, live, pipeline, storage
+from . import accounts, auth, jobs, live, pipeline, storage
 from .models import Pacing, Project, new_id
 from .providers import registry, sample
 
 app = FastAPI(title="Angle Studio API", version="0.2.0")
 
 
+PUBLIC = ("/healthz", "/api/auth/", "/media/", "/templates/")
+
+
 @app.middleware("http")
-async def require_password(request: Request, call_next):
-    """When APP_PASSWORD is set (always, once hosted), every page, API call and media file needs it.
-    The browser asks once and remembers it; any user name works."""
-    password = os.getenv("APP_PASSWORD")
-    if password and request.url.path != "/healthz":
-        ok = False
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("basic "):
-            try:
-                ok = hmac.compare_digest(base64.b64decode(auth[6:]).decode().split(":", 1)[1], password)
-            except Exception:
-                ok = False
-        if not ok:
-            return Response("Angle Studio needs its password.", status_code=401,
-                            headers={"WWW-Authenticate": 'Basic realm="Angle Studio", charset="UTF-8"'})
-    return await call_next(request)
+async def account_check(request: Request, call_next):
+    """Who is calling: the signed-in account (from its session cookie) is checked here for every API call.
+    The page itself, sign-in, media files and template pictures are open; the app's steps need an approved account,
+    and the older /api routes are for the owner only. ANGLE_STUDIO_OPEN=1 turns accounts off (local use)."""
+    path = request.url.path
+    user = auth.user_for_token(request.cookies.get(auth.COOKIE))
+    token = auth.CURRENT.set(user)
+    try:
+        if not auth.open_mode() and path.startswith("/api/") and not path.startswith(PUBLIC):
+            if path == "/api/live/status":
+                pass  # tells the page whether to show sign-in
+            elif user is None:
+                return JSONResponse(status_code=401, content={"detail": "Sign in to use Angle Studio."})
+            elif user.get("status") != "approved":
+                return JSONResponse(status_code=403, content={"detail": "Your account is waiting for the owner’s approval."
+                                                              if user.get("status") == "pending" else "This account is turned off."})
+            elif not path.startswith(("/api/live/", "/api/admin/")) and not auth.is_admin(user):
+                return JSONResponse(status_code=403, content={"detail": "Only the owner can do this."})
+        return await call_next(request)
+    finally:
+        auth.CURRENT.reset(token)
 
 
 @app.get("/healthz")
@@ -46,6 +52,7 @@ def healthz():
 
 
 app.include_router(live.router)
+app.include_router(accounts.router)
 live.MEDIA.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=live.MEDIA), name="media")
 app.mount("/templates", StaticFiles(directory=Path(__file__).resolve().parents[2] / "web" / "templates"), name="templates")

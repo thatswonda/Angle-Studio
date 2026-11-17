@@ -20,6 +20,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from . import auth
 from . import thumbs as thumbs_mod
 from . import jobs, render, storage
 from .providers import fal, google, youtube
@@ -104,15 +105,26 @@ def media_url(p: Path) -> str:
     return "/media/" + p.resolve().relative_to(MEDIA.resolve()).as_posix()
 
 
-def _job(label: str, work) -> dict:
-    j = jobs.submit("live", label, work)
+def _job(label: str, work, what: str = "") -> dict:
+    """Runs a slow step in the background; what it really cost is charged to the account that started it."""
+    user = auth.CURRENT.get()
+
+    async def metered(progress):
+        res = await work(progress)
+        if isinstance(res, dict):
+            auth.charge(res.get("cost") or 0, what, user)
+        return res
+
+    j = jobs.submit("live", label, metered)
     return {"id": j.id}
 
 
 @router.get("/status")
 def status():
+    u = auth.CURRENT.get() or (auth.OWNER_OPEN if auth.open_mode() else None)
     return {
         "live": True,
+        "user": auth.public(u) if u else None,  # None: show sign-in
         "providers": {"google": has("GEMINI_API_KEY"), "youtube": has("YOUTUBE_API_KEY"), "openai": has("OPENAI_API_KEY"),
                       "fal": has("FAL_KEY"), "anthropic": has("ANTHROPIC_API_KEY"), "higgsfield": False, "elevenlabs": False},
         "video_models": False,  # this Gemini key has no Veo models; animation stays off
@@ -187,6 +199,7 @@ class IngestBody(BaseModel):
 
 @router.post("/ingest")
 async def ingest(body: IngestBody):
+    auth.gate(analyst=body.analyst, writer=body.writer)
     youtube.video_id(body.url)  # fail fast on a bad link
 
     cache_key = f"{body.url}|{body.analyst}|{body.writer}"
@@ -280,7 +293,7 @@ async def ingest(body: IngestBody):
             storage.kv_put("live_ingest", cache_key, result)
         return result
 
-    return _job("Analyzing reference video", work)
+    return _job("Analyzing reference video", work, "analyses")
 
 
 # ---------- The original video's look: its on-screen captions and its thumbnail
@@ -317,6 +330,7 @@ class SourceCaptionsBody(BaseModel):
 @router.post("/source-captions")
 async def source_captions(body: SourceCaptionsBody):
     """For videos analyzed before captions were read: Gemini Flash watches the original once (low resolution) for its caption look."""
+    auth.gate()
     youtube.video_id(body.url)
 
     async def work(progress):
@@ -333,7 +347,7 @@ async def source_captions(body: SourceCaptionsBody):
         storage.kv_put("captions_look", body.url, out)
         return {**out, "cost": round(cost, 4)}
 
-    return _job("Reading the original's captions", work)
+    return _job("Reading the original's captions", work, "writing")
 
 
 THUMB_LOOK_PROMPT = (
@@ -403,8 +417,10 @@ class StoryBody(BaseModel):
 
 @router.post("/story")
 async def story(body: StoryBody):
+    auth.gate(writer=body.writer)
     if not 15 <= body.target_seconds <= 600:
         raise HTTPException(422, "Length must be between 15 seconds and 10 minutes.")
+    auth.check_seconds(body.target_seconds, "The length you picked")
 
     async def work(progress):
         wn = WRITER_NAMES.get(body.writer, body.writer)
@@ -438,7 +454,7 @@ async def story(body: StoryBody):
         visuals = [v for v in (data.get("visuals") or []) if isinstance(v, dict) and v.get("sentence")]
         return {"hook_options": hooks, "story": story_text, "visuals": visuals, "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
-    return _job("Writing the story", work)
+    return _job("Writing the story", work, "stories")
 
 
 # ---------- Projects saved on the server too, so clearing the browser or switching devices loses nothing
@@ -446,12 +462,22 @@ async def story(body: StoryBody):
 STATE_FILE = storage.ROOT / "app_state.json"
 
 
+def state_file() -> Path:
+    """The owner keeps the original save file (so nothing made before accounts is lost); each other account has its own."""
+    u = auth.current()
+    if u.get("owner"):
+        return STATE_FILE
+    safe = re.sub(r"[^a-z0-9_.-]", "_", u["username"].lower())
+    return storage.ROOT / "users" / safe / "app_state.json"
+
+
 @router.get("/state")
 def get_state():
-    if not STATE_FILE.exists():
+    f = state_file()
+    if not f.exists():
         return {"state": None, "saved_at": 0}
     try:
-        return json.loads(STATE_FILE.read_text())
+        return json.loads(f.read_text())
     except (OSError, ValueError):
         return {"state": None, "saved_at": 0}
 
@@ -466,12 +492,17 @@ def put_state(body: StateBody):
     data = json.dumps({"state": body.state, "saved_at": body.saved_at})
     if len(data) > 60_000_000:
         raise HTTPException(413, "Projects are too large to back up on the server (over 60 MB).")
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_FILE.with_suffix(".tmp")
+    f = state_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".tmp")
     tmp.write_text(data)
-    if STATE_FILE.exists():  # keep the previous save too, in case a bad save ever overwrites good work
-        STATE_FILE.replace(STATE_FILE.with_name("app_state.prev.json"))
-    tmp.replace(STATE_FILE)  # atomic: a crash mid-write never leaves a broken file
+    if f.exists():  # keep the previous save too, in case a bad save ever overwrites good work
+        f.replace(f.with_name("app_state.prev.json"))
+    tmp.replace(f)  # atomic: a crash mid-write never leaves a broken file
+    # a few numbers for the owner's account list
+    projects = body.state.get("projects") or {}
+    videos = sum(len([v for v in ((p or {}).get("render") or {}).get("videos") or [] if v.get("kind") == "final"]) for p in projects.values() if isinstance(p, dict))
+    auth.touch(auth.current(), projects=len(projects), videos=videos)
     return {"ok": True, "saved_at": body.saved_at}
 
 
@@ -592,6 +623,7 @@ def _no_words(visual: str) -> str:
 @router.post("/scene-visuals")
 async def scene_visuals(body: SceneVisualsBody):
     """For each scene: a picture that makes its narration obvious at a glance, plus 1-3 words that could be printed on it."""
+    auth.gate(writer=body.writer)
     scenes = [s for s in body.scenes if str(s.get("text", "")).strip()][:400]
     if not scenes:
         raise HTTPException(422, "No scenes to picture.")
@@ -655,7 +687,7 @@ async def scene_visuals(body: SceneVisualsBody):
             item.pop("liked", None)
         return {"scenes": out, "written_by": wn, "cost": round(cost, 4), "warning": warn}
 
-    return _job("Picturing the scenes", work)
+    return _job("Picturing the scenes", work, "writing")
 
 
 class VisualsBody(BaseModel):
@@ -666,6 +698,8 @@ class VisualsBody(BaseModel):
 @router.post("/visuals")
 async def visuals(body: VisualsBody):
     """Image ideas for a story the creator pasted: one short visual per sentence. Text only, so it costs little."""
+    auth.gate(writer=body.writer)
+    auth.check_seconds(len(body.story.split()) / 2.5, "This story")  # about 150 spoken words a minute
     if len(body.story.split()) < 5:
         raise HTTPException(422, "Paste a longer story first.")
 
@@ -683,7 +717,7 @@ async def visuals(body: VisualsBody):
             raise ProviderError(f"{wn} returned no image ideas. Try again.")
         return {"visuals": vis, "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
-    return _job("Picturing the story", work)
+    return _job("Picturing the story", work, "writing")
 
 
 # ---------- 3. Voice, images
@@ -719,6 +753,7 @@ def tune_voice(path: Path, speed: float, pitch: float) -> float:
 
 @router.post("/tts")
 async def tts(body: SpeakBody):
+    auth.gate(voice=body.model)
     if not body.text.strip():
         raise HTTPException(422, "Nothing to read.")
     out = MEDIA / "audio" / f"{uuid.uuid4().hex}.wav"
@@ -727,6 +762,7 @@ async def tts(body: SpeakBody):
         seconds = await asyncio.to_thread(tune_voice, out, body.speed, body.pitch)
     except ProviderError as e:
         raise HTTPException(502, str(e))
+    auth.charge(cost, "voice_clips")
     return {"url": media_url(out), "duration": round(seconds, 2), "cost": round(cost, 4)}
 
 
@@ -774,6 +810,7 @@ def kontext_ref(ref: str) -> str:
 
 @router.post("/image")
 async def image(body: ImageBody):
+    auth.gate(image=body.model)
     if body.aspect not in ("9:16", "16:9", "1:1", "4:5"):
         raise HTTPException(422, "Unsupported frame.")
     try:
@@ -787,6 +824,7 @@ async def image(body: ImageBody):
             path, cost = await google.draw(body.prompt[:4000], body.aspect, body.model, MEDIA / "images" / uuid.uuid4().hex, refs)
     except ProviderError as e:
         raise HTTPException(502, str(e))
+    auth.charge(cost, "images")
     return {"url": media_url(path), "cost": cost}
 
 
@@ -799,6 +837,7 @@ class StyleFromImages(BaseModel):
 
 @router.post("/style-from-images")
 async def style_from_images(body: StyleFromImages):
+    auth.gate()
     if not 1 <= len(body.images) <= 3:
         raise HTTPException(422, "Upload one to three images.")
     parts = [{"inlineData": {"mimeType": m, "data": base64.b64encode(d).decode()}} for d, m in (load_ref(i) for i in body.images)]
@@ -817,6 +856,7 @@ async def style_from_images(body: StyleFromImages):
     pal = [c for c in (data.get("palette") or []) if isinstance(c, str) and c.startswith("#")][:4]
     while len(pal) < 4:
         pal.append(["#222222", "#777777", "#EEEEEE", "#C97B4B"][len(pal)])
+    auth.charge(cost, "templates")
     return {"name": body.name.strip() or str(data.get("name") or "My style")[:40], "mood": str(data.get("mood", ""))[:80],
             "prefix": str(data.get("prefix", ""))[:600], "avoid": str(data.get("avoid", ""))[:300], "palette": pal, "cost": round(cost, 4)}
 
@@ -835,6 +875,8 @@ class ReviseBody(BaseModel):
 
 @router.post("/revise")
 async def revise(body: ReviseBody):
+    auth.gate(writer=body.writer)
+    auth.check_seconds(body.target_seconds, "The length you picked")
     if not body.idea.strip():
         raise HTTPException(422, "Type the idea you want added first.")
 
@@ -861,7 +903,7 @@ async def revise(body: ReviseBody):
         return {"story": story_text, "changed": str(data.get("changed", "")), "written_by": wn, "cost": round(cost, 4), "warning": warning,
                 "visuals": [v for v in (data.get("visuals") or []) if isinstance(v, dict) and v.get("sentence")]}
 
-    return _job("Rewriting the story", work)
+    return _job("Rewriting the story", work, "stories")
 
 
 # ---------- After the video: titles, post captions and thumbnails to choose from
@@ -908,6 +950,8 @@ class KitBody(BaseModel):
 
 @router.post("/publish-kit")
 async def publish_kit(body: KitBody):
+    auth.gate(writer=body.writer)
+
     async def work(progress):
         look, look_ref, look_cost = None, "", 0.0
         if body.thumb:
@@ -973,7 +1017,7 @@ async def publish_kit(body: KitBody):
                 "tags": [str(t) for t in (data.get("tags") or [])][:10], "written_by": wn, "cost": round(cost + look_cost, 4), "warning": warning,
                 "source_thumb": {"look": look, "ref": look_ref} if look else None}
 
-    return _job("Writing the publish kit", work)
+    return _job("Writing the publish kit", work, "publish_kits")
 
 
 # ---------- Channel ideas: a channel built around this kind of story and look
@@ -993,6 +1037,8 @@ class ChannelBody(BaseModel):
 
 @router.post("/channel-kit")
 async def channel_kit(body: ChannelBody):
+    auth.gate(writer=body.writer)
+
     async def work(progress):
         progress("Reading the story type and the visual style")
         data, cost, wn, warning = await write_json(body.writer, progress, (
@@ -1026,7 +1072,7 @@ async def channel_kit(body: ChannelBody):
         return {"story_type": str(data.get("story_type", "")), "visual_type": str(data.get("visual_type", "")),
                 "channels": chans, "written_by": wn, "cost": round(cost, 4), "warning": warning}
 
-    return _job("Writing channel ideas", work)
+    return _job("Writing channel ideas", work, "writing")
 
 
 # ---------- 4. Render
@@ -1040,11 +1086,19 @@ class RenderBody(BaseModel):
     lines: list[dict[str, Any]]
     music: dict[str, Any] = {}  # {url, volume 0-0.6, duck}
     card_style: dict[str, Any] = {}  # {id, kind, palette} of the template, for text cards
+    caption_look: Optional[dict[str, Any]] = None  # "Like the original" captions: colours, words at a time, position
+    motion: dict[str, Any] = {}  # zoom and pan: {strength, type}
 
 
 @router.post("/render")
 async def render_video(body: RenderBody):
+    u = auth.gate()
+    payload = body.model_dump()
+    payload["max_seconds"] = u.get("max_seconds")
+
     async def work(progress):
-        return await asyncio.to_thread(render.render, body.model_dump(), MEDIA, progress)
+        res = await asyncio.to_thread(render.render, payload, MEDIA, progress)
+        auth.charge(0, "final_videos" if body.final else "drafts", u)
+        return res
 
     return _job("Rendering final MP4" if body.final else "Building draft", work)

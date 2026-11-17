@@ -302,6 +302,24 @@ label.mrow { grid-template-columns: auto 1fr; cursor: pointer; }
 .lightbox .lbcap { color: #fff; margin-top: 8px; text-align: center; font-size: 14px; }
 .pickgrid .pnum { position: absolute; top: 4px; right: 4px; background: var(--accent); color: #fff; border-radius: 999px; width: 20px; height: 20px; font-size: 12px; display: grid; place-items: center; font-weight: 700; }
 .tplbox { background: var(--surface); border-radius: var(--r); padding: 16px; width: min(720px, 100%); max-height: 100%; overflow: auto; }
+.authwrap { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); }
+.authcard { width: min(420px, 100%); background: var(--surface); border-radius: 16px; padding: 24px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); display: grid; gap: 14px; }
+.authcard h1 { margin: 0; font-size: 22px; }
+.authcard .brand { font-weight: 700; display: flex; gap: 8px; align-items: center; }
+.authcard .input { width: 100%; font-size: 16px; }
+.acctbtn { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.acctbtn .left { font-family: var(--f-mono, monospace); font-weight: 700; }
+.acctbtn .left.low { color: var(--rec); }
+.ucards { display: grid; gap: 12px; }
+.ucard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.ucard.pending { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.ustats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.ustat { background: var(--sunk); border-radius: 10px; padding: 8px 10px; }
+.ustat b { display: block; font-size: 18px; } .ustat span { font-size: 12px; color: var(--muted); }
+.cbar { height: 8px; border-radius: 999px; background: var(--sunk); overflow: hidden; } .cbar i { display: block; height: 100%; background: var(--accent); }
+.mchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mchip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 13px; cursor: pointer; background: var(--surface); }
+.mchip input { margin: 0; } .mchip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .zoom-nav { font-size: 28px; line-height: 1; padding: 6px 10px; }
 @media (max-width: 860px) { .zoom-box { grid-template-columns: auto minmax(0, 1fr) auto; overflow: auto; } .zoom-side { grid-column: 1 / -1; } .zoom-img { height: 60vh; } .zoom-img.r16x9 { width: 100%; height: auto; } }
 .vlib { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
@@ -766,7 +784,9 @@ const frameCls = p => ' r' + p.format.aspect_ratio.replace(':', 'x');
 // Video lengths, up to 10 minutes.
 const LENGTHS = [30, 60, 90, 180, 300, 600];
 const lenLabel = v => v < 120 ? v + 's' : (Math.round(v / 6) / 10) + ' min';
-const LENGTH_OPTS = [...LENGTHS.map(v => ({ value: v, label: lenLabel(v) })), { value: 'c', label: 'Custom' }];
+// The longest video this account may make (the owner sets it per account); 600 s without accounts.
+const maxLen = () => Math.min(600, (typeof ACCOUNT !== 'undefined' && ACCOUNT && ACCOUNT.max_seconds) || 600);
+const lengthOpts = () => [...LENGTHS.filter(v => v <= maxLen()).map(v => ({ value: v, label: lenLabel(v) })), { value: 'c', label: 'Custom' }];
 // Ways to remake the same viral video (never a sequel): the new video stands alone and is recommended beside it.
 const ANGLE_TYPES = ['Fill a gap', 'Same video, new niche', 'Same video, new character', 'Same format, new topic', 'Same story, new look', 'Similar storyline', 'New perspective'];
 // How the script talks to the viewer, chosen after the angle.
@@ -1009,7 +1029,10 @@ const styleImg = (st, n) => st.refs ? st.refs[n - 1] : (st.examples ? 'templates
 // The project's look: the template, plus the creator's own idea for it when they added one.
 const isTextOnly = id => !!(MODELS.image.find(m => m.id === id) || {}).text;
 // Thumbnails and banners print words, which FLUX does poorly: they use Nano Banana 2 when a FLUX model is chosen.
-const textImageModel = p => isTextOnly(p.models.image) ? 'nano-banana-2' : p.models.image;
+// Models that can start from a picture and spell words well, best first: used when the chosen model cannot.
+const PICTURE_MODELS = ['nano-banana-2', 'seedream', 'nano-banana-2-lite', 'nano-banana-pro', 'flux-kontext'];
+const pictureModel = p => PICTURE_MODELS.find(id => isAllowed('image', id)) || p.models.image;
+const textImageModel = p => isTextOnly(p.models.image) ? pictureModel(p) : p.models.image;
 // Thumbnails and channel art use the same rule as the scene images.
 const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); return idea ? { ...st, prefix: (st.idea ? st.prefix.replace('. Also: ' + st.idea, '') : st.prefix) + '. Rule for every image (follow it exactly): ' + idea.replace(/[.\s]+$/, '') } : st; };
 // A thumbnail picture built on a click formula: one big subject with a strong emotion, a clear open area for the words
@@ -1019,7 +1042,7 @@ const projStyle = p => { const st = styleById(p.style); const idea = ideaOf(p); 
 const thumbTextMode = k => (k && k.text_mode) || 'design';
 // The model a thumbnail is drawn with: text-only models cannot start from a picture and FLUX spells poorly, so Nano Banana 2 does those.
 const thumbModel = (p, t) => { const pic = t && t.scene_id && scenePics(p).find(x => x.id === t.scene_id); const design = thumbTextMode(p.kit) === 'design';
-  return (pic || design) && (isTextOnly(p.models.image) || /^flux-(schnell|dev)$/.test(p.models.image)) ? 'nano-banana-2' : p.models.image; };
+  return (pic || design) && (isTextOnly(p.models.image) || /^flux-(schnell|dev)$/.test(p.models.image)) ? pictureModel(p) : p.models.image; };
 const thumbCost = (p, t) => (MODELS.image.find(m => m.id === thumbModel(p, t)) || modelOf(p, 'image')).cost;
 // The words, designed as part of the thumbnail: huge bold letters placed wherever they catch the eye best.
 const thumbDesignWords = (t, look) => { const words = (t.text || '').replace(/\*/g, '').toUpperCase().trim(); const hi = ((t.text || '').match(/\*([^*]+)\*/) || [])[1];
@@ -1179,7 +1202,8 @@ function estimate(p) {
 /* ======================================================================
    Store: one project JSON per video (PRJ-1), saved on every change
    ====================================================================== */
-const KEY = 'angle-studio-demo-v8';
+const KEY_BASE = 'angle-studio-demo-v8';
+let KEY = KEY_BASE;  // each signed-in account (other than the owner) saves under its own key on a shared device
 const listeners = new Set();
 const DEFAULT_MODELS = { writer: 'gpt-5-5', voice: 'gemini-tts-flash', image: 'nano-banana-2', video: 'veo-31-fast' };
 
@@ -1262,11 +1286,41 @@ let STATE = load() || seed();
 moveTemplateIdeas(STATE);
 // Live mode: when this page is served by the Angle Studio server, real APIs replace the simulation.
 let LIVE = null;
+// ---------- Accounts: the signed-in user, what they may use, and how much credit is left
+let ACCOUNT = null;  // null: no accounts (demo, or a server with accounts off)
+const ON_SERVER = /^https?:$/.test(location.protocol) && !/claude/i.test(location.hostname);
+let AUTH = { phase: ON_SERVER ? 'checking' : 'off' };  // checking | signin | waiting | disabled | in | off
+const authListeners = new Set();
+function setAuth(next) { AUTH = { ...AUTH, ...next }; authListeners.forEach(l => l()); listeners.forEach(l => l()); }
+function useAuth() { return useSyncExternalStore(cb => { authListeners.add(cb); return () => authListeners.delete(cb); }, () => AUTH); }
+const allowedIds = step => ACCOUNT && ACCOUNT.models ? (ACCOUNT.models[step] || []) : null;
+const isAllowed = (step, id) => { const a = allowedIds(step); return !a || a.includes(id); };
+const isAdmin = () => !!(ACCOUNT && ACCOUNT.role === 'admin');
+const creditLeft = () => ACCOUNT && ACCOUNT.remaining != null ? ACCOUNT.remaining : null;
+let accountTimer = null;
+function refreshAccount(now) {
+  if (!ACCOUNT) return;
+  clearTimeout(accountTimer);
+  accountTimer = setTimeout(async () => { try { const r = await fetch('/api/auth/me'); const d = await r.json(); if (d.user) { ACCOUNT = d.user; setAuth({ tick: Date.now() }); } else if (r.ok) setAuth({ phase: 'signin' }); } catch (e) { /* try later */ } }, now ? 0 : 1200);
+}
+// Keeps every project on models this account may use (the first allowed one when the chosen one is off).
+function fitModels() {
+  if (!ACCOUNT || !ACCOUNT.models) return;
+  const fit = (step, id) => isAllowed(step, id) ? id : (allowedIds(step)[0] || id);
+  update(s => {
+    ['writer', 'voice', 'image', 'video'].forEach(k => { s.settings.defaults[k] = fit(k, s.settings.defaults[k]); Object.values(s.projects).forEach(q => { q.models[k] = fit(k, q.models[k]); }); });
+    s.settings.analyst = fit('analyst', s.settings.analyst);
+  });
+}
+async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {} location.reload(); }
 const DEFAULT_DELIVERY = 'warm, steady and conversational, like explaining something to a friend, at a medium pace';
 async function post(path, body) {
   const r = await fetch('/api/live/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const d = await r.json().catch(() => ({}));
+  if (r.status === 401 && ACCOUNT) setAuth({ phase: 'signin' });
+  if (r.status === 402) refreshAccount(true);
   if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : r.status >= 502 ? 'The server is restarting or busy (' + r.status + '). Wait a minute and try again.' : 'The server could not finish this step (' + r.status + ').');
+  if (d && d.cost) refreshAccount();
   return d;
 }
 // Starts a server job and mirrors its progress in the Jobs panel until it finishes.
@@ -1291,7 +1345,7 @@ async function liveJob(pid, label, path, body, stages) {
       }
       misses = 0;
       if (j.stage) setJob(x => { let k = x.stages.indexOf(j.stage); if (k < 0) { x.stages.splice(x.stage + 1, 0, j.stage); k = x.stage + 1; } x.stage = Math.max(x.stage, k); });
-      if (j.status === 'done') { setJob(x => { x.stage = x.stages.length; x.status = 'done'; }); return j.result; }
+      if (j.status === 'done') { setJob(x => { x.stage = x.stages.length; x.status = 'done'; }); refreshAccount(); return j.result; }
       if (j.status === 'failed') throw new Error(j.error || 'The step failed.');
     }
   } catch (e) { setJob(x => { x.status = 'failed'; x.error = e.message; }); throw e; }
@@ -1299,8 +1353,19 @@ async function liveJob(pid, label, path, body, stages) {
 async function detectLive() {
   if (!/^https?:$/.test(location.protocol) || /claude/i.test(location.hostname)) return; // file or claude.ai preview: demo mode
   try {
-    const r = await fetch('/api/live/status'); if (!r.ok) return;
-    const d = await r.json(); if (!d.live) return;
+    const r = await fetch('/api/live/status'); if (!r.ok) { setAuth({ phase: 'off' }); return; }
+    const d = await r.json(); if (!d.live) { setAuth({ phase: 'off' }); return; }
+    if ('user' in d) {  // a server with accounts
+      const u = d.user;
+      if (!u) { setAuth({ phase: 'signin' }); return; }
+      ACCOUNT = u;
+      if (u.status === 'pending') { setAuth({ phase: 'waiting' }); return; }
+      if (u.status !== 'approved') { setAuth({ phase: 'disabled' }); return; }
+      if (!u.owner) {  // this account's own work, never the owner's (or another account's) on a shared device
+        KEY = KEY_BASE + ':' + u.username.toLowerCase();
+        STATE = load() || seed(); moveTemplateIdeas(STATE);
+      }
+    }
     LIVE = d;
     let remote = null;
     try { const rs = await fetch('/api/live/state'); if (rs.ok) remote = (await rs.json()).state; } catch (e) { remote = null; }
@@ -1322,7 +1387,11 @@ async function detectLive() {
       setTimeout(() => toast('Claude is now the brain of the app: angles, scripts, image ideas, titles and channel ideas. Gemini still watches the videos.'), 600);
     }
     update(s => { s.settings.keys = { ...s.settings.keys, ...d.providers }; if (!s.analyst_v2) { s.settings.analyst = 'gemini-flash'; s.analyst_v2 = true; } });
+    fitModels();
+    setAuth({ phase: ACCOUNT ? 'in' : 'off' });
+    if (isAdmin()) adminCall('GET', 'users').then(x => setAuth({ pending: x.users.filter(u => u.status === 'pending').length })).catch(() => {});
   } catch (e) { /* not served by the Angle Studio server: demo mode */ }
+  if (AUTH.phase === 'checking') setAuth({ phase: 'off' });
 }
 function playLine(l, v) { if (l.audio_url) { try { new Audio(l.audio_url).play(); } catch (e) {} } else speak(l.text, v); }
 let saveTimer = null;
@@ -2090,9 +2159,9 @@ function ModelPicker({ kind, p, s }) {
       <span className="k">${KIND_LABEL[kind]} model</span><span className="v">${cur.name}<small>${cur.price || fmt$(cur.cost) + cur.unit}</small></span>
     </button>
     ${open ? html`<div className="menu" role="listbox">
-      ${MODELS[kind].map(m => { const noVeo = kind === 'video' && LIVE && !LIVE.video_models; const has = s.settings.keys[m.provider] && !noVeo; return html`<button key=${m.id} type="button" role="option" className="menu-item" aria-checked=${m.id === cur.id} disabled=${!has} onClick=${() => pick(m)}>
+      ${MODELS[kind].map(m => { const noVeo = kind === 'video' && LIVE && !LIVE.video_models; const off = !isAllowed(kind, m.id); const has = s.settings.keys[m.provider] && !noVeo && !off; return html`<button key=${m.id} type="button" role="option" className="menu-item" aria-checked=${m.id === cur.id} disabled=${!has} onClick=${() => pick(m)}>
         <div className="mi-top"><span>${m.name}</span><span className="mono">${m.price || fmt$(m.cost) + m.unit}</span></div>
-        <div className="mi-sub">${has ? m.limits : noVeo ? 'Not available on your Gemini key yet.' : 'No ' + PROVIDERS[m.provider] + ' key yet. Add it ' + (LIVE ? 'to server/.env.' : 'in Settings.')}</div></button>`; })}
+        <div className="mi-sub">${off ? 'Not turned on for your account.' : has ? m.limits : noVeo ? 'Not available on your Gemini key yet.' : 'No ' + PROVIDERS[m.provider] + ' key yet. Add it ' + (LIVE ? 'to server/.env.' : 'in Settings.')}</div></button>`; })}
       <div className="menu-note">Saved with this project. Changing it affects newly generated items only.</div>
     </div>` : null}
   </div>`;
@@ -2106,8 +2175,8 @@ function AnalystPicker({ s }) {
       <span className="k">Video analysis</span><span className="v">${cur.name}<small>~${fmt$(cur.perVideo)}/video</small></span>
     </button>
     ${open ? html`<div className="menu" role="listbox">
-      ${ANALYSTS.map(m => html`<button key=${m.id} type="button" role="option" className="menu-item" aria-checked=${m.id === cur.id} onClick=${() => { setOpen(false); update(st => { st.settings.analyst = m.id; }); toast(m.name + ' will watch the next video you analyze.'); }}>
-        <div className="mi-top"><span>${m.name}</span><span className="mono">~${fmt$(m.perVideo)}/video</span></div><div className="mi-sub">${m.limits}</div></button>`)}
+      ${ANALYSTS.map(m => html`<button key=${m.id} type="button" role="option" className="menu-item" aria-checked=${m.id === cur.id} disabled=${!isAllowed('analyst', m.id)} onClick=${() => { setOpen(false); update(st => { st.settings.analyst = m.id; }); toast(m.name + ' will watch the next video you analyze.'); }}>
+        <div className="mi-top"><span>${m.name}</span><span className="mono">~${fmt$(m.perVideo)}/video</span></div><div className="mi-sub">${isAllowed('analyst', m.id) ? m.limits : 'Not turned on for your account.'}</div></button>`)}
       <div className="menu-note">Watches the reference video. Used for every project.</div>
     </div>` : null}
   </div>`;
@@ -2117,6 +2186,7 @@ function TopBar({ s, p }) {
   return html`<header className="topbar">
     <div className="brand"><span className="brand-mark" aria-hidden="true"></span>Angle Studio<span className=${'pill ' + (LIVE ? 'ready' : 'pending')} title=${LIVE ? 'Connected to the Angle Studio server and real APIs' : 'Simulated: nothing is generated or charged'}>${LIVE ? 'Live' : 'Demo'}</span></div>
     <span className="proj-title" title=${p.title}>${p.title}</span>
+    ${ACCOUNT ? html`<div style=${{ marginLeft: 'auto' }}><${AccountMenu} /></div>` : null}
     <div className="models">
       <${AnalystPicker} s=${s} /><${ModelPicker} kind="writer" p=${p} s=${s} /><${ModelPicker} kind="voice" p=${p} s=${s} /><${ModelPicker} kind="image" p=${p} s=${s} /><${ModelPicker} kind="video" p=${p} s=${s} />
       <span className="costpill" title="Estimated full-run cost for this project, and what has been spent">Est. <b>${fmt$(est.total)}</b> · spent <b>${fmt$(p.render.cost_actual)}</b></span>
@@ -2152,6 +2222,7 @@ function Rail({ s, p }) {
         <button type="button" className="rail-item" aria-current=${s.view === 'ideas'} onClick=${() => setView('ideas')}><${Icon} n="bulb" /><span>Idea bank</span><span className="rail-count">${s.ideaBank.length}</span></button>
         <button type="button" className="rail-item" aria-current=${s.view === 'templates'} onClick=${() => setView('templates')}><${Icon} n="layers" /><span>Templates</span><span className="rail-count">${allStyles().length}</span></button>
         <button type="button" className="rail-item" aria-current=${s.view === 'settings'} onClick=${() => setView('settings')}><${Icon} n="gear" /><span>Settings</span></button>
+        ${isAdmin() ? html`<button type="button" className="rail-item" aria-current=${s.view === 'admin'} onClick=${() => setView('admin')}><${Icon} n="lock" /><span>Accounts</span>${AUTH.pending ? html`<span className="rail-count" style=${{ background: 'var(--accent)', color: '#fff' }}>${AUTH.pending}</span>` : null}</button>` : null}
       </nav>
     </div>
   </aside>`;
@@ -2190,8 +2261,8 @@ function IngestScreen({ p, s }) {
           <textarea id="own-idea" className="textarea" rows="5" placeholder="e.g. A grandmother in Lagos teaches her grandson how she survived the 1980s with one sewing machine. Warm, funny, ends with a lesson about patience." value=${own} onChange=${e => setOwn(e.target.value)}></textarea></label>
         <p className="note">Add anything you want kept: characters, places, the ending, the tone, who it is for.</p>
         ${typeSeg}
-        <div className="row"><span className="note">Video length</span><${Seg} label="Video length" value=${LENGTHS.includes(len) ? len : 'c'} onChange=${v => setLen(v === 'c' ? 120 : v)} options=${LENGTH_OPTS} />
-          ${!LENGTHS.includes(len) ? html`<input id="own-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} value=${len} onChange=${e => setLen(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" /><span className="note">seconds, up to 600</span>` : null}</div>
+        <div className="row"><span className="note">Video length</span><${Seg} label="Video length" value=${LENGTHS.includes(len) ? len : 'c'} onChange=${v => setLen(v === 'c' ? 120 : v)} options=${lengthOpts()} />
+          ${!LENGTHS.includes(len) ? html`<input id="own-len" className="input" type="number" min="15" max=${maxLen()} style=${{ width: 80 }} value=${len} onChange=${e => setLen(Math.max(15, Math.min(maxLen(), +e.target.value || 60)))} aria-label="Custom length in seconds" /><span className="note">seconds, up to ${maxLen()}</span>` : null}</div>
         <div style=${{ maxWidth: 420 }}><${ScriptTypePicker} p=${p} value=${stype} onChange=${setStype} /></div>
         <div><${CostGate} p=${p} label="Write my story" disabled=${words(own).length < 3} cost=${wr.perVideo * 0.3} rows=${[[wr.name, 'one ' + lenLabel(len) + ' story with 3 hook options and an image idea per sentence']]} onGo=${() => { updateP(p.id, q => { q.script_type = stype; }); api.startOwn(p.id, 'idea', own, { video_type: vt, target_seconds: len }); }} /></div>
       </${Fragment}>` : html`<${Fragment}>
@@ -2344,8 +2415,8 @@ function AnglesScreen({ p, s }) {
             <div className="row"><span className="note">Make it as</span><${Seg} label="Video type" value=${p.video_type} onChange=${v => !locked && updateP(p.id, q => { q.video_type = v; })} options=${[{ value: 'voiceover', label: 'Voiceover video' }, { value: 'character', label: 'Character video' }]} /></div>
             <p className="note">${p.video_type === 'voiceover' ? 'Narrated, with images that stay still or get animated.' : 'Characters with their own voices, scenes animated from images.'}</p>
             <div className="row"><span className="note">Video length</span>
-              <${Seg} label="Video length" value=${LENGTHS.includes(p.format.target_seconds) ? p.format.target_seconds : 'c'} onChange=${v => !locked && updateP(p.id, q => { q.format.target_seconds = v === 'c' ? 120 : v; })} options=${LENGTH_OPTS} />
-              ${!LENGTHS.includes(p.format.target_seconds) ? html`<input id="angle-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${p.format.target_seconds} onChange=${e => updateP(p.id, q => { q.format.target_seconds = Math.max(15, Math.min(600, +e.target.value || 60)); })} aria-label="Custom length in seconds" /><span className="note">seconds, up to 600</span>` : null}
+              <${Seg} label="Video length" value=${LENGTHS.includes(p.format.target_seconds) ? p.format.target_seconds : 'c'} onChange=${v => !locked && updateP(p.id, q => { q.format.target_seconds = v === 'c' ? 120 : v; })} options=${lengthOpts()} />
+              ${!LENGTHS.includes(p.format.target_seconds) ? html`<input id="angle-len" className="input" type="number" min="15" max=${maxLen()} style=${{ width: 80 }} disabled=${locked} value=${p.format.target_seconds} onChange=${e => updateP(p.id, q => { q.format.target_seconds = Math.max(15, Math.min(maxLen(), +e.target.value || 60)); })} aria-label="Custom length in seconds" /><span className="note">seconds, up to ${maxLen()}</span>` : null}
             </div>
           </div>
           <${ScriptTypePicker} p=${p} value=${p.script_type} disabled=${locked} onChange=${v => updateP(p.id, q => { q.script_type = v; })} />
@@ -2395,8 +2466,8 @@ function ScriptScreen({ p, s }) {
   return html`<${Fragment}>
     <${StepHead} title="Script" sub=${(sc.pasted ? 'Your own script, used word for word.' : 'Written by ' + (sc.written_by || modelOf(p, 'writer').name) + ' as a ' + scriptTypeOf(p).name.toLowerCase() + '.') + ' Edit it freely. Next it is split into scenes and each scene gets an image.'}>
       <div className="row"><span className="note">Length</span>
-        <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (locked) return; if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${LENGTH_OPTS} />
-        ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max="600" style=${{ width: 80 }} disabled=${locked} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(600, +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
+        <${Seg} label="Target length" value=${custom ? 'c' : target} onChange=${v => { if (locked) return; if (v === 'c') setCustom(true); else { setCustom(false); setTarget(v); } }} options=${lengthOpts()} />
+        ${custom ? html`<input id="custom-len" className="input" type="number" min="15" max=${maxLen()} style=${{ width: 80 }} disabled=${locked} value=${target} onChange=${e => setTarget(Math.max(15, Math.min(maxLen(), +e.target.value || 60)))} aria-label="Custom length in seconds" />` : null}
       </div>
       <div className="row"><span className="note">Type</span><select className="select" style=${{ width: 'auto' }} aria-label="Script type" disabled=${locked || sc.revising} value=${nextType} onChange=${e => setNextType(e.target.value)}>${SCRIPT_TYPES.map(t => html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}</select>
         ${nextType !== scriptTypeOf(p).id ? html`<button type="button" className="btn primary" disabled=${locked || sc.revising} onClick=${() => api.changeScriptType(p.id, nextType)}><${Icon} n="redo" />Rewrite as ${(SCRIPT_TYPES.find(t => t.id === nextType) || {}).name}</button>` : null}</div>
@@ -3672,12 +3743,177 @@ function Flow({ p, s }) {
   const Screen = { ingest: IngestScreen, angles: AnglesScreen, script: ScriptScreen, style: StyleScreen, voice: VoiceScreen, format: FormatScreen, scenes: ScenesScreen, animate: AnimateScreen, compile: CompileScreen, export: ExportScreen }[step];
   return html`<${Screen} p=${p} s=${s} />`;
 }
+/* ======================================================================
+   Accounts: sign in, waiting for approval, the account menu, and the owner's Accounts page
+   ====================================================================== */
+async function authPost(path, body) {
+  const r = await fetch('/api/auth/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Something went wrong (' + r.status + '). Try again.');
+  return d;
+}
+function AuthScreen() {
+  const [mode, setMode] = useState('signin'); const [f, setF] = useState({ login: '', username: '', email: '', password: '' });
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  const go = async e => {
+    e.preventDefault(); setErr(''); setBusy(true);
+    try {
+      if (mode === 'signin') await authPost('login', { login: f.login, password: f.password });
+      else await authPost('register', { username: f.username, email: f.email, password: f.password });
+      location.reload();
+    } catch (x) { setErr(x.message); setBusy(false); }
+  };
+  return html`<div className="authwrap"><form className="authcard" onSubmit=${go}>
+    <div className="brand"><span className="brand-mark" aria-hidden="true"></span>Angle Studio</div>
+    <h1>${mode === 'signin' ? 'Sign in' : 'Create your account'}</h1>
+    <${Seg} label="Sign in or create an account" value=${mode} onChange=${v => { setMode(v); setErr(''); }} options=${[{ value: 'signin', label: 'Sign in' }, { value: 'register', label: 'Create account' }]} />
+    ${mode === 'signin' ? html`<label className="field" htmlFor="au-login">Username or email<input id="au-login" className="input" autoComplete="username" autoCapitalize="none" required value=${f.login} onInput=${e => set('login', e.target.value)} /></label>`
+      : html`<${Fragment}>
+        <label className="field" htmlFor="au-user">Username<input id="au-user" className="input" autoComplete="username" autoCapitalize="none" required minLength="3" maxLength="32" pattern="[A-Za-z0-9_.\-]+" title="Letters, numbers, dots, dashes or underscores" value=${f.username} onInput=${e => set('username', e.target.value)} /></label>
+        <label className="field" htmlFor="au-email">Email<input id="au-email" className="input" type="email" autoComplete="email" required value=${f.email} onInput=${e => set('email', e.target.value)} /></label>
+      </${Fragment}>`}
+    <label className="field" htmlFor="au-pass">Password<input id="au-pass" className="input" type="password" autoComplete=${mode === 'signin' ? 'current-password' : 'new-password'} required minLength=${mode === 'signin' ? 1 : 8} value=${f.password} onInput=${e => set('password', e.target.value)} /></label>
+    ${mode === 'register' ? html`<p className="note" style=${{ margin: 0 }}>At least 8 characters. After you sign up, the owner reviews your account; you can start once it is approved.</p>` : null}
+    ${err ? html`<div className="warnbox" role="alert">${err}</div>` : null}
+    <button type="submit" className="btn primary" disabled=${busy}>${busy ? html`<span className="spinner"></span>` : null}${mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+    ${mode === 'signin' ? html`<p className="note" style=${{ margin: 0 }}>Forgot your password? Ask the owner to reset it.</p>` : null}
+  </form></div>`;
+}
+function WaitScreen({ phase }) {
+  const [busy, setBusy] = useState(false);
+  const again = async () => { setBusy(true); await new Promise(r => setTimeout(r, 300)); location.reload(); };
+  return html`<div className="authwrap"><div className="authcard">
+    <div className="brand"><span className="brand-mark" aria-hidden="true"></span>Angle Studio</div>
+    ${phase === 'waiting' ? html`<${Fragment}><h1>Thanks${ACCOUNT ? ', ' + ACCOUNT.username : ''}!</h1>
+      <p style=${{ margin: 0 }}>Your account is waiting for the owner’s approval. Once it is approved you can sign in and start creating, on your computer or your phone.</p></${Fragment}>`
+      : html`<${Fragment}><h1>This account is turned off</h1><p style=${{ margin: 0 }}>Contact the owner if you think this is a mistake.</p></${Fragment}>`}
+    <div className="row"><button type="button" className="btn primary" disabled=${busy} onClick=${again}>Check again</button><button type="button" className="btn" onClick=${signOut}>Sign out</button></div>
+  </div></div>`;
+}
+function AccountMenu() {
+  const [open, setOpen] = useState(false); const ref = useRef(null); const [pw, setPw] = useState(null);
+  useEffect(() => { if (!open) return; const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, [open]);
+  const a = ACCOUNT; const left = creditLeft();
+  const changePw = async () => { try { await authPost('password', { old: pw.old, new: pw.new }); toast('Password changed.'); setPw(null); } catch (e) { toast(e.message); } };
+  return html`<div className="acctwrap" ref=${ref}>
+    <button type="button" className="acctbtn" aria-haspopup="menu" aria-expanded=${open} onClick=${() => { setOpen(!open); refreshAccount(true); }} title="Your account">
+      <${Icon} n="lock" />${left != null ? html`<span className=${'left' + (left < 1 ? ' low' : '')}>${fmt$(left)}</span><span className="note">left</span>` : html`<span>${a.username}</span>`}
+    </button>
+    ${open ? html`<div className="menu" role="menu" style=${{ right: 0, left: 'auto', minWidth: 260 }}>
+      <div style=${{ padding: '10px 12px' }} className="stack">
+        <div><strong>${a.username}</strong><div className="note">${a.email}${a.owner ? ' · owner' : ''}</div></div>
+        ${a.credit != null ? html`<div className="stack" style=${{ gap: 4 }}><div className="row" style=${{ justifyContent: 'space-between' }}><span className="note">Credit</span><span className="mono">${fmt$(a.remaining)} of ${fmt$(a.credit)} left</span></div>
+          <div className="cbar"><i style=${{ width: Math.max(0, Math.min(100, 100 * a.remaining / Math.max(0.01, a.credit))) + '%' }}></i></div>
+          ${a.remaining <= 0 ? html`<div className="warnbox">Your credit is used up. Ask the owner for more to keep creating.</div>` : null}</div>` : html`<span className="note">No credit limit.</span>`}
+        ${a.max_seconds ? html`<span className="note">Videos up to ${lenLabel(a.max_seconds)}</span>` : null}
+        ${pw ? html`<div className="stack" style=${{ gap: 6 }}>
+          <input className="input" type="password" placeholder="Current password" autoComplete="current-password" value=${pw.old} onInput=${e => setPw({ ...pw, old: e.target.value })} />
+          <input className="input" type="password" placeholder="New password (8+ characters)" autoComplete="new-password" value=${pw.new} onInput=${e => setPw({ ...pw, new: e.target.value })} />
+          <div className="row"><button type="button" className="btn sm primary" disabled=${!pw.old || (pw.new || '').length < 8} onClick=${changePw}>Save</button><button type="button" className="btn sm ghost" onClick=${() => setPw(null)}>Cancel</button></div></div>`
+          : html`<button type="button" className="btn sm" onClick=${() => setPw({ old: '', new: '' })}>Change password</button>`}
+        ${isAdmin() ? html`<button type="button" className="btn sm" onClick=${() => { setOpen(false); update(st => { st.view = 'admin'; }); }}>Accounts</button>` : null}
+        <button type="button" className="btn sm ghost" onClick=${signOut}>Sign out</button>
+      </div>
+    </div>` : null}
+  </div>`;
+}
+// ---------- the owner's Accounts page
+const USAGE = [['final_videos', 'Final videos'], ['drafts', 'Drafts'], ['images', 'Images'], ['voice_clips', 'Voice clips'], ['analyses', 'Videos analyzed'], ['stories', 'Stories written'], ['publish_kits', 'Publish kits'], ['templates', 'Templates made']];
+const STEP_MODELS = () => ({ analyst: ANALYSTS, writer: MODELS.writer, voice: MODELS.voice, image: MODELS.image, video: MODELS.video });
+const ago = t => { if (!t) return 'never'; const m = Math.round((Date.now() / 1000 - t) / 60); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; };
+async function adminCall(method, path, body) {
+  const r = await fetch('/api/admin/' + path, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Could not save (' + r.status + ').');
+  return d;
+}
+function AdminView() {
+  const [data, setData] = useState(null); const [tab, setTab] = useState('all'); const [err, setErr] = useState('');
+  const load = async () => { try { const d = await adminCall('GET', 'users'); setData(d); setAuth({ pending: d.users.filter(u => u.status === 'pending').length }); } catch (e) { setErr(e.message); } };
+  useEffect(() => { load(); }, []);
+  if (err) return html`<section className="panel"><div className="warnbox">${err}</div></section>`;
+  if (!data) return html`<section className="panel row note"><span className="spinner"></span> Loading accounts</section>`;
+  const us = data.users; const pending = us.filter(u => u.status === 'pending');
+  const shown = us.filter(u => tab === 'all' || (tab === 'pending' ? u.status === 'pending' : tab === 'active' ? u.status === 'approved' : u.status === 'disabled'))
+    .sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1) || (b.last_active || 0) - (a.last_active || 0));
+  const given = us.reduce((t, u) => t + (u.credit || 0), 0); const spent = us.reduce((t, u) => t + (u.spent || 0), 0);
+  return html`<${Fragment}>
+    <${StepHead} title="Accounts" sub="Approve people who signed up, give each a credit budget, the models they may use at each step, and the longest video they may make. Limits are checked on the server for every step.">
+      <button type="button" className="btn sm" onClick=${load}><${Icon} n="redo" />Refresh</button></${StepHead}>
+    <section className="ustats">
+      <div className="ustat"><b>${us.length}</b><span>Accounts</span></div>
+      <div className="ustat"><b>${pending.length}</b><span>Waiting for approval</span></div>
+      <div className="ustat"><b>${fmt$(given)}</b><span>Credit given</span></div>
+      <div className="ustat"><b>${fmt$(spent)}</b><span>Credit used (all accounts)</span></div>
+      <div className="ustat"><b>${us.reduce((t, u) => t + (u.videos || 0), 0)}</b><span>Final videos</span></div>
+    </section>
+    <div className="row"><${Seg} label="Show" value=${tab} onChange=${setTab} options=${[{ value: 'all', label: 'All' }, { value: 'pending', label: 'Waiting (' + pending.length + ')' }, { value: 'active', label: 'Approved' }, { value: 'off', label: 'Turned off' }]} /></div>
+    <div className="ucards">${shown.map(u => html`<${UserCard} key=${u.username} u=${u} onSaved=${load} />`)}${shown.length ? null : html`<p className="note">No accounts here.</p>`}</div>
+  </${Fragment}>`;
+}
+function UserCard({ u, onSaved }) {
+  const [edit, setEdit] = useState(u.status === 'pending'); const [busy, setBusy] = useState(false); const [temp, setTemp] = useState('');
+  const [f, setF] = useState(() => ({ credit: u.credit != null ? u.credit : 50, max_seconds: u.max_seconds || 180, note: u.note || '',
+    models: Object.fromEntries(Object.keys(STEP_MODELS()).map(k => [k, (u.models && u.models[k]) || []])) }));
+  const save = async (extra, msg) => { setBusy(true); try { await adminCall('PATCH', 'users/' + encodeURIComponent(u.username), extra); toast(msg || 'Saved.'); await onSaved(); } catch (e) { toast(e.message); } setBusy(false); };
+  const saveAll = (status) => save({ credit: +f.credit, max_seconds: +f.max_seconds, note: f.note, models: f.models, ...(status ? { status } : {}) }, status === 'approved' ? u.username + ' can now use the app.' : 'Saved.');
+  const toggle = (step, id) => setF(x => { const cur = x.models[step] || []; return { ...x, models: { ...x.models, [step]: cur.includes(id) ? cur.filter(m => m !== id) : cur.concat(id) } }; });
+  const pct = u.credit ? Math.max(0, Math.min(100, 100 * (u.remaining || 0) / u.credit)) : 100;
+  const chip = { pending: ['Waiting', 'var(--accent)'], approved: ['Approved', 'var(--ok)'], disabled: ['Turned off', 'var(--muted)'] }[u.status] || [u.status, 'var(--muted)'];
+  return html`<article className=${'ucard' + (u.status === 'pending' ? ' pending' : '')}>
+    <div className="row" style=${{ justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+      <div style=${{ minWidth: 0 }}><strong style=${{ fontSize: 16 }}>${u.username}</strong> <span className="chip" style=${{ color: chip[1] }}>${chip[0]}</span>${u.owner ? html` <span className="chip">Owner · no limits</span>` : u.role === 'admin' ? html` <span className="chip">Admin</span>` : null}
+        <div className="note" style=${{ wordBreak: 'break-all' }}>${u.email} · joined ${new Date((u.created_at || 0) * 1000).toLocaleDateString()} · last active ${ago(u.last_active)}</div></div>
+      ${u.owner ? null : html`<div className="row" style=${{ gap: 6 }}>
+        ${u.status === 'pending' ? html`<button type="button" className="btn sm primary" disabled=${busy} onClick=${() => saveAll('approved')}>Approve</button>` : null}
+        ${u.status === 'approved' ? html`<button type="button" className="btn sm" disabled=${busy} onClick=${() => save({ status: 'disabled' }, u.username + ' is turned off.')}>Turn off</button>` : null}
+        ${u.status === 'disabled' ? html`<button type="button" className="btn sm" disabled=${busy} onClick=${() => save({ status: 'approved' }, u.username + ' is back on.')}>Turn back on</button>` : null}
+        <button type="button" className="btn sm" aria-expanded=${edit} onClick=${() => setEdit(!edit)}>${edit ? 'Close' : 'Limits'}</button></div>`}
+    </div>
+    ${u.owner ? null : html`<div className="stack" style=${{ gap: 4 }}>
+      <div className="row" style=${{ justifyContent: 'space-between' }}><span className="note">Credit</span><span className="mono">${fmt$(u.remaining || 0)} left of ${fmt$(u.credit || 0)} · ${fmt$(u.spent || 0)} used</span></div>
+      <div className="cbar"><i style=${{ width: pct + '%', background: pct < 10 ? 'var(--rec)' : null }}></i></div></div>`}
+    <div className="ustats">
+      <div className="ustat"><b>${u.projects || 0}</b><span>Projects</span></div>
+      ${USAGE.map(([k, label]) => html`<div key=${k} className="ustat"><b>${(k === 'final_videos' ? Math.max(u.videos || 0, (u.usage || {})[k] || 0) : (u.usage || {})[k]) || 0}</b><span>${label}</span></div>`)}
+      ${u.owner ? html`<div className="ustat"><b>${fmt$(u.spent || 0)}</b><span>Credit used</span></div>` : html`<div className="ustat"><b>${u.max_seconds ? lenLabel(u.max_seconds) : 'Any'}</b><span>Longest video</span></div>`}
+    </div>
+    ${edit && !u.owner ? html`<div className="stack" style=${{ gap: 12, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+      <div className="row" style=${{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label className="field">Total credit ($)<input className="input" type="number" min="0" step="1" style=${{ width: 110 }} value=${f.credit} onInput=${e => setF({ ...f, credit: e.target.value })} /></label>
+        <div className="row" style=${{ gap: 4 }}>${[10, 25, 50].map(n => html`<button key=${n} type="button" className="btn sm" disabled=${busy} onClick=${() => save({ add_credit: n }, 'Added ' + fmt$(n) + ' for ' + u.username + '.')}>+ $${n}</button>`)}</div>
+        <label className="field">Longest video<select className="select" value=${f.max_seconds} onChange=${e => setF({ ...f, max_seconds: +e.target.value })}>${[30, 60, 90, 120, 180, 300, 600].map(v => html`<option key=${v} value=${v}>${lenLabel(v)}</option>`)}</select></label>
+      </div>
+      <div className="stack" style=${{ gap: 8 }}><strong>Models they may use</strong>
+        ${Object.entries(STEP_MODELS()).map(([step, list]) => html`<div key=${step} className="stack" style=${{ gap: 4 }}><span className="note">${({ analyst: 'Video analysis', writer: 'Writing', voice: 'Voiceover', image: 'Images', video: 'Video clips' })[step]}${(f.models[step] || []).length ? '' : ' · none (this step is off)'}</span>
+          <div className="mchips">${list.map(m => { const on = (f.models[step] || []).includes(m.id); return html`<label key=${m.id} className=${'mchip' + (on ? ' on' : '')}><input type="checkbox" checked=${on} onChange=${() => toggle(step, m.id)} />${m.name}<span className="note mono">${m.cost != null ? fmt$(m.cost) : m.perVideo != null ? '~' + fmt$(m.perVideo) : ''}</span></label>`; })}</div></div>`)}
+      </div>
+      <label className="field">Note (only you see it)<input className="input" value=${f.note} onInput=${e => setF({ ...f, note: e.target.value })} /></label>
+      <div className="row" style=${{ gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" className="btn primary" disabled=${busy} onClick=${() => saveAll(u.status === 'pending' ? 'approved' : null)}>${u.status === 'pending' ? 'Approve with these limits' : 'Save limits'}</button>
+        <button type="button" className="btn sm" disabled=${busy} onClick=${async () => { try { const d = await adminCall('POST', 'users/' + encodeURIComponent(u.username) + '/reset-password'); setTemp(d.password); } catch (e) { toast(e.message); } }}>Reset password</button>
+        <button type="button" className="btn sm ghost danger" disabled=${busy} onClick=${async () => { if (!confirm('Delete ' + u.username + '? Their account is removed; files they made stay on the server.')) return; try { await adminCall('DELETE', 'users/' + encodeURIComponent(u.username)); toast(u.username + ' deleted.'); onSaved(); } catch (e) { toast(e.message); } }}><${Icon} n="trash" />Delete</button>
+      </div>
+      ${temp ? html`<div className="warnbox">Temporary password for ${u.username}: <strong className="mono">${temp}</strong>. Send it to them; they can change it from the account menu.</div>` : null}
+    </div>` : null}
+  </article>`;
+}
 function App() {
-  const s = useStore(); const p = s.projects[s.currentId];
-  const View = { flow: Flow, projects: ProjectsView, ideas: IdeasView, templates: TemplatesView, settings: SettingsView }[s.view] || Flow;
+  const a = useAuth();
+  if (a.phase === 'checking') return html`<div className="authwrap"><div className="row note"><span className="spinner"></span> Opening Angle Studio\u2026</div></div>`;
+  if (a.phase === 'signin') return html`<${AuthScreen} />`;
+  if (a.phase === 'waiting' || a.phase === 'disabled') return html`<${WaitScreen} phase=${a.phase} />`;
+  return html`<${MainApp} />`;
+}
+function MainApp() {
+  const s = useStore(); const p = s.projects[s.currentId]; useAuth();
+  const View = { flow: Flow, projects: ProjectsView, ideas: IdeasView, templates: TemplatesView, settings: SettingsView, admin: isAdmin() ? AdminView : Flow }[s.view] || Flow;
   return html`<div className="app">
     <${TopBar} s=${s} p=${p} />
-    <div className="shell"><${Rail} s=${s} p=${p} /><main className="main"><${View} p=${p} s=${s} /></main></div>
+    <div className="shell"><${Rail} s=${s} p=${p} /><main className="main">
+      ${creditLeft() != null && creditLeft() <= 0 ? html`<div className="warnbox" role="alert" style=${{ marginBottom: 12 }}><strong>Your credit is used up.</strong> You can still open, watch and download what you made. Ask the owner for more credit to keep creating.</div>` : null}
+      <${View} p=${p} s=${s} /></main></div>
     <${Toasts} s=${s} />
   </div>`;
 }
