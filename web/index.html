@@ -308,6 +308,14 @@ label.mrow { grid-template-columns: auto 1fr; cursor: pointer; }
 .authcard .brand { font-weight: 700; display: flex; gap: 8px; align-items: center; }
 .authcard .input { width: 100%; font-size: 16px; }
 .acctbtn { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.pwbox { position: relative; display: flex; align-items: center; }
+.pwbox .input { width: 100%; padding-right: 78px; }
+.pweye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 6px 8px; border-radius: 8px; cursor: pointer; min-height: 32px; }
+.pweye:hover { background: var(--sunk); color: var(--ink); }
+.pweye svg { width: 18px; height: 18px; flex: none; }
+.acctwrap { position: relative; }
+.acctwrap .menu { position: absolute; top: calc(100% + 6px); right: 0; left: auto; z-index: 60; }
+.acctbtn svg { width: 14px; height: 14px; flex: none; }
 .acctbtn .left { font-family: var(--f-mono, monospace); font-weight: 700; }
 .acctbtn .left.low { color: var(--rec); }
 .ucards { display: grid; gap: 12px; }
@@ -3752,6 +3760,17 @@ async function authPost(path, body) {
   if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Something went wrong (' + r.status + '). Try again.');
   return d;
 }
+// A password box with an eye button to show or hide what was typed.
+function PasswordInput({ id, value, onInput, placeholder, autoComplete, required, minLength }) {
+  const [show, setShow] = useState(false);
+  return html`<div className="pwbox">
+    <input id=${id} className="input" type=${show ? 'text' : 'password'} placeholder=${placeholder} autoComplete=${autoComplete} required=${required} minLength=${minLength}
+      autoCapitalize="none" autoCorrect="off" spellCheck=${false} value=${value} onInput=${onInput} />
+    <button type="button" className="pweye" aria-label=${show ? 'Hide password' : 'Show password'} aria-pressed=${show} title=${show ? 'Hide password' : 'Show password'} onClick=${() => setShow(!show)}>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z" /><circle cx="10" cy="10" r="2.6" />${show ? null : html`<path d="M3 17L17 3" />`}</svg>
+      <span>${show ? 'Hide' : 'Show'}</span></button>
+  </div>`;
+}
 function AuthScreen() {
   const [mode, setMode] = useState('signin'); const [f, setF] = useState({ login: '', username: '', email: '', password: '' });
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -3773,7 +3792,7 @@ function AuthScreen() {
         <label className="field" htmlFor="au-user">Username<input id="au-user" className="input" autoComplete="username" autoCapitalize="none" required minLength="3" maxLength="32" pattern="[A-Za-z0-9_.\-]+" title="Letters, numbers, dots, dashes or underscores" value=${f.username} onInput=${e => set('username', e.target.value)} /></label>
         <label className="field" htmlFor="au-email">Email<input id="au-email" className="input" type="email" autoComplete="email" required value=${f.email} onInput=${e => set('email', e.target.value)} /></label>
       </${Fragment}>`}
-    <label className="field" htmlFor="au-pass">Password<input id="au-pass" className="input" type="password" autoComplete=${mode === 'signin' ? 'current-password' : 'new-password'} required minLength=${mode === 'signin' ? 1 : 8} value=${f.password} onInput=${e => set('password', e.target.value)} /></label>
+    <label className="field" htmlFor="au-pass">Password<${PasswordInput} id="au-pass" autoComplete=${mode === 'signin' ? 'current-password' : 'new-password'} required=${true} minLength=${mode === 'signin' ? 1 : 8} value=${f.password} onInput=${e => set('password', e.target.value)} /></label>
     ${mode === 'register' ? html`<p className="note" style=${{ margin: 0 }}>At least 8 characters. After you sign up, the owner reviews your account; you can start once it is approved.</p>` : null}
     ${err ? html`<div className="warnbox" role="alert">${err}</div>` : null}
     <button type="submit" className="btn primary" disabled=${busy}>${busy ? html`<span className="spinner"></span>` : null}${mode === 'signin' ? 'Sign in' : 'Create account'}</button>
@@ -3808,8 +3827,8 @@ function AccountMenu() {
           ${a.remaining <= 0 ? html`<div className="warnbox">Your credit is used up. Ask the owner for more to keep creating.</div>` : null}</div>` : html`<span className="note">No credit limit.</span>`}
         ${a.max_seconds ? html`<span className="note">Videos up to ${lenLabel(a.max_seconds)}</span>` : null}
         ${pw ? html`<div className="stack" style=${{ gap: 6 }}>
-          <input className="input" type="password" placeholder="Current password" autoComplete="current-password" value=${pw.old} onInput=${e => setPw({ ...pw, old: e.target.value })} />
-          <input className="input" type="password" placeholder="New password (8+ characters)" autoComplete="new-password" value=${pw.new} onInput=${e => setPw({ ...pw, new: e.target.value })} />
+          <${PasswordInput} placeholder="Current password" autoComplete="current-password" value=${pw.old} onInput=${e => setPw({ ...pw, old: e.target.value })} />
+          <${PasswordInput} placeholder="New password (8+ characters)" autoComplete="new-password" value=${pw.new} onInput=${e => setPw({ ...pw, new: e.target.value })} />
           <div className="row"><button type="button" className="btn sm primary" disabled=${!pw.old || (pw.new || '').length < 8} onClick=${changePw}>Save</button><button type="button" className="btn sm ghost" onClick=${() => setPw(null)}>Cancel</button></div></div>`
           : html`<button type="button" className="btn sm" onClick=${() => setPw({ old: '', new: '' })}>Change password</button>`}
         ${isAdmin() ? html`<button type="button" className="btn sm" onClick=${() => { setOpen(false); update(st => { st.view = 'admin'; }); }}>Accounts</button>` : null}
