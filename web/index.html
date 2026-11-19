@@ -1106,11 +1106,13 @@ function buildImagePrompt(p, sc, chars) {
     : textIdea ? ' If the rule asks for words, write at most ' + limit + (limit > 1 ? ' short words' : ' short word') + ', once, and no other text anywhere.' : ' No words, captions, labels, signs, watermarks or logos in the image.';
   return prefix + '.' + (idea ? ' Rule for every image (follow it exactly): ' + idea + '.' : '')
     + ' Scene: ' + (sc.image_prompt || sc.description || '').trim().replace(/[.\s]+$/, '') + (chars ? '. Characters: ' + chars : '') + '.'
+    + (sc.dir_rule ? ' The creator\u2019s direction for this scene (follow it exactly, drawn in this same style): ' + sc.dir_rule.replace(/[.\s]+$/, '') + '.' : '')
     + ' The picture must make this meaning obvious at a glance, with one clear focal point and readable faces and actions (it is the meaning only: never write it as text): ' + meaning
     + text
     + (avoid ? ' Avoid: ' + avoid + '.' : '')
     + ' No watermarks or signatures.'
     + (idea && !textIdea ? ' Remember the rule: ' + idea + '.' : '')
+    + (sc.dir_rule ? ' Remember: ' + sc.dir_rule.replace(/[.\s]+$/, '') + '.' : '')
     + ' Draw it in the ' + st.name + ' style: ' + prefix.split(/\s+/).slice(0, 22).join(' ').replace(/[,.]+$/, '') + '.';
 }
 const imagePrompt = (st, scene) => st.prefix + '. Scene: ' + scene + (st.avoid ? '. Avoid: ' + st.avoid : '') + '. No words, captions, watermarks or logos in the image.';
@@ -1908,7 +1910,7 @@ const api = {
     const nOf = sc => p0.scenes.findIndex(x => x.id === sc.id) + 1;
     let res = {}, cost = 0;
     if (LIVE) {
-      const r = await liveJob(pid, 'Picturing the scenes', 'scene-visuals', { cards_share: cardsShare(p0), total: p0.scenes.length, card_scenes: p0.scenes.map((sc, i) => isCard(sc) && !list.includes(sc) ? i + 1 : 0).filter(Boolean), writer: wr.id, story: p0.script.story, scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc) })), style_name: st.name, idea: ideaOf(p0), words_max: wordLimit(ideaOf(p0)),
+      const r = await liveJob(pid, 'Picturing the scenes', 'scene-visuals', { direction: p0.scene_dir || '', cards_share: cardsShare(p0), total: p0.scenes.length, card_scenes: p0.scenes.map((sc, i) => isCard(sc) && !list.includes(sc) ? i + 1 : 0).filter(Boolean), writer: wr.id, story: p0.script.story, scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc) })), style_name: st.name, idea: ideaOf(p0), words_max: wordLimit(ideaOf(p0)),
         characters: p0.video_type === 'character' ? p0.characters.map(c => ({ name: c.name, description: c.description })) : [] }, [wr.name + ' is picturing each scene']);
       res = r.scenes || {}; cost = r.cost || 0; if (r.warning) toast(r.warning);
     } else {
@@ -1919,8 +1921,33 @@ const api = {
         if (card) last = n;
         res[String(n)] = { card, visual: 'a clear moment that shows: ' + words(t).slice(0, 14).join(' ').replace(/[.,!?]+$/, ''), text: kw.slice(0, 2).join(' ').toUpperCase(), key: n % 3 === 1 }; });
     }
-    updateP(pid, q => { list.forEach(sc0 => { const sc = q.scenes.find(x => x.id === sc0.id); const r = res[String(nOf(sc0))]; if (!sc || !r) return; sc.description = r.visual; sc.image_prompt = r.visual; sc.overlay_text = r.text; sc.overlay_key = !!r.key; sc.visual_v = 2;
+    updateP(pid, q => { list.forEach(sc0 => { const sc = q.scenes.find(x => x.id === sc0.id); const r = res[String(nOf(sc0))]; if (!sc || !r) return; sc.description = r.visual; sc.image_prompt = r.visual; sc.overlay_text = r.text; sc.overlay_key = !!r.key; sc.visual_v = 2; if (p0.scene_dir) sc.dir_rule = r.rule || '';
         if (!sc.kind_user && !sc.image_versions.length) { if (r.card) { sc.kind = 'card'; sc.card = r.card; sc.image_status = 'ready'; } else { sc.kind = 'image'; if (sc.image_status === 'ready') sc.image_status = 'pending'; } } }); addCost(q, cost); });
+  },
+  // The creator's direction for characters or scenes: the writer rewrites only the image ideas it applies to.
+  async directScenes(pid) {
+    const p0 = STATE.projects[pid]; const st = styleById(p0.style); const wr = modelOf(p0, 'writer');
+    const list = p0.scenes.filter(sc => !isCard(sc) && !sc.reuse_of); const nOf = sc => p0.scenes.findIndex(x => x.id === sc.id) + 1;
+    let res = {}, cost = 0;
+    if (LIVE) {
+      const r = await liveJob(pid, 'Applying your direction', 'scene-visuals', { direction: p0.scene_dir || '', affected_only: true, cards_share: 0, writer: wr.id, story: p0.script.story,
+        scenes: list.map(sc => ({ n: nOf(sc), text: sceneText(p0, sc), visual: sc.image_prompt || sc.description || '' })), style_name: st.name, idea: ideaOf(p0), words_max: wordLimit(ideaOf(p0)),
+        characters: p0.video_type === 'character' ? p0.characters.map(c => ({ name: c.name, description: c.description })) : [] }, [wr.name + ' is finding the scenes your direction changes']);
+      res = r.scenes || {}; cost = r.cost || 0; if (r.warning) toast(r.warning);
+    } else {  // demo: scenes that mention a word from the direction
+      await runJob(pid, 'Applying your direction', [wr.name + ' is finding the scenes your direction changes'], 500);
+      const keys = words(p0.scene_dir || '').filter(w => w.length > 3).map(w => w.toLowerCase().replace(/[^a-z']/g, ''));
+      list.forEach(sc => { const t = sceneText(p0, sc).toLowerCase(); if (keys.some(k => k && t.includes(k))) res[String(nOf(sc))] = { visual: (sc.image_prompt || sc.description) + ', following your direction: ' + p0.scene_dir, rule: p0.scene_dir, text: sc.overlay_text || '' }; });
+    }
+    const changed = [];
+    updateP(pid, q => {
+      list.forEach(sc0 => { const sc = q.scenes.find(x => x.id === sc0.id); if (!sc) return; const r = res[String(nOf(sc0))];
+        if (r) { sc.description = r.visual; sc.image_prompt = r.visual; sc.dir_rule = r.rule || q.scene_dir; sc.visual_v = 2; sc.directed_at = Date.now(); changed.push(sc.id); }
+        else if (sc.dir_rule) { sc.dir_rule = ''; } });
+      q.dir_changed = changed; addCost(q, cost);
+    });
+    toast(changed.length ? changed.length + ' scene' + (changed.length === 1 ? '' : 's') + ' rewritten to follow your direction.' : 'No scene needed a change for this direction.');
+    return changed;
   },
   async generateImages(pid, ids) {
     try { await api.pictureScenes(pid, ids); } catch (e) { toast('Could not write the image ideas (' + e.message + '). Using the current ones.'); }
@@ -3016,6 +3043,24 @@ function SceneZoom({ p, id, setId }) {
     </div>
   </div>`;
 }
+// Your direction for characters or scenes (for example how God looks), applied by the writer to the scenes it fits.
+function SceneDirection({ p }) {
+  const [busy, setBusy] = useState(false); const [v, setV] = useState(p.scene_dir || ''); useEffect(() => setV(p.scene_dir || ''), [p.id]);
+  const wr = modelOf(p, 'writer'); const im = modelOf(p, 'image');
+  const changed = (p.dir_changed || []).map(id => p.scenes.findIndex(x => x.id === id) + 1).filter(n => n > 0);
+  const redo = (p.dir_changed || []).filter(id => { const sc = p.scenes.find(x => x.id === id); return sc && !isCard(sc) && sc.image_versions.length && ((sc.image_versions[sc.image_index] || {}).at || 0) < (sc.directed_at || 0); });  // images made before the rewrite
+  const run = async () => { setBusy(true); updateP(p.id, q => { q.scene_dir = v.trim(); }); try { await api.directScenes(p.id); } catch (e) { toast(e.message); } setBusy(false); };
+  if (!p.scenes.length) return null;
+  return html`<section className="panel stack">
+    <div className="panel-h" style=${{ marginBottom: 0 }}><h3>Your direction for characters and scenes</h3><span className="note">${wr.name} rewrites only the image ideas it applies to; the template stays the same</span></div>
+    <textarea id="scene-dir" className="input" rows="3" placeholder=${'e.g. Whenever God appears or acts, draw Him as a glowing spirit of soft white light with no solid body, not a regular stick figure. Adam and Eve wear simple leaf clothing.'} value=${v} onInput=${e => setV(e.target.value)}></textarea>
+    <div className="row" style=${{ gap: 8, flexWrap: 'wrap' }}>
+      <button type="button" className="btn primary sm" disabled=${busy || !v.trim()} onClick=${run}>${busy ? html`<span className="spinner"></span> Finding the scenes it changes` : html`<${Fragment}><${Icon} n="spark" />Rewrite the scenes it affects<span className="tag">~${fmt$(wr.perVideo * 0.15)}</span></${Fragment}>`}</button>
+      ${p.scene_dir && !busy ? html`<span className="note">${changed.length ? 'Changed: scene' + (changed.length === 1 ? ' ' : 's ') + changed.join(', ') + '.' : 'No scene matched the last direction.'} New images and redos follow it; it is also used whenever image ideas are written again.</span>` : null}
+      ${redo.length && !busy ? html`<button type="button" className="btn sm" onClick=${() => api.generateImages(p.id, redo)}><${Icon} n="redo" />Redo ${redo.length} image${redo.length === 1 ? '' : 's'} with the new ideas<span className="tag">${fmt$(redo.length * im.cost)}</span></button>` : null}
+    </div>
+  </section>`;
+}
 function PaceOptions({ p, locked, current, onChoose }) {
   const im = modelOf(p, 'image'); const pc = current || p.format.pacing || DEFAULT_PACING;
   const opts = ['simple', 'moderate', 'compact'].map(m => { const cfg = { mode: m, compact_every: pc.compact_every || 3 }; const plan = scenePlan(p, cfg); return { m, cfg, plan, n: plan.length, every: paceEvery(cfg), st: planStats(p, cfg) }; });
@@ -3099,13 +3144,14 @@ function ScenesScreen({ p, s }) {
           <span className="note">${wordsMode(p) === 'off' ? 'Images carry the message with pictures only.' : '1 to 3 bold words printed in the image' + (isTextOnly(p.models.image) ? ' (FLUX spells less reliably than Nano Banana)' : '') + '. Applies to images you make or redo from now on.'}</span>
           <button type="button" className="btn sm ghost" disabled=${busy} title="The writer pictures every scene again from its narration (your own edits are kept)" onClick=${async () => { try { await api.pictureScenes(p.id, p.scenes.map(x => x.id), true); toast('New image ideas written. Redo the images you want to change.'); } catch (e) { toast(e.message); } }}><${Icon} n="spark" />Rewrite image ideas</button>
     </section>
+    <${SceneDirection} p=${p} />
     ${zoomId && p.scenes.some(x => x.id === zoomId) ? html`<${SceneZoom} p=${p} id=${zoomId} setId=${setZoomId} />` : null}
     <div className="sgrid">${p.scenes.map((sc, i) => {
       const ls = sceneLines(p, sc); const open = openId === sc.id; const who = isChar && ls[0] && p.characters.find(c => c.id === ls[0].speaker);
       return html`<article key=${sc.id} className=${'scard2' + (open ? ' open' : '')}>
         <div style=${{ minWidth: 0 }}>
           <div className="row sc-head">
-            <strong>${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span>${sc.reuse_of ? html`<span className="chip" title="Shows the image of the scene before, with a different zoom">Reuses ${p.scenes.findIndex(x => x.id === sc.reuse_of) + 1}</span>` : html`<${Pill} status=${sc.image_status !== 'generating' && (p.img_queue || []).includes(sc.id) ? 'queued' : sc.image_status} />`}
+            <strong>${i + 1}</strong><span className="mono muted">${sceneSecs(p, sc).toFixed(1)}s</span>${sc.reuse_of ? html`<span className="chip" title="Shows the image of the scene before, with a different zoom">Reuses ${p.scenes.findIndex(x => x.id === sc.reuse_of) + 1}</span>` : html`<${Pill} status=${sc.image_status !== 'generating' && (p.img_queue || []).includes(sc.id) ? 'queued' : sc.image_status} />`}${sc.dir_rule ? html`<span className="chip" title=${'Your direction: ' + sc.dir_rule} style=${{ color: 'var(--accent)' }}>Your direction</span>` : null}
             <span className="grow"></span>
 ${isCard(sc) ? null : html`            <button type="button" className="btn ghost sm" aria-label=${(sc.reuse_of ? 'Give its own image to' : sc.image_versions.length ? 'Redo image for' : 'Generate image for') + ' scene ' + (i + 1)} title=${sc.reuse_of ? 'Make its own image instead of reusing' : sc.image_versions.length ? 'Redo this image' : 'Generate this image'} disabled=${imgBusy(p, sc)} onClick=${() => api.generateImage(p.id, sc.id)}><${Icon} n="redo" /></button>`}
             <button type="button" className="btn sm" aria-expanded=${open} onClick=${() => setOpenId(open ? null : sc.id)}>${open ? 'Close' : 'Edit'}</button>

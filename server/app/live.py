@@ -583,6 +583,8 @@ class SceneVisualsBody(BaseModel):
     cards_share: float = 0.0    # share of scenes to make free text cards (0.3 = about 30%)
     total: int = 0              # scenes in the whole video (these may be only some of them)
     card_scenes: list[int] = [] # scenes outside this list that are already text cards
+    direction: str = ""         # the creator's direction for characters or scenes ("God appears as a glowing spirit")
+    affected_only: bool = False # rewrite only the scenes that direction changes, and return only those
 
 
 def spread_cards(avail: list[int], liked: set[int], total: int, share: float, existing: set[int] | None = None) -> list[int]:
@@ -639,6 +641,14 @@ async def scene_visuals(body: SceneVisualsBody):
                 + f"Visual style of every image: {body.style_name}.\n"
                 + (f"Characters (describe them the same way every time they appear): {cast}\n" if cast else "")
                 + (f"The creator's rule for every image (follow it exactly): {body.idea}\n" if body.idea.strip() else "")
+                + (f"THE CREATOR'S DIRECTION FOR CHARACTERS AND SCENES (follow it exactly wherever it applies; it changes what is "
+                   f"drawn, never the visual style, which stays {body.style_name}): {body.direction.strip()[:1500]}\n"
+                   "For every scene it applies to, also give \"rule\": one short sentence telling the illustrator exactly how to draw "
+                   "that part in this style (for example: 'God is a glowing figure of soft white light with no solid body, drawn "
+                   "with the same simple lines, not a regular stick figure').\n" if body.direction.strip() else "")
+                + ("ONLY rewrite the scenes the direction applies to (a character it names appears, or the moment it describes "
+                   "happens); return just those scenes, and return an empty list if none apply. Their current pictures are given "
+                   "as 'now': keep what still fits and change what the direction asks.\n" if body.affected_only else "")
                 + "Each scene below is the narration heard while one image is on screen. For each, describe ONE image that "
                 "makes the meaning of that narration obvious at a glance, even with the sound off and no text: who is in it, "
                 "what they are doing, where, the key object or symbol, and the emotion on their faces. Turn abstract ideas "
@@ -654,9 +664,10 @@ async def scene_visuals(body: SceneVisualsBody):
                    "word to highlight in *stars*), card_emoji (exactly one emoji that fits the scene), card_small (only for a "
                    "countdown: 'Number 3'; otherwise empty) and card_layout: big, number (for a countdown or a numbered point) "
                    "or question (if it asks something).\n" if body.cards_share > 0 else "")
-                + f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600]} for s in batch])}\n"
+                + f"Scenes: {json.dumps([{'n': s.get('n'), 'text': str(s.get('text'))[:600], **({'now': str(s.get('visual'))[:400]} if s.get('visual') else {})} for s in batch])}\n"
                 + 'Return {"scenes": [{"n": scene number, "visual": "the image, under 45 words", "text": "the words", "key": true or false'
                 + (', "card": true or false, "card_text": "1-3 words", "card_emoji": "one emoji", "card_small": "", "card_layout": "big|number|question"' if body.cards_share > 0 else "")
+                + (', "rule": "how to draw what the direction asks in this scene, or empty"' if body.direction.strip() else "")
                 + '}]}'))
             cost += c
             warn = warn or w
@@ -672,11 +683,12 @@ async def scene_visuals(body: SceneVisualsBody):
                                 "small": str(item.get("card_small") or "")[:24],
                                 "layout": item.get("card_layout") if item.get("card_layout") in ("big", "number", "question", "quote") else "big"}
                     out[str(item.get("n"))] = {"card": card, "visual": _no_words(str(item["visual"]))[:500], "text": " ".join(str(item.get("text", "")).replace('"', "").replace("*", "").split()[:max(1, min(3, body.words_max))])[:40],
-                                               "key": bool(item.get("key")), "liked": bool(item.get("card"))}
-        if not out:
+                                               "key": bool(item.get("key")), "liked": bool(item.get("card")),
+                                               "rule": str(item.get("rule") or "")[:300] if body.direction.strip() else ""}
+        if not out and not body.affected_only:
             raise ProviderError(f"{wn} returned no image ideas. Try again.")
         # text cards spread evenly over the whole video (not bunched where the writer happened to mark them)
-        if body.cards_share > 0:
+        if body.cards_share > 0 and not body.affected_only:
             avail = sorted(int(k) for k in out if k.isdigit() and out[k].get("card"))
             keep = set(spread_cards(avail, {n for n in avail if out[str(n)].get("liked")}, body.total or len(scenes),
                                     body.cards_share, set(body.card_scenes)))

@@ -875,3 +875,25 @@ def test_owner_can_always_get_back_in(monkeypatch, tmp_path):
     monkeypatch.setenv("ANGLE_STUDIO_ADMIN_EMAIL", "new.owner@x.com")
     name = auth.recover_owner()
     assert name == "new.owner" and TestClient(app).post("/api/auth/login", json={"login": "new.owner@x.com", "password": "recovered1"}).status_code == 200
+
+
+def test_direction_rewrites_only_the_scenes_it_affects(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import live
+    from app.main import app
+    seen = []
+
+    async def fake_write(writer_id, progress, prompt):
+        seen.append(prompt)
+        return {"scenes": [{"n": 2, "visual": "God, a glowing spirit of light, speaks light into darkness", "text": "LET THERE BE LIGHT", "key": True,
+                            "rule": "God is a glowing figure of soft white light, not a regular stick figure"}]}, 0.01, "Claude", None
+
+    monkeypatch.setattr(live, "write_json", fake_write)
+    r = _run_job(TestClient(app), "/api/live/scene-visuals", {"writer": "claude-opus-5-5", "affected_only": True, "style_name": "Stick figure",
+        "direction": "Whenever God appears, draw Him as a spirit of light, not a stick figure",
+        "scenes": [{"n": 1, "text": "The earth was empty.", "visual": "an empty dark world"}, {"n": 2, "text": "God said, let there be light.", "visual": "a stick figure raising a hand"}]})
+    out = r["result"]["scenes"]
+    assert list(out) == ["2"] and out["2"]["rule"].startswith("God is a glowing") and out["2"]["card"] is None
+    p = seen[0]
+    assert "draw Him as a spirit of light" in p and "ONLY rewrite the scenes the direction applies to" in p and "stays Stick figure" in p
+    assert '"now": "a stick figure raising a hand"' in p
