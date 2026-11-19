@@ -1840,14 +1840,25 @@ const api = {
       const jid = uid('job');
       update(s => { s.jobs.unshift({ id: jid, pid, label: ids.length > 1 ? 'Generating narration' : 'Regenerating one sentence', stages: ['Reading ' + ids.length + ' sentence' + (ids.length > 1 ? 's' : '') + ' with ' + modelOf(p0, 'voice').name], stage: 0, status: 'running' }); });
       let failed = 0, stop = null;
+      // Several sentences per request (same voice and delivery, up to 6 and ~600 letters): Google limits voice
+      // requests per day, so this makes the limit last several times longer. One sentence alone uses a single request.
+      const groups = []; let g = null;
       for (const id of ids) {
-        if (stop) break;
         const p = STATE.projects[pid]; const l = p.script.lines.find(x => x.id === id); if (!l) continue;
+        const k = lineVoice(p, l) + '|' + lineDelivery(p, l);
+        if (!g || g.k !== k || g.ids.length >= 6 || g.chars + l.text.length > 600) { g = { k, ids: [], chars: 0 }; groups.push(g); }
+        g.ids.push(id); g.chars += l.text.length;
+      }
+      const done = (id, r, cost) => updateP(pid, q => { const x = q.script.lines.find(x => x.id === id); if (!x) return; Object.assign(x, { audio_status: 'ready', duration: r.duration, audio_url: r.url, voice_used: lineVoice(q, x), voice_model: q.models.voice, wave: randSeed(), sig: lineSig(q, x), error: null, play_error: null }); addCost(q, cost || 0); });
+      for (const grp of groups) {
+        if (stop) break;
+        const p = STATE.projects[pid]; const lines = grp.ids.map(id => p.script.lines.find(x => x.id === id)).filter(Boolean); if (!lines.length) continue;
+        const opts = { voice: lineVoice(p, lines[0]), model: p.models.voice, delivery: lineDelivery(p, lines[0]), speed: p.audio.speed || 1, pitch: p.audio.pitch || 0 };
         try {
-          const r = await post('tts', { text: l.text, voice: lineVoice(p, l), model: p.models.voice, delivery: lineDelivery(p, l), speed: p.audio.speed || 1, pitch: p.audio.pitch || 0 });
-          updateP(pid, q => { const x = q.script.lines.find(x => x.id === id); if (!x) return; Object.assign(x, { audio_status: 'ready', duration: r.duration, audio_url: r.url, voice_used: lineVoice(q, x), voice_model: q.models.voice, wave: randSeed(), sig: lineSig(q, x), error: null, play_error: null }); addCost(q, r.cost || 0); });
+          if (lines.length === 1) { const r = await post('tts', { text: lines[0].text, ...opts }); done(lines[0].id, r, r.cost); }
+          else { const r = await post('tts-many', { texts: lines.map(l => l.text), ...opts }); r.clips.forEach((c, k) => done(lines[k].id, c, k ? 0 : r.cost)); }
         } catch (e) {
-          failed++; updateP(pid, q => { const x = q.script.lines.find(x => x.id === id); if (x) { x.audio_status = 'failed'; x.error = e.message; } });
+          failed += lines.length; updateP(pid, q => lines.forEach(l0 => { const x = q.script.lines.find(x => x.id === l0.id); if (x) { x.audio_status = 'failed'; x.error = e.message; } }));
           if (/quota|billing|free tier|not set|refused/i.test(e.message)) stop = e.message;
         }
       }

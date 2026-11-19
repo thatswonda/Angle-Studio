@@ -778,6 +778,32 @@ async def tts(body: SpeakBody):
     return {"url": media_url(out), "duration": round(seconds, 2), "cost": round(cost, 4)}
 
 
+class SpeakManyBody(BaseModel):
+    texts: list[str]
+    voice: str = "v-aoede"
+    model: str = "gemini-tts-flash"
+    delivery: str = "warm, steady and conversational, like explaining something to a friend, at a medium pace"
+    speed: float = 1.0
+    pitch: float = 0.0
+
+
+@router.post("/tts-many")
+async def tts_many(body: SpeakManyBody):
+    """Several sentences in one voice request (Google limits voice requests per day), one clip back per sentence."""
+    auth.gate(voice=body.model)
+    texts = [t for t in body.texts if t.strip()][:12]
+    if not texts or len(texts) != len(body.texts):
+        raise HTTPException(422, "Nothing to read.")
+    outs = [MEDIA / "audio" / f"{uuid.uuid4().hex}.wav" for _ in texts]
+    try:
+        secs, cost = await google.speak_many(texts, body.voice, body.model, outs, body.delivery)
+        secs = [await asyncio.to_thread(tune_voice, o, body.speed, body.pitch) for o in outs]
+    except ProviderError as e:
+        raise HTTPException(502, str(e))
+    auth.charge(cost, "voice_clips", count=len(texts))
+    return {"clips": [{"url": media_url(o), "duration": round(d, 2)} for o, d in zip(outs, secs)], "cost": round(cost, 4)}
+
+
 class ImageBody(BaseModel):
     prompt: str
     aspect: str = "9:16"

@@ -184,26 +184,129 @@ class GeminiWriter:
         return await generate_json(self.model_id, [{"text": system + "\n\n" + prompt}])
 
 
+# Google limits each voice model to a number of requests per day (separate from billing). When one model's
+# daily limit is used up, the next one on the key reads instead; each has its own limit and the same voices.
+TTS_CHAIN = {
+    "gemini-tts-flash": ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-pro-preview-tts"],
+    "gemini-tts-pro": ["gemini-2.5-pro-preview-tts", "gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview"],
+}
+_tts_out: dict[str, float] = {}  # API model -> time its daily limit was found used up (skipped for 3 hours)
+
+
+def _voice_body(prompt: str, voice_id: str) -> dict:
+    return {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"responseModalities": ["AUDIO"],
+                                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": VOICE_NAMES.get(voice_id, "Aoede")}}}}}
+
+
+async def _voice(prompt: str, voice_id: str, model_id: str) -> tuple[bytes, int]:
+    """One TTS request, moving to the next voice model when one has used up its daily request limit."""
+    import time
+    chain = TTS_CHAIN.get(model_id, [MODELS.get(model_id, model_id)])
+    last = None
+    for api_model in chain:
+        if time.time() - _tts_out.get(api_model, 0) < 3 * 3600:
+            continue
+        try:
+            resp = await generate(api_model, _voice_body(prompt, voice_id), timeout=180.0)
+        except ProviderError as e:
+            if "quota" in str(e).lower():
+                _tts_out[api_model] = time.time()
+                last = e
+                continue
+            raise
+        inline = next((p["inlineData"] for p in _parts(resp) if "inlineData" in p), None)
+        if not inline:
+            raise ProviderError("Gemini TTS returned no audio.")
+        m = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
+        return clean_pcm(base64.b64decode(inline["data"]), int(m.group(1)) if m else 24000)
+    raise ProviderError("Every Gemini voice model on this key has used today's request quota (Google limits voice requests "
+                        "per day, separately from your credit). It resets within 24 hours.")
+
+
+def _prompt(delivery: str, transcript: str, extra: str = "") -> str:
+    # Director's-notes format: the style guides the voice without being read aloud (a plain "Say warmly:" prefix gets spoken).
+    return f"# AUDIO PROFILE: Narrator\n### DIRECTOR'S NOTES\nStyle: {delivery}{extra}\n#### TRANSCRIPT\n{transcript}"
+
+
 async def speak(text: str, voice_id: str, model_id: str, out: Path, delivery: str) -> tuple[float, float]:
     """Text to speech. Writes a 16-bit mono WAV and returns (seconds, cost)."""
-    # Director's-notes format: the style guides the voice without being read aloud (a plain "Say warmly:" prefix gets spoken).
-    prompt = f"# AUDIO PROFILE: Narrator\n### DIRECTOR'S NOTES\nStyle: {delivery}\n#### TRANSCRIPT\n{text}"
-    body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": VOICE_NAMES.get(voice_id, "Aoede")}}},
-        },
-    }
-    resp = await generate(model_id, body, timeout=180.0)
-    inline = next((p["inlineData"] for p in _parts(resp) if "inlineData" in p), None)
-    if not inline:
-        raise ProviderError("Gemini TTS returned no audio.")
-    m = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
-    pcm, rate = clean_pcm(base64.b64decode(inline["data"]), int(m.group(1)) if m else 24000)
+    pcm, rate = await _voice(_prompt(delivery, text), voice_id, model_id)
     pcm = trim_silence(pcm, rate)
     write_wav(out, pcm, rate)
     return len(pcm) / 2 / rate, len(text) / 1000 * TTS_PRICES_PER_1K_CHARS.get(model_id, 0.01)
+
+
+def split_at_pauses(pcm: bytes, rate: int, texts: list[str]) -> list[bytes] | None:
+    """Cuts one recording of several sentences back into one clip per sentence, at the longest pauses. Returns None
+    when the pauses do not line up with the sentences (then each sentence is read on its own instead)."""
+    n = len(texts)
+    if n == 1:
+        return [pcm]
+    samples = array.array("h", pcm[: len(pcm) // 2 * 2])
+    if sys.byteorder == "big":
+        samples.byteswap()
+    win = max(1, rate // 100)  # 10 ms
+    levels = [max((abs(x) for x in samples[i:i + win]), default=0) for i in range(0, len(samples), win)]
+    peak = max(levels, default=0)
+    if peak < 300:
+        return None
+    thr = max(300, peak * 0.04)
+    loud = [v > thr for v in levels]
+    first = loud.index(True)
+    last = len(loud) - 1 - loud[::-1].index(True)
+    gaps, k = [], first
+    while k <= last:  # quiet runs inside the speech: (length, start, end) in 10 ms steps
+        if not loud[k]:
+            a = k
+            while k <= last and not loud[k]:
+                k += 1
+            gaps.append((k - a, a, k))
+        else:
+            k += 1
+    if len(gaps) < n - 1:
+        return None
+    chosen = sorted(sorted(gaps, reverse=True)[: n - 1], key=lambda g: g[1])
+    if chosen[-1][0] < 22:  # the shortest cut is under 0.22 s: probably a comma, not the end of a sentence
+        return None
+    cuts = [first] + [(g[1] + g[2]) // 2 for g in chosen] + [last + 1]
+    lens = [cuts[i + 1] - cuts[i] for i in range(n)]
+    total_chars = sum(max(1, len(t)) for t in texts)
+    for t, ln in zip(texts, lens):  # each piece must be about as long as its sentence
+        want = (last + 1 - first) * max(1, len(t)) / total_chars
+        if not 0.45 * want - 25 <= ln <= 2.2 * want + 40:
+            return None
+    out = []
+    for i in range(n):
+        piece = samples[cuts[i] * win: cuts[i + 1] * win]
+        if sys.byteorder == "big":
+            piece.byteswap()
+        out.append(piece.tobytes())
+    return out
+
+
+async def speak_many(texts: list[str], voice_id: str, model_id: str, outs: list[Path], delivery: str) -> tuple[list[float], float]:
+    """Reads several sentences in ONE request (so Google's daily request limit lasts several times longer), then cuts
+    them apart at the pauses. If the cut does not line up, each sentence is read on its own. Returns (seconds, cost)."""
+    cost = sum(len(t) for t in texts) / 1000 * TTS_PRICES_PER_1K_CHARS.get(model_id, 0.01)
+    pieces = None
+    if len(texts) > 1:
+        transcript = "\n\n".join(t.strip() for t in texts)
+        pcm, rate = await _voice(_prompt(delivery, transcript, "\nRead each paragraph as its own sentence, with a clear pause of about one "
+                                                               "second between paragraphs and no pause longer than that inside a sentence."), voice_id, model_id)
+        pieces = split_at_pauses(pcm, rate, texts)
+    if pieces is None:
+        secs = []
+        for t, out in zip(texts, outs):
+            d, _ = await speak(t, voice_id, model_id, out, delivery)
+            secs.append(d)
+        return secs, cost
+    secs = []
+    for piece, out in zip(pieces, outs):
+        clip = trim_silence(piece, rate)
+        write_wav(out, clip, rate)
+        secs.append(len(clip) / 2 / rate)
+    return secs, cost
 
 
 def clean_pcm(raw: bytes, rate: int = 24000) -> tuple[bytes, int]:

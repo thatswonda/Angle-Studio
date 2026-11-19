@@ -897,3 +897,38 @@ def test_direction_rewrites_only_the_scenes_it_affects(monkeypatch):
     p = seen[0]
     assert "draw Him as a spirit of light" in p and "ONLY rewrite the scenes the direction applies to" in p and "stays Stick figure" in p
     assert '"now": "a stick figure raising a hand"' in p
+
+
+def test_voice_falls_back_when_a_model_hits_its_daily_limit_and_batches_sentences(monkeypatch, tmp_path):
+    import asyncio, base64, math, array
+    from app.providers import google
+    google._tts_out.clear()
+    rate = 24000
+
+    def tone(sec):
+        return array.array("h", [int(8000 * math.sin(i / 8)) for i in range(int(sec * rate))]).tobytes()
+
+    def quiet(sec):
+        return b"\0\0" * int(sec * rate)
+
+    used = []
+
+    async def fake_generate(model, body, timeout=600.0):
+        used.append(model)
+        if model == "gemini-3.8-flash-tts":
+            raise google.ProviderError("The daily Gemini quota for gemini-3.8-flash-tts is used up.")
+        text = body["contents"][0]["parts"][0]["text"].split("#### TRANSCRIPT\n", 1)[1]
+        paras = text.split("\n\n")
+        pcm = quiet(0.3) + quiet(0.9).join(tone(0.08 * len(p)) for p in paras) + quiet(0.4)
+        return {"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": f"audio/L16;rate={rate}", "data": base64.b64encode(pcm).decode()}}]}}]}
+
+    monkeypatch.setattr(google, "generate", fake_generate)
+    texts = ["A living mirror.", "Male and female, He created them.", "Then He stopped."]
+    outs = [tmp_path / f"c{i}.wav" for i in range(3)]
+    secs, cost = asyncio.run(google.speak_many(texts, "v-charon", "gemini-tts-flash", outs, "calm"))
+    assert used == ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"]  # one request, on the next model
+    assert all(o.exists() for o in outs) and secs[1] > secs[0] > secs[2] * 0.9
+    # the used-up model is skipped for later requests
+    asyncio.run(google.speak("Hi there.", "v-charon", "gemini-tts-flash", tmp_path / "x.wav", "calm"))
+    assert used[-1] == "gemini-3.8-flash-lite-tts" and used.count("gemini-3.8-flash-tts") == 1
+    google._tts_out.clear()
